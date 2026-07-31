@@ -1,0 +1,18 @@
+﻿root = true
+
+[*]
+charset = utf-8-bom
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Excepciones obligadas: estos archivos los lee `JSON.parse` de herramientas
+# de terceros, que no toleran la marca de orden de bytes. Vite, al buscar la
+# configuración de PostCSS, falla al arrancar si `package.json` lleva BOM.
+[{package.json,package-lock.json,.prettierrc.json}]
+charset = utf-8

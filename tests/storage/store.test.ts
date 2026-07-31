@@ -1,0 +1,117 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { toCents, ZERO } from '@/core/money';
+import { ESTADO_INICIAL } from '@/storage/defaults';
+import { cargarEstado, limpiarDatosConservandoConfiguracion } from '@/storage/store';
+import type { EstadoPersistido } from '@/domain/types';
+
+function estadoConDatos(): EstadoPersistido {
+  return {
+    ...ESTADO_INICIAL,
+    schemaVersion: 3,
+    perfil: {
+      ...ESTADO_INICIAL.perfil,
+      titulares: [
+        {
+          netoPorPaga: toCents(2_500),
+          numeroPagas: 14,
+          edad: 42,
+          situacionLaboral: 'funcionario',
+        },
+      ],
+      ahorrosActuales: toCents(50_000),
+      ahorroMensualPrevisto: toCents(800),
+    },
+    preferencias: {
+      ...ESTADO_INICIAL.preferencias,
+      precioObjetivo: toCents(220_000),
+      precioMinExplorar: toCents(80_000),
+      precioMaxExplorar: toCents(400_000),
+      pasoEscala: 20000,
+    },
+    gastos: {
+      ...ESTADO_INICIAL.gastos,
+      notariaCompraventa: toCents(1_250),
+      inmobiliariaPorcentaje: 0,
+    },
+    ajustes: {
+      ...ESTADO_INICIAL.ajustes,
+      tinPorDefecto: 0.041,
+    },
+    escenarioSimulador: {
+      ...ESTADO_INICIAL.escenarioSimulador,
+      precioCompra: toCents(220_000),
+      valorTasacion: toCents(210_000),
+      importeSolicitado: toCents(168_000),
+    },
+  };
+}
+
+describe('limpieza de datos', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('parte sin importes personales ni ejemplos precargados', () => {
+    expect(ESTADO_INICIAL.schemaVersion).toBe(6);
+    expect(ESTADO_INICIAL.perfil.titulares[0].netoPorPaga).toBe(ZERO);
+    expect(ESTADO_INICIAL.perfil.ahorrosActuales).toBe(ZERO);
+    expect(ESTADO_INICIAL.preferencias.precioObjetivo).toBe(ZERO);
+    expect(ESTADO_INICIAL.escenarioSimulador.precioCompra).toBe(ZERO);
+    expect(ESTADO_INICIAL.escenarioSimulador.valorTasacion).toBe(ZERO);
+    expect(ESTADO_INICIAL.escenarioSimulador.importeSolicitado).toBe(ZERO);
+  });
+
+  it('borra datos y conserva la configuración ajustada', () => {
+    const previo = estadoConDatos();
+    const limpio = limpiarDatosConservandoConfiguracion(previo);
+
+    expect(limpio.perfil.titulares[0].netoPorPaga).toBe(ZERO);
+    expect(limpio.perfil.ahorrosActuales).toBe(ZERO);
+    expect(limpio.preferencias.precioObjetivo).toBe(ZERO);
+    expect(limpio.escenarioSimulador.precioCompra).toBe(ZERO);
+    expect(limpio.simulaciones).toEqual([]);
+    expect(limpio.ofertas).toEqual([]);
+    expect(limpio.metas).toEqual([]);
+
+    expect(limpio.gastos).toEqual(previo.gastos);
+    expect(limpio.ajustes).toEqual(previo.ajustes);
+    expect(limpio.preferencias.precioMinExplorar).toBe(toCents(80_000));
+    expect(limpio.preferencias.precioMaxExplorar).toBe(toCents(400_000));
+    expect(limpio.preferencias.pasoEscala).toBe(20000);
+  });
+
+  it('limpia una sola vez los datos ya guardados con schema 3', () => {
+    const previo = estadoConDatos();
+    localStorage.setItem('hipotecas-v1', JSON.stringify(previo));
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(6);
+    expect(cargado.perfil.titulares[0].netoPorPaga).toBe(ZERO);
+    expect(cargado.preferencias.precioObjetivo).toBe(ZERO);
+    expect(cargado.escenarioSimulador.importeSolicitado).toBe(ZERO);
+    expect(cargado.gastos.notariaCompraventa).toBe(toCents(1_250));
+    expect(cargado.gastos.inmobiliariaPorcentaje).toBe(0.03);
+    expect(cargado.ajustes.tinPorDefecto).toBe(0.041);
+    expect(cargado.ajustes.tinFuente).toBe('manual');
+  });
+
+  it('migra el antiguo TIN inicial al modo automático del INE', () => {
+    const previo = {
+      ...estadoConDatos(),
+      schemaVersion: 5,
+      ajustes: {
+        ...ESTADO_INICIAL.ajustes,
+        tinPorDefecto: 0.035,
+      },
+    };
+    localStorage.setItem('hipotecas-v1', JSON.stringify(previo));
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(6);
+    expect(cargado.ajustes.tinFuente).toBe('ine');
+    expect(cargado.ajustes.tinPorDefecto).toBe(0.0298);
+    expect(cargado.ajustes.tinReferenciaPeriodo).toBe('2026-05');
+  });
+});

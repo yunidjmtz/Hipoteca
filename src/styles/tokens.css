@@ -1,0 +1,68 @@
+/* ============================================================================
+   Paleta «Registro Privado»: pergamino cálido / nogal profundo.
+
+   El tema se resuelve con `light-dark()`. Cambiar de tema = cambiar
+   `color-scheme` en :root. Por defecto sigue la preferencia del sistema.
+
+   Todos los pares texto/fondo están verificados a nivel AA en
+   tests/tokens.contraste.test.ts. Si tocas un valor, el test lo comprueba.
+   ========================================================================= */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- Superficies ------------------------------------------------------- */
+  --c-lienzo: light-dark(#f5efe3, #0c0a07);
+  --c-superficie: light-dark(#fefcf8, #14120e);
+  --c-superficie-2: light-dark(#ede7d9, #1d1a15);
+
+  --c-linea: light-dark(#d4c9b5, #2b2520);
+  --c-linea-fuerte: light-dark(#9c8e7a, #6d6258);
+
+  /* --- Tinta ------------------------------------------------------------- */
+  --c-tinta: light-dark(#1a1509, #ede5d4);
+  --c-tinta-media: light-dark(#52473a, #a89880);
+  --c-tinta-suave: light-dark(#685c50, #aa9b89);
+
+  /* --- Acento: ámbar cálido ---------------------------------------------- */
+  --c-acento: light-dark(#8c5a00, #d4952a);
+  --c-acento-tenue: light-dark(#faecd5, #261905);
+  --c-sobre-acento: light-dark(#fefcf8, #0d0802);
+
+  /* --- Estados de viabilidad (§6.5) -------------------------------------
+     El color nunca va solo: cada estado se acompaña siempre de su texto. */
+  --c-comodo: light-dark(#16663c, #6fc98c);
+  --c-comodo-tenue: light-dark(#dceadd, #16301f);
+  --c-ajustado: light-dark(#7a5300, #dda93f);
+  --c-ajustado-tenue: light-dark(#f6e7c3, #33280d);
+  --c-revisar: light-dark(#9a4a16, #e8955a);
+  --c-revisar-tenue: light-dark(#f7e1ce, #3a2312);
+  --c-no-viable: light-dark(#a32018, #f2867c);
+  --c-no-viable-tenue: light-dark(#f6dcd8, #3b1a17);
+
+  /* --- Sombras ----------------------------------------------------------- */
+  --s-papel:
+    0 1px 2px light-dark(rgb(26 21 9 / 0.07), rgb(0 0 0 / 0.55)),
+    0 0 0 1px light-dark(rgb(26 21 9 / 0.04), rgb(255 255 255 / 0.02));
+  --s-elevado:
+    0 1px 3px light-dark(rgb(26 21 9 / 0.06), rgb(0 0 0 / 0.45)),
+    0 10px 32px -8px light-dark(rgb(26 21 9 / 0.18), rgb(0 0 0 / 0.7));
+
+  /* --- Tipografía --------------------------------------------------------
+     Optima/Candara: humanista elegante con un punto de carácter.
+     Iowan/Palatino mantiene el aire documental en los titulares. */
+  --f-display:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, Cambria,
+    'Times New Roman', serif;
+  --f-texto:
+    'Optima', 'Candara', 'Gill Sans MT', 'Gill Sans', Calibri, 'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, -apple-system, sans-serif;
+  --f-cifra: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* --- Métricas ---------------------------------------------------------- */
+  --r-chico: 4px;
+  --r-medio: 7px;
+  --r-grande: 12px;
+
+  --toque: 2.75rem;
+}

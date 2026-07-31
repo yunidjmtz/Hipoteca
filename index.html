@@ -1,0 +1,25 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src https://servicios.ine.es; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Asistente privado para decidir si comprar una vivienda, cuánto y cuándo. Los cálculos se realizan en el dispositivo y el TIN de referencia se consulta al INE."
+    />
+    <title>Asistente de compra de vivienda</title>
+  </head>
+  <body>
+    <div id="raiz"></div>
+    <noscript>
+      Esta aplicación calcula todo en tu propio dispositivo, así que necesita JavaScript activado.
+      No envía ningún dato personal a Internet.
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+﻿node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.vite/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.local
+.claude/
+.playwright-mcp/
+*.log
+mobile-*.png

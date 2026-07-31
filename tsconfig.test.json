@@ -1,0 +1,10 @@
+﻿{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    // Las pruebas sí corren en Node (leen archivos, arrancan Vitest).
+    // La aplicación no: en tsconfig.app.json no existen los tipos de Node.
+    "types": ["vite/client", "node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["tests"]
+}
