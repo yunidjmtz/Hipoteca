@@ -197,6 +197,28 @@ describe('caso 19 — amortización reduciendo plazo', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Aportaciones múltiples
+// ---------------------------------------------------------------------------
+
+describe('aportaciones múltiples', () => {
+  it('aplica cada aportación en la cuota indicada y acumula sus comisiones', () => {
+    const result = simularAmortizacionAnticipada(flujoFijo(100_000, 0.03, 20), {
+      aportaciones: [
+        { importe: toCents(5_000), enMes: 12 },
+        { importe: toCents(3_000), enMes: 24 },
+      ],
+      opcion: 'cuota',
+      comisionParcial: 0.01,
+    });
+
+    expect(result.comision).toBe(toCents(80));
+    expect(result.flujoAmortizado[12]?.comisiones).toBe(toCents(50));
+    expect(result.flujoAmortizado[24]?.comisiones).toBe(toCents(30));
+    expect(result.flujoAmortizado.at(-1)?.pendiente).toBe(ZERO);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Invariantes
 // ---------------------------------------------------------------------------
 

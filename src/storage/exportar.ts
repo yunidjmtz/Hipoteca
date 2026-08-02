@@ -82,6 +82,97 @@ export function generarCSVEscala(filas: readonly EvaluacionPrecio[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Generador PDF
+// ---------------------------------------------------------------------------
+
+/** Descarga el cuadro de amortización en PDF, con cabecera repetida en cada página. */
+export async function descargarPDFAmortizacion(lineas: readonly LineaMensual[]): Promise<void> {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const documento = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+  const fecha = new Date();
+  const fechaArchivo = fecha.toISOString().slice(0, 10);
+  const fechaDocumento = new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(fecha);
+
+  autoTable(documento, {
+    head: [
+      [
+        'Nº',
+        'Fecha',
+        'TIN',
+        'Cuota',
+        'Intereses',
+        'Principal',
+        'Pendiente',
+        'Costes vinculados',
+      ],
+    ],
+    body: lineas.slice(1).map((linea) => [
+      String(linea.numero),
+      formatFecha(linea.fecha),
+      formatPorcentaje(linea.tinAplicado),
+      formatEuros(linea.cuota),
+      formatEuros(linea.intereses),
+      formatEuros(linea.principal),
+      formatEuros(linea.pendiente),
+      formatEuros(linea.costesVinculados),
+    ]),
+    startY: 24,
+    margin: { top: 24, right: 10, bottom: 14, left: 10 },
+    styles: {
+      font: 'courier',
+      fontSize: 7,
+      cellPadding: 1.8,
+      textColor: [45, 39, 33],
+      lineColor: [225, 213, 194],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [140, 90, 0],
+      textColor: [255, 255, 255],
+      font: 'helvetica',
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: { fillColor: [250, 247, 242] },
+    columnStyles: {
+      0: { halign: 'right', cellWidth: 10 },
+      1: { cellWidth: 22 },
+      2: { halign: 'right', cellWidth: 17 },
+      3: { halign: 'right', cellWidth: 29 },
+      4: { halign: 'right', cellWidth: 29 },
+      5: { halign: 'right', cellWidth: 29 },
+      6: { halign: 'right', cellWidth: 31 },
+      7: { halign: 'right', cellWidth: 37 },
+    },
+    didDrawPage: () => {
+      documento.setFont('helvetica', 'bold');
+      documento.setFontSize(14);
+      documento.setTextColor(45, 39, 33);
+      documento.text('Mi Hipoteca', 10, 10);
+      documento.setFont('helvetica', 'normal');
+      documento.setFontSize(10);
+      documento.setTextColor(100, 91, 80);
+      documento.text('Cuadro mensual tras amortización anticipada', 10, 16);
+      documento.text(`Generado el ${fechaDocumento}`, 287, 10, { align: 'right' });
+      documento.setFontSize(8);
+      documento.text(`Página ${documento.getNumberOfPages()}`, 287, 204, { align: 'right' });
+    },
+  });
+
+  documento.save(`amortizacion-anticipada-${fechaArchivo}.pdf`);
+}
+
+// ---------------------------------------------------------------------------
 // Descarga en el navegador
 // ---------------------------------------------------------------------------
 

@@ -55,11 +55,23 @@ function costesVinculadosMesLocal(vincs: FlujoInput['vinculaciones'], k: number)
 
 export type OpcionAmortizacion = 'cuota' | 'plazo';
 
-export interface InputAmortizacionAnticipada {
-  /** Importe a amortizar anticipadamente (en céntimos). */
+export interface AportacionAmortizacion {
+  /** Importe de la aportación extraordinaria (en céntimos). */
   importe: Cents;
-  /** Número de cuota (1-indexado) en el que se realiza la amortización. */
+  /** Número de cuota (1-indexado) en el que se realiza la aportación. */
   enMes: number;
+}
+
+export interface InputAmortizacionAnticipada {
+  /**
+   * Aportaciones extraordinarias a simular. Las que coinciden en un mismo mes
+   * se suman antes de recalcular la cuota o el plazo.
+   */
+  aportaciones?: readonly AportacionAmortizacion[];
+  /** Compatibilidad con la simulación de una sola aportación. */
+  importe?: Cents;
+  /** Compatibilidad con la simulación de una sola aportación. */
+  enMes?: number;
   /** 'cuota': mismo plazo, cuota menor; 'plazo': misma cuota, plazo menor. */
   opcion: OpcionAmortizacion;
   /** Decimal; de EscenarioHipoteca.comisiones.amortizacionParcial. */
@@ -78,6 +90,23 @@ export interface ResultadoAmortizacion {
   nuevoNumCuotas: number | null;
   diferenciaCuota: Cents | null;
   diferenciaMeses: number | null;
+}
+
+function agruparAportacionesPorMes(amort: InputAmortizacionAnticipada): Map<number, Cents> {
+  const aportaciones = amort.aportaciones ?? [
+    { importe: amort.importe ?? ZERO, enMes: amort.enMes ?? 1 },
+  ];
+  const porMes = new Map<number, Cents>();
+
+  for (const aportacion of aportaciones) {
+    if (aportacion.importe <= ZERO || aportacion.enMes < 1) continue;
+    porMes.set(
+      aportacion.enMes,
+      addCents(porMes.get(aportacion.enMes) ?? ZERO, aportacion.importe),
+    );
+  }
+
+  return porMes;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +139,7 @@ export function simularAmortizacionAnticipada(
   const flujoOriginal = construirFlujoDeCaja(input);
   const interesesOriginales = sumCents(flujoOriginal.slice(1).map((l) => l.intereses));
   const cuotaOriginalMes1 = flujoOriginal[1]?.cuota ?? ZERO;
+  const aportacionesPorMes = agruparAportacionesPorMes(amort);
 
   // Estado inicial del bucle amortizado
   let tinActual = calcularTinMes(1, input, mesesFijos);
@@ -150,10 +180,13 @@ export function simularAmortizacionAnticipada(
       cuotaActual = cuotaMensual(pendiente, tinActual, mesesRestantes);
     }
 
-    // Evento de amortización anticipada (antes del pago ordinario del mes k)
-    if (k === amort.enMes && amort.importe > ZERO) {
-      const importeEfectivo = minCents(amort.importe, pendiente);
-      comision = centsRoundHalfUp(importeEfectivo * amort.comisionParcial);
+    // Aportación extraordinaria antes del pago ordinario del mes k.
+    const aportacion = aportacionesPorMes.get(k) ?? ZERO;
+    let comisionMes = ZERO;
+    if (aportacion > ZERO) {
+      const importeEfectivo = minCents(aportacion, pendiente);
+      comisionMes = centsRoundHalfUp(importeEfectivo * amort.comisionParcial);
+      comision = addCents(comision, comisionMes);
       pendiente = subtractCents(pendiente, importeEfectivo);
 
       if (pendiente <= ZERO) {
@@ -167,7 +200,7 @@ export function simularAmortizacionAnticipada(
           principal: ZERO,
           pendiente: ZERO,
           costesVinculados: ZERO,
-          comisiones: comision,
+          comisiones: comisionMes,
         });
         break;
       }
@@ -206,7 +239,7 @@ export function simularAmortizacionAnticipada(
       principal,
       pendiente: nuevoPendiente,
       costesVinculados: cv,
-      comisiones: ZERO,
+      comisiones: comisionMes,
     });
 
     pendiente = nuevoPendiente;

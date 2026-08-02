@@ -20,6 +20,7 @@ describe('construirContexto', () => {
       },
       preferencias: {
         ...ESTADO_INICIAL.preferencias,
+        ccaa: 'Aragón',
         valorReferenciaFiscal: toCents(210_000),
       },
     });

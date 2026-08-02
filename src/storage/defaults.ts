@@ -29,7 +29,7 @@ export const ESTADO_INICIAL: EstadoPersistido = {
   },
 
   preferencias: {
-    ccaa: 'Aragón',
+    ccaa: '',
     provincia: '',
     destino: 'habitual',
     estadoVivienda: 'usada',

@@ -3,6 +3,29 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import { Icono } from '@/components/Icono';
 import { SECCIONES } from '@/app/secciones';
 import { Ajustes } from '@/pages/Ajustes';
+import { useEstado } from '@/app/EstadoProvider';
+
+const COMUNIDADES_AUTONOMAS = [
+  'Andalucía',
+  'Aragón',
+  'Asturias',
+  'Islas Baleares',
+  'Canarias',
+  'Cantabria',
+  'Castilla-La Mancha',
+  'Castilla y León',
+  'Cataluña',
+  'Extremadura',
+  'Galicia',
+  'La Rioja',
+  'Madrid',
+  'Murcia',
+  'Navarra',
+  'País Vasco',
+  'Comunitat Valenciana',
+  'Ceuta',
+  'Melilla',
+] as const;
 
 function rutaDe(ruta: string): string {
   return ruta === '' ? '/' : `/${ruta}`;
@@ -33,7 +56,10 @@ function Marca({ compacta = false }: { readonly compacta?: boolean }) {
 
 export function Disposicion() {
   const { pathname } = useLocation();
+  const { estado, actualizarPreferencias } = useEstado();
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+  const [ccaaInicial, setCcaaInicial] = useState('');
+  const necesitaElegirCcaa = estado.preferencias.ccaa === '';
 
   function abrirAjustes() {
     setAjustesAbiertos(true);
@@ -52,7 +78,7 @@ export function Disposicion() {
   }, [ajustesAbiertos]);
 
   return (
-    <div className="relative z-10 min-h-dvh lg:grid lg:grid-cols-[17rem_1fr]">
+    <div className="relative z-10 min-h-svh lg:grid lg:min-h-dvh lg:grid-cols-[17rem_1fr]">
       {/* Raíl lateral: tableta horizontal y escritorio */}
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex">
         <div className="px-1">
@@ -121,7 +147,7 @@ export function Disposicion() {
       </aside>
 
       {/* Cabecera compacta: tableta vertical y móvil */}
-      <header className="sticky top-0 z-20 border-b border-linea bg-superficie/95 px-4 py-3 backdrop-blur-sm lg:hidden">
+      <header className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/95 px-4 backdrop-blur-sm lg:hidden">
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <Marca compacta />
@@ -141,7 +167,7 @@ export function Disposicion() {
         className={[
           'mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-10',
           pathname === '/escala'
-            ? 'flex h-[calc(100dvh-3.75rem)] overflow-hidden pt-4 pb-20 lg:h-dvh lg:pt-8 lg:pb-8'
+            ? 'flex h-[calc(100svh-3.75rem)] overflow-hidden pt-4 pb-20 lg:h-dvh lg:pt-8 lg:pb-8'
             : 'pt-6 pb-32 lg:pt-8 lg:pb-12',
         ].join(' ')}
       >
@@ -151,7 +177,7 @@ export function Disposicion() {
       {/* Navegación inferior: móvil y tableta vertical */}
       <nav
         aria-label="Secciones"
-        className="fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
+        className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
       >
         <ul className="grid grid-cols-5">
           {SECCIONES.map((seccion) => (
@@ -220,6 +246,49 @@ export function Disposicion() {
         {/* Contenido scrollable */}
         <div className="flex-1 overflow-y-auto p-6">{ajustesAbiertos && <Ajustes />}</div>
       </aside>
+
+      {necesitaElegirCcaa && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-ccaa-inicial"
+          className="fixed inset-0 z-[60] flex items-end bg-tinta/30 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
+        >
+          <section className="w-full max-w-md rounded-grande border border-linea bg-superficie p-6 shadow-elevado">
+            <p className="rotulo mb-1">Configuración inicial</p>
+            <h2 id="titulo-ccaa-inicial" className="font-display text-2xl text-tinta">
+              ¿Dónde quieres comprar?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+              Selecciona tu comunidad autónoma para estimar correctamente los impuestos de compra.
+            </p>
+            <label htmlFor="ccaa-inicial" className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta">
+              Comunidad autónoma
+              <select
+                id="ccaa-inicial"
+                value={ccaaInicial}
+                onChange={(e) => setCcaaInicial(e.target.value)}
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-base font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              >
+                <option value="">Selecciona una comunidad</option>
+                {COMUNIDADES_AUTONOMAS.map((ccaa) => (
+                  <option key={ccaa} value={ccaa}>
+                    {ccaa}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={ccaaInicial === ''}
+              onClick={() => actualizarPreferencias({ ccaa: ccaaInicial })}
+              className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Continuar
+            </button>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

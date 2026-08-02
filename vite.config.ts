@@ -2,6 +2,7 @@
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
 /**
@@ -28,7 +29,59 @@ function cspDesarrollo(): Plugin {
 export default defineConfig({
   // Hosting estático cualquiera: rutas relativas + router por hash (§2.1).
   base: './',
-  plugins: [react(), tailwindcss(), cspDesarrollo()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    cspDesarrollo(),
+    VitePWA({
+      registerType: 'prompt',
+      injectRegister: 'script-defer',
+      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
+      workbox: {
+        cleanupOutdatedCaches: true,
+        navigateFallback: 'index.html',
+        globPatterns: ['**/*.{html,js,css,ico,png}'],
+      },
+      manifest: {
+        id: './',
+        name: 'Mi Hipoteca',
+        short_name: 'Mi Hipoteca',
+        description:
+          'Asistente privado para calcular, comparar y planificar la compra de una vivienda.',
+        lang: 'es',
+        start_url: './',
+        scope: './',
+        display: 'standalone',
+        orientation: 'any',
+        background_color: '#f5efe3',
+        theme_color: '#8c5a00',
+        categories: ['finance', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-64x64.png',
+            sizes: '64x64',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'maskable-icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

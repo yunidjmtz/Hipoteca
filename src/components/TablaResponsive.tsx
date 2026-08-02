@@ -6,15 +6,22 @@ interface Props {
   minWidth?: string;
   children: ReactNode;
   className?: string;
+  cabecera?: ReactNode;
 }
 
 /**
  * Envoltorio que garantiza scroll horizontal en pantallas estrechas.
  * minWidth se pasa como estilo inline para evitar clases dinámicas de Tailwind.
  */
-export function TablaResponsive({ minWidth = '600px', children, className = '' }: Props) {
+export function TablaResponsive({
+  minWidth = '600px',
+  children,
+  className = '',
+  cabecera,
+}: Props) {
   return (
     <div className={`overflow-x-auto [-webkit-overflow-scrolling:touch] ${className}`}>
+      {cabecera}
       <table
         className="tabla-responsive w-full border-collapse text-sm"
         style={{ '--tabla-min-width': minWidth } as CSSProperties}

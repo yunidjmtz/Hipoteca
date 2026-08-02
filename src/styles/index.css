@@ -222,3 +222,53 @@
 @utility tooltip-anima {
   animation: tooltip-aparecer 200ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
+
+/*
+ * Safari amplía automáticamente los controles con texto menor de 16 px al
+ * recibir el foco. En pantallas táctiles mantenemos ese mínimo para que abrir
+ * el teclado no deje la página ampliada al terminar de editar.
+ */
+@media (max-width: 1023px) {
+  input:is(
+    [type='text'],
+    [type='number'],
+    [type='date'],
+    [type='email'],
+    [type='password'],
+    [type='search'],
+    [type='tel'],
+    [type='url']
+  ),
+  input:not([type]),
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}
+
+/*
+ * Alturas estables para el chrome propio de la aplicación. El espacio seguro
+ * del iPhone queda fuera de los botones y no cambia su caja cuando Safari
+ * contrae o despliega su barra inferior.
+ */
+@media (max-width: 1023px) {
+  .cabecera-movil {
+    height: 3.75rem;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .cabecera-movil > div {
+    height: 100%;
+  }
+
+  .navegacion-movil {
+    height: calc(3.75rem + env(safe-area-inset-bottom));
+    transform: translateZ(0);
+  }
+
+  .navegacion-movil > ul {
+    height: 3.75rem;
+  }
+
+}

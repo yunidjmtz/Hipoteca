@@ -282,10 +282,10 @@ export function Ajustes() {
       </Panel>
 
       <Panel titulo="Opciones de cálculo avanzadas" rotulo="Ajustes">
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col">
           {/* A. Parámetros de hipoteca */}
-          <Panel titulo="Parámetros de hipoteca" rotulo="Ajustes">
-            <div className="flex flex-col gap-4">
+          <section className="flex flex-col gap-4">
+            <h3 className="font-display text-xl text-tinta">Parámetros de hipoteca</h3>
               <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-tinta">
                   Referencia del interés para estimaciones
@@ -393,12 +393,11 @@ export function Ajustes() {
                 valor={ajustes.ltvPorDefecto}
                 onChange={(v) => actualizarAjustes({ ltvPorDefecto: v })}
               />
-            </div>
-          </Panel>
+          </section>
 
           {/* B. Ratios y plazos */}
-          <Panel titulo="Ratios y plazos">
-            <div className="flex flex-col gap-4">
+          <section className="mt-5 flex flex-col gap-4 border-t border-linea pt-5">
+            <h3 className="font-display text-xl text-tinta">Ratios y plazos</h3>
               <InputPorcentaje
                 id="ratio-bancario-max"
                 etiqueta="Máximo de ingresos destinado a deudas"
@@ -447,13 +446,12 @@ export function Ajustes() {
                   <option value="menor">Titular de menos edad</option>
                 </select>
               </div>
-            </div>
-          </Panel>
+          </section>
 
           {/* C. Rango de exploración */}
-          <Panel titulo="Rango de exploración">
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <section className="mt-5 flex flex-col gap-4 border-t border-linea pt-5">
+            <h3 className="font-display text-xl text-tinta">Rango de exploración</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <InputMoneda
                   id="precio-min"
                   etiqueta="Precio mínimo"
@@ -487,25 +485,25 @@ export function Ajustes() {
                     <option value={20000}>20.000 €</option>
                   </select>
                 </div>
-              </div>
             </div>
-          </Panel>
+          </section>
 
           {/* D. Fiscalidad por CCAA */}
-          <Panel titulo="Fiscalidad por CCAA">
-            <div className="flex flex-col gap-5">
-              {ajustes.fiscal.map((cfg) => (
-                <FiscalCcaaEditor
-                  key={cfg.ccaa}
-                  config={cfg}
-                  onCambiar={(nueva) => {
-                    const fiscal = ajustes.fiscal.map((f) => (f.ccaa === cfg.ccaa ? nueva : f));
-                    actualizarAjustes({ fiscal });
-                  }}
-                />
+          <section className="mt-5 flex flex-col gap-5 border-t border-linea pt-5">
+            <h3 className="font-display text-xl text-tinta">Fiscalidad por CCAA</h3>
+            {ajustes.fiscal
+              .filter((cfg) => cfg.ccaa !== 'Aragón')
+              .map((cfg) => (
+              <FiscalCcaaEditor
+                key={cfg.ccaa}
+                config={cfg}
+                onCambiar={(nueva) => {
+                  const fiscal = ajustes.fiscal.map((f) => (f.ccaa === cfg.ccaa ? nueva : f));
+                  actualizarAjustes({ fiscal });
+                }}
+              />
               ))}
-            </div>
-          </Panel>
+          </section>
         </div>
       </Panel>
 
