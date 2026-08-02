@@ -1,5 +1,25 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { fechaVencimiento, addMonthsAnchored } from '@/core/dates';
+import {
+  fechaVencimiento,
+  addMonthsAnchored,
+  fechaLocalISO,
+  primerDiaMesSiguienteLocal,
+} from '@/core/dates';
+
+describe('fechas locales', () => {
+  it('acepta la fecha actual cuando no se proporciona una explícita', () => {
+    expect(fechaLocalISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(primerDiaMesSiguienteLocal()).toMatch(/^\d{4}-\d{2}-01$/);
+  });
+
+  it('no retrocede de día al convertir una medianoche local', () => {
+    expect(fechaLocalISO(new Date(2026, 8, 1, 0, 0, 0))).toBe('2026-09-01');
+  });
+
+  it('calcula el primer día del mes siguiente en hora local', () => {
+    expect(primerDiaMesSiguienteLocal(new Date(2026, 7, 2, 23, 30))).toBe('2026-09-01');
+  });
+});
 
 describe('addMonthsAnchored', () => {
   it('avanza meses sin cambiar el día cuando el mes lo permite', () => {

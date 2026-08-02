@@ -10,12 +10,14 @@ import {
   ValorEurosTabla,
   ValorPorcentajeTabla,
 } from '@/components/TablaResponsive';
+import { fechaLocalISO } from '@/core/dates';
 import { formatEntero, formatEuros } from '@/core/format';
 import { addCents, maxCents, subtractCents, sumCents, toCents, ZERO } from '@/core/money';
 import { simulacionDesdeOferta } from '@/domain/mortgageOffer';
 import {
   compararOfertas,
   PESOS_POR_DEFECTO,
+  sonOfertasComparables,
   type PesosComparacion,
   type ResultadoComparacion,
 } from '@/finance/offers';
@@ -171,7 +173,7 @@ function PanelPesos({ pesos, onCambio }: PropsPesos) {
   const dimensiones: { campo: keyof PesosComparacion; etiqueta: string }[] = [
     { campo: 'costeReal', etiqueta: 'Coste real total' },
     { campo: 'cuota', etiqueta: 'Cuota inicial' },
-    { campo: 'desembolsoInicial', etiqueta: 'Desembolso inicial' },
+    { campo: 'desembolsoInicial', etiqueta: 'Aportación y costes iniciales' },
     { campo: 'flexibilidad', etiqueta: 'Flexibilidad' },
     { campo: 'vinculaciones', etiqueta: 'Vinculaciones' },
   ];
@@ -245,7 +247,7 @@ export function TablaComparacion({
               <EncabezadoConUnidad titulo="Coste total" unidad="€" />
             </th>
             <th className="py-2 pr-3 font-medium">
-              <EncabezadoConUnidad titulo="Desembolso" unidad="€" />
+              <EncabezadoConUnidad titulo="Aportación + costes iniciales" unidad="€" />
             </th>
             {puntuacionActiva && <th className="py-2 pr-3 font-medium">Puntuación</th>}
             <th className="py-2 font-medium">Acciones</th>
@@ -422,7 +424,7 @@ export function TablaComparacion({
                               [
                                 ['costeReal', 'Coste real'],
                                 ['cuota', 'Cuota'],
-                                ['desembolsoInicial', 'Desembolso'],
+                                ['desembolsoInicial', 'Inicial'],
                                 ['flexibilidad', 'Flexibilidad'],
                                 ['vinculaciones', 'Vinculaciones'],
                               ] as [keyof PesosComparacion, string][]
@@ -652,7 +654,7 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
           </dd>
         </div>
         <div className="rounded-chico bg-superficie-2 px-3 py-2">
-          <dt className="text-xs text-tinta-suave">Desembolso inicial</dt>
+          <dt className="text-xs text-tinta-suave">Aportación y costes iniciales</dt>
           <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
             {formatEuros(metricas.desembolsoInicial)}
           </dd>
@@ -760,6 +762,8 @@ function Hipotecas() {
     () => compararOfertas(estado.ofertas, pesos),
     [estado.ofertas, pesos],
   );
+  const ofertasComparables = sonOfertasComparables(estado.ofertas);
+  const mostrarPuntuacion = puntuacionActiva && ofertasComparables && comparacion.length > 1;
   const indiceVisible = Math.min(indiceActivo, Math.max(comparacion.length - 1, 0));
 
   function abrirNueva() {
@@ -799,11 +803,21 @@ function Hipotecas() {
 
       {comparacion.length > 0 && (
         <>
-          <Recomendacion
-            comparacion={comparacion}
-            puntuacionActiva={puntuacionActiva}
-            onConfigurar={() => setMostrarConfigPesos(true)}
-          />
+          {ofertasComparables ? (
+            <Recomendacion
+              comparacion={comparacion}
+              puntuacionActiva={mostrarPuntuacion}
+              onConfigurar={() => setMostrarConfigPesos(true)}
+            />
+          ) : (
+            <section
+              role="status"
+              className="rounded-grande border border-revisar/40 bg-revisar-tenue px-5 py-4 text-sm leading-relaxed text-tinta"
+            >
+              Estas ofertas corresponden a precios de vivienda distintos. Se muestran sus cifras,
+              pero no se elige una “mejor” hasta que todas comparen la misma compra.
+            </section>
+          )}
 
           {comparacion.length > 1 && (
             <nav
@@ -937,7 +951,7 @@ interface BorradorVivienda {
 
 const VIVIENDA_VACIA: BorradorVivienda = {
   nombre: '',
-  fecha: new Date().toISOString().slice(0, 10),
+  fecha: fechaLocalISO(),
   direccion: '',
   precioVenta: ZERO,
   superficieM2: 0,
@@ -955,7 +969,7 @@ function totalReformas(reformas: readonly PartidaReforma[]): Cents {
 function borradorDesdeVivienda(vivienda: ViviendaGuardada): BorradorVivienda {
   return {
     nombre: vivienda.nombre,
-    fecha: vivienda.fecha === '' ? new Date().toISOString().slice(0, 10) : vivienda.fecha,
+    fecha: vivienda.fecha === '' ? fechaLocalISO() : vivienda.fecha,
     direccion: vivienda.direccion,
     precioVenta: vivienda.precioVenta,
     superficieM2: vivienda.superficieM2,

@@ -223,9 +223,7 @@ describe('aportaciones múltiples', () => {
 // ---------------------------------------------------------------------------
 
 describe('invariantes del flujo amortizado', () => {
-  it('Σ principal = capital original (sin amortización fuera de cuotas ordinarias)', () => {
-    // No verificamos esto aquí porque la amortización parcial reduce el capital
-    // que se amortiza ordinariamente. En su lugar verificamos el cierre a 0.
+  it('Σ principal ordinario + amortizaciones extraordinarias = capital original', () => {
     const input = flujoFijo(100_000, 0.04, 15);
     const result = simularAmortizacionAnticipada(input, {
       importe: toCents(5_000),
@@ -233,7 +231,11 @@ describe('invariantes del flujo amortizado', () => {
       opcion: 'cuota',
       comisionParcial: 0,
     });
+    const capitalExplicado = result.flujoAmortizado
+      .slice(1)
+      .reduce((total, linea) => total + linea.principal + linea.amortizacionExtraordinaria, 0);
     const ultima = result.flujoAmortizado[result.flujoAmortizado.length - 1];
+    expect(capitalExplicado).toBe(input.capital);
     expect(ultima?.pendiente).toBe(ZERO);
   });
 

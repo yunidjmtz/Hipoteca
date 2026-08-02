@@ -73,7 +73,7 @@ export function Capacidad() {
   const porComodo = useMemo(
     () =>
       buscarPrecioMaximo(
-        (e) => e.ratioBancario <= ajustes.ratioPersonalObjetivo,
+        (e) => e.ratioPersonal <= ajustes.ratioPersonalObjetivo,
         ctxFactory,
         rango,
       ),
@@ -100,7 +100,7 @@ export function Capacidad() {
     [ctxFactory, rango, ajustes.ratioBancarioMaximo],
   );
 
-  const factor = factorLimitante(evaluacionObjetivo);
+  const factor = factorLimitante(evaluacionObjetivo, ajustes.ratioBancarioMaximo);
 
   const filas: readonly FilaPrecio[] = [
     {
@@ -116,7 +116,7 @@ export function Capacidad() {
     },
     {
       etiqueta: 'Cómodo',
-      descripcion: `Precio máximo con desembolso cubierto y cuota por debajo del ${(ajustes.ratioPersonalObjetivo * 100).toFixed(0)} % de los ingresos.`,
+      descripcion: `Precio máximo con desembolso cubierto y coste de vivienda más deudas por debajo del ${(ajustes.ratioPersonalObjetivo * 100).toFixed(0)} % de los ingresos.`,
       resultado: porComodo,
     },
     {

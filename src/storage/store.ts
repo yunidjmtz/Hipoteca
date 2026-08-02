@@ -22,6 +22,7 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
 }
 
 const CLAVE = 'hipotecas-v1';
+const CLAVE_RECUPERACION = 'hipotecas-recuperacion-v1';
 const SCHEMA_ACTUAL = 10;
 
 // Referencia al timer de debounce; vive a nivel de módulo para persistir entre llamadas.
@@ -171,19 +172,26 @@ export function limpiarDatosConservandoConfiguracion(data: EstadoPersistido): Es
 // ---------------------------------------------------------------------------
 
 export function cargarEstado(): EstadoPersistido {
-  const raw = localStorage.getItem(CLAVE);
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(CLAVE);
+  } catch {
+    return ESTADO_INICIAL;
+  }
   if (raw === null) return ESTADO_INICIAL;
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
+    guardarDatosRecuperacion(raw);
     return ESTADO_INICIAL;
   }
 
   const resultado = zEstadoPersistido.safeParse(parsed);
   if (!resultado.success) {
     console.error('[store] Estado almacenado no válido:', resultado.error);
+    guardarDatosRecuperacion(raw);
     return ESTADO_INICIAL;
   }
 
@@ -196,20 +204,35 @@ export function cargarEstado(): EstadoPersistido {
   return estado;
 }
 
-export function guardarEstadoConDebounce(estado: EstadoPersistido): void {
+export function guardarEstadoConDebounce(
+  estado: EstadoPersistido,
+  onResultado?: (guardado: boolean) => void,
+): void {
   if (timerId !== null) clearTimeout(timerId);
   timerId = setTimeout(() => {
-    localStorage.setItem(CLAVE, JSON.stringify(estado));
+    try {
+      localStorage.setItem(CLAVE, JSON.stringify(estado));
+      onResultado?.(true);
+    } catch (error) {
+      console.error('[store] No se pudo guardar el estado:', error);
+      onResultado?.(false);
+    }
     timerId = null;
   }, 500);
 }
 
-export function guardarEstadoAhora(estado: EstadoPersistido): void {
+export function guardarEstadoAhora(estado: EstadoPersistido): boolean {
   if (timerId !== null) {
     clearTimeout(timerId);
     timerId = null;
   }
-  localStorage.setItem(CLAVE, JSON.stringify(estado));
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify(estado));
+    return true;
+  } catch (error) {
+    console.error('[store] No se pudo guardar el estado:', error);
+    return false;
+  }
 }
 
 export function exportarJSON(estado: EstadoPersistido): string {
@@ -238,5 +261,34 @@ export function limpiarAlmacenamiento(): void {
     clearTimeout(timerId);
     timerId = null;
   }
-  localStorage.removeItem(CLAVE);
+  try {
+    localStorage.removeItem(CLAVE);
+  } catch {
+    // El estado en memoria se puede restablecer aunque el navegador bloquee storage.
+  }
+}
+
+function guardarDatosRecuperacion(raw: string): void {
+  try {
+    localStorage.setItem(CLAVE_RECUPERACION, raw);
+  } catch {
+    // Si storage está completamente bloqueado no existe un segundo lugar local seguro.
+  }
+}
+
+/** Devuelve el último estado inválido conservado para que el usuario pueda rescatarlo. */
+export function obtenerDatosRecuperacion(): string | null {
+  try {
+    return localStorage.getItem(CLAVE_RECUPERACION);
+  } catch {
+    return null;
+  }
+}
+
+export function descartarDatosRecuperacion(): void {
+  try {
+    localStorage.removeItem(CLAVE_RECUPERACION);
+  } catch {
+    // No debe impedir que la aplicación siga funcionando.
+  }
 }

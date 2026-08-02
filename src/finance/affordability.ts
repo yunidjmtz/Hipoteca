@@ -82,13 +82,23 @@ export function calcularDeudasMensuales(deudas: ContextoEvaluacion['perfil']['de
 }
 
 /**
+ * Calcula los otros ingresos desde su lista normalizada. El escalar antiguo
+ * solo se conserva como respaldo para datos migrados que todavía no tengan lista.
+ */
+export function calcularOtrosIngresosMensuales(perfil: ContextoEvaluacion['perfil']): Cents {
+  return perfil.otrosIngresos.length > 0
+    ? calcularImportesMensuales(perfil.otrosIngresos)
+    : perfil.otrosIngresosMensuales;
+}
+
+/**
  * Margen mensual que queda hoy para ahorrar. Incluye todos los gastos fijos,
  * también el alquiler actual, y las deudas ya comprometidas.
  */
 export function calcularCapacidadAhorroActual(perfil: ContextoEvaluacion['perfil']): Cents {
   const ingresos = addCents(
     calcularIngresoMensualNormalizado(perfil.titulares),
-    perfil.otrosIngresosMensuales,
+    calcularOtrosIngresosMensuales(perfil),
   );
   const deudas = calcularDeudasMensuales(perfil.deudas);
   const gastos = calcularGastosFijosActualesMensuales(perfil.gastosFijos);
@@ -129,9 +139,9 @@ export function calcularPlazoEfectivo(
 export type FactorLimitante =
   'ahorro' | 'cuota' | 'ahorro_y_cuota' | 'tasacion' | 'edad' | 'ninguno';
 
-export function factorLimitante(e: EvaluacionPrecio): FactorLimitante {
+export function factorLimitante(e: EvaluacionPrecio, ratioMaximo: number): FactorLimitante {
   const faltaAhorro = e.faltante > 0;
-  const cuotaExcesiva = e.estado === 'cuota_excesiva' || e.ratioBancario > 0.35;
+  const cuotaExcesiva = e.estado === 'cuota_excesiva' || e.ratioBancario > ratioMaximo;
   if (faltaAhorro && cuotaExcesiva) return 'ahorro_y_cuota';
   if (faltaAhorro) return 'ahorro';
   if (cuotaExcesiva) return 'cuota';
@@ -171,7 +181,7 @@ export function evaluarPrecio(precio: Cents, ctx: ContextoEvaluacion): Evaluacio
   // Ingresos normalizados (R3)
   const ingresoMensual = addCents(
     calcularIngresoMensualNormalizado(perfil.titulares),
-    perfil.otrosIngresosMensuales,
+    calcularOtrosIngresosMensuales(perfil),
   );
 
   // Otras deudas mensuales
@@ -219,11 +229,18 @@ export function evaluarPrecio(precio: Cents, ctx: ContextoEvaluacion): Evaluacio
   const estado = determinarEstado(
     dn,
     ratioBancario,
+    ratioPersonal,
     ajustes.ratioBancarioMaximo,
     ajustes.ratioPersonalObjetivo,
   );
 
-  const motivo = generarMotivo(estado, dn, ratioBancario, ajustes.ratioBancarioMaximo);
+  const motivo = generarMotivo(
+    estado,
+    dn,
+    ratioPersonal,
+    ajustes.ratioBancarioMaximo,
+    ajustes.ratioPersonalObjetivo,
+  );
 
   return {
     precio,
@@ -321,13 +338,14 @@ export function buscarPrecioMaximo(
 function determinarEstado(
   dn: ReturnType<typeof calcularDineroNecesario>,
   ratioBancario: number,
+  ratioPersonal: number,
   ratioMax: number,
   ratioObjetivo: number,
 ): EstadoViabilidad {
   const tieneMinimo = dn.faltanteMinimo <= 0;
   const tieneRecomendado = dn.faltanteRecomendado <= 0;
   const cuotaOk = ratioBancario <= ratioMax;
-  const ratioComodo = ratioBancario <= ratioObjetivo;
+  const ratioComodo = ratioPersonal <= ratioObjetivo;
 
   if (!tieneMinimo && !cuotaOk) return 'no_viable';
   if (!tieneMinimo) return 'falta_ahorro';
@@ -340,8 +358,9 @@ function determinarEstado(
 function generarMotivo(
   estado: EstadoViabilidad,
   dn: ReturnType<typeof calcularDineroNecesario>,
-  ratioBancario: number,
+  ratioPersonal: number,
   ratioMax: number,
+  ratioObjetivo: number,
 ): string {
   switch (estado) {
     case 'comodo':
@@ -351,7 +370,7 @@ function generarMotivo(
     case 'ajustado':
       return dn.faltanteRecomendado > 0
         ? 'Cubre el mínimo, pero te falta parte del dinero recomendado.'
-        : `La cuota (${(ratioBancario * 100).toFixed(1)} %) roza el límite del ${(ratioMax * 100).toFixed(0)} %.`;
+        : `La vivienda y tus deudas consumirían el ${(ratioPersonal * 100).toFixed(1)} % de los ingresos, por encima de tu objetivo del ${(ratioObjetivo * 100).toFixed(0)} %.`;
     case 'falta_ahorro':
       return 'La cuota sería asumible, pero no tienes suficiente ahorro para el desembolso inicial.';
     case 'cuota_excesiva':

@@ -31,7 +31,7 @@ export function Panel({
       ]
         .filter(Boolean)
         .join(' ')}
-      >
+    >
       {(rotulo ?? titulo) !== undefined && (
         <header
           className={`flex items-start justify-between gap-4 border-b border-linea px-6 pt-5 pb-4 ${encabezadoClassName}`}

@@ -93,6 +93,7 @@ export function EscalaPrecios() {
       </button>
       <Panel
         rotulo="Escala de precios"
+        titulo="Comparativa por precio"
         className="flex min-h-0 w-full flex-1 flex-col"
         contenidoClassName="flex min-h-0 flex-1 flex-col"
       >
@@ -135,6 +136,15 @@ export function EscalaPrecios() {
                     className={`py-2.5 pr-3 font-mono ${esObjetivo ? 'font-semibold' : 'font-medium'} text-tinta`}
                   >
                     <ValorMiles valor={fila.precio} />
+                    {esObjetivo && (
+                      <span
+                        className="ml-1 text-acento"
+                        aria-label="Precio objetivo"
+                        title="Precio objetivo"
+                      >
+                        ◀
+                      </span>
+                    )}
                   </td>
                   <td className="py-2.5 pr-3 font-mono text-tinta-media">
                     <ValorEurosTabla valor={fila.entrada} />

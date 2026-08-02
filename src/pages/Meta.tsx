@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useEstado } from '@/app/EstadoProvider';
+import { addMonthsAnchored, fechaLocalISO } from '@/core/dates';
 import { formatEuros, formatFecha } from '@/core/format';
 import { maxCents, subtractCents, ZERO } from '@/core/money';
 import { calcularCapacidadAhorroActual, evaluarPrecio } from '@/finance/affordability';
@@ -56,7 +57,9 @@ function ProgresoHitos({
           <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
             {formatEuros(inicio.ahorroAcumulado)}
           </p>
-          <p className="mt-0.5 text-xs text-tinta-media">{Math.round(progreso * 100)} % completado</p>
+          <p className="mt-0.5 text-xs text-tinta-media">
+            {Math.round(progreso * 100)} % completado
+          </p>
         </div>
         <div className="rounded-chico bg-superficie-2/80 px-3 py-2.5">
           <p className="text-xs text-tinta-suave">Próximo hito</p>
@@ -97,18 +100,19 @@ export function Meta() {
   );
 
   const capacidadAhorroActual = useMemo(() => calcularCapacidadAhorroActual(perfil), [perfil]);
+  const hoy = fechaLocalISO();
   const proyeccionInput = useMemo(
     () => ({
       ahorroInicial: perfil.ahorrosActuales,
       ahorroMensual: capacidadAhorroActual,
       extraordinarios: perfil.ingresosExtraordinarios,
-      fechaInicio: new Date().toISOString().slice(0, 10),
+      fechaInicio: hoy,
       precioObjetivo: evaluacion.dineroMinimo,
       crecimientoAnualPrecio: ajustes.crecimientoAnualPrecioVivienda,
       rentabilidadAnualAhorro: ajustes.rentabilidadAnualAhorro,
       mesesMaximos: 120,
     }),
-    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo],
+    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo, hoy],
   );
 
   const meses = useMemo(() => mesesHastaObjetivo(proyeccionInput), [proyeccionInput]);
@@ -119,9 +123,8 @@ export function Meta() {
   const fechaEstimada =
     meses !== null
       ? (() => {
-          const d = new Date();
-          d.setMonth(d.getMonth() + meses);
-          return formatFecha(d.toISOString().slice(0, 10));
+          const diaAncla = Number(hoy.slice(8, 10));
+          return formatFecha(addMonthsAnchored(hoy, diaAncla, meses));
         })()
       : null;
 
@@ -230,7 +233,9 @@ export function Meta() {
                 <tbody>
                   {puntosHastaMeta.map((punto) => (
                     <tr key={punto.mes} className="border-b border-linea last:border-b-0">
-                      <td className="px-5 py-2.5 text-tinta">{punto.mes === 0 ? 'Hoy' : `Mes ${punto.mes}`}</td>
+                      <td className="px-5 py-2.5 text-tinta">
+                        {punto.mes === 0 ? 'Hoy' : `Mes ${punto.mes}`}
+                      </td>
                       <td className="px-3 py-2.5 text-tinta-media">{formatFecha(punto.fecha)}</td>
                       <td className="px-5 py-2.5 text-right font-cifra font-semibold tabular-nums text-tinta">
                         {formatEuros(punto.ahorroAcumulado)}

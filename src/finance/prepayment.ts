@@ -159,6 +159,7 @@ export function simularAmortizacionAnticipada(
     cuota: ZERO,
     intereses: ZERO,
     principal: ZERO,
+    amortizacionExtraordinaria: ZERO,
     pendiente: capital,
     costesVinculados: ZERO,
     comisiones: comisionApertura,
@@ -183,8 +184,10 @@ export function simularAmortizacionAnticipada(
     // Aportación extraordinaria antes del pago ordinario del mes k.
     const aportacion = aportacionesPorMes.get(k) ?? ZERO;
     let comisionMes = ZERO;
+    let amortizacionExtraordinaria = ZERO;
     if (aportacion > ZERO) {
       const importeEfectivo = minCents(aportacion, pendiente);
+      amortizacionExtraordinaria = importeEfectivo;
       comisionMes = centsRoundHalfUp(importeEfectivo * amort.comisionParcial);
       comision = addCents(comision, comisionMes);
       pendiente = subtractCents(pendiente, importeEfectivo);
@@ -198,6 +201,7 @@ export function simularAmortizacionAnticipada(
           cuota: ZERO,
           intereses: ZERO,
           principal: ZERO,
+          amortizacionExtraordinaria,
           pendiente: ZERO,
           costesVinculados: ZERO,
           comisiones: comisionMes,
@@ -237,6 +241,7 @@ export function simularAmortizacionAnticipada(
       cuota: cuotaReal,
       intereses,
       principal,
+      amortizacionExtraordinaria,
       pendiente: nuevoPendiente,
       costesVinculados: cv,
       comisiones: comisionMes,

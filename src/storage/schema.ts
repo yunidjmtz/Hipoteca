@@ -9,8 +9,14 @@ import { normalizarEscenarioHipoteca } from '@/domain/mortgageScenario';
 
 const zCents = z
   .number()
+  .finite()
   .int()
+  .nonnegative()
   .transform((n) => n as Cents);
+
+const zPorcentaje = z.number().finite().min(0).max(1);
+const zTipoInteres = z.number().finite().min(-0.1).max(1);
+const zFechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 // ---------------------------------------------------------------------------
 // Enumeraciones de cadena como uniones de literales (Zod 4 no tiene z.enum)
@@ -61,19 +67,19 @@ const zCriterioEdad = z.union([z.literal('mayor'), z.literal('menor')]);
 // ---------------------------------------------------------------------------
 
 const zTramoImpositivo = z.object({
-  hasta: z.union([z.number(), z.null()]),
-  tipo: z.number(),
+  hasta: z.union([z.number().finite().positive(), z.null()]),
+  tipo: zPorcentaje,
 });
 
 const zReduccionFiscal = z.object({
   id: z.string(),
   descripcion: z.string(),
-  edadMaxima: z.number().optional(),
-  discapacidadMinima: z.number().optional(),
+  edadMaxima: z.number().int().min(0).max(120).optional(),
+  discapacidadMinima: z.number().min(0).max(100).optional(),
   victimaViolenciaGenero: z.literal(true).optional(),
   familiaNumerosa: z.literal(true).optional(),
-  valorMaximoInmueble: z.number().optional(),
-  bonificacionCuota: z.number(),
+  valorMaximoInmueble: z.number().finite().positive().optional(),
+  bonificacionCuota: zPorcentaje,
 });
 
 const zConfigFiscalCcaa = z.object({
@@ -81,11 +87,11 @@ const zConfigFiscalCcaa = z.object({
   revisadoEl: z.string(),
   itpTramos: z.array(zTramoImpositivo),
   itpReducciones: z.array(zReduccionFiscal),
-  ajdCompraventa: z.number(),
+  ajdCompraventa: zPorcentaje,
   ajdReducciones: z.array(zReduccionFiscal),
-  ivaViviendaNueva: z.number(),
-  ivaVpoEspecial: z.number(),
-  tipoManualOverride: z.number().optional(),
+  ivaViviendaNueva: zPorcentaje,
+  ivaVpoEspecial: zPorcentaje,
+  tipoManualOverride: zPorcentaje.optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -95,7 +101,7 @@ const zConfigFiscalCcaa = z.object({
 export const zTitular = z.object({
   netoPorPaga: zCents,
   numeroPagas: z.union([z.literal(12), z.literal(14)]),
-  edad: z.number().int(),
+  edad: z.number().int().min(18).max(120),
   situacionLaboral: zSituacionLaboral,
 });
 
@@ -125,7 +131,7 @@ export const zIngresoExtraordinario = z.object({
   id: z.string(),
   concepto: z.string(),
   importe: zCents,
-  fecha: z.string(),
+  fecha: zFechaIso,
 });
 
 // Un array con uno o exactamente dos titulares.
@@ -171,10 +177,10 @@ export const zGastosCompra = z.object({
   tasacion: zCents,
   notaSimple: zCents,
   inmobiliariaFijo: zCents,
-  inmobiliariaPorcentaje: z.number(),
-  inmobiliariaIva: z.number(),
+  inmobiliariaPorcentaje: zPorcentaje,
+  inmobiliariaIva: zPorcentaje,
   brokerFijo: zCents,
-  brokerPorcentaje: z.number(),
+  brokerPorcentaje: zPorcentaje,
   reforma: zCents,
   muebles: zCents,
   mudanza: zCents,
@@ -199,9 +205,9 @@ export const zCostesRecurrentes = z.object({
 // ---------------------------------------------------------------------------
 
 export const zComisiones = z.object({
-  apertura: z.number(),
-  amortizacionParcial: z.number(),
-  amortizacionTotal: z.number(),
+  apertura: zPorcentaje,
+  amortizacionParcial: zPorcentaje,
+  amortizacionTotal: zPorcentaje,
   subrogacion: zCents,
   novacion: zCents,
   otras: zCents,
@@ -211,12 +217,12 @@ export const zProductoVinculado = z.object({
   id: z.string(),
   nombre: z.string(),
   activo: z.boolean(),
-  bonificacionTin: z.number(),
-  bonificacionMaxima: z.number().optional(),
+  bonificacionTin: zPorcentaje,
+  bonificacionMaxima: zPorcentaje.optional(),
   costeInicial: zCents,
   costeAnual: zCents,
-  incrementoAnual: z.number(),
-  aniosExigidos: z.union([z.number(), z.null()]),
+  incrementoAnual: z.number().finite().min(-0.99).max(10),
+  aniosExigidos: z.union([z.number().int().min(1).max(100), z.null()]),
   obligatorio: z.boolean(),
   observaciones: z.string(),
 });
@@ -227,25 +233,25 @@ export const zEscenarioHipoteca = z
     titulo: z.string(),
     precioCompra: zCents,
     valorTasacion: zCents,
-    ltv: z.number(),
+    ltv: zPorcentaje,
     importeSolicitado: zCents,
-    plazoAnios: z.number(),
+    plazoAnios: z.number().int().min(1).max(40),
     tipo: zTipoHipoteca,
-    tinFijo: z.number().optional(),
-    euribor: z.number().optional(),
+    tinFijo: zTipoInteres.optional(),
+    euribor: zTipoInteres.optional(),
     euriborFechaValor: z.string().optional(),
-    diferencial: z.number().optional(),
+    diferencial: zTipoInteres.optional(),
     periodicidadRevision: zPeriodicidadRevision.optional(),
     euriborPorPeriodos: z
-      .array(z.object({ desdeMes: z.number().int().min(1), valor: z.number() }))
+      .array(z.object({ desdeMes: z.number().int().min(1), valor: zTipoInteres }))
       .optional(),
-    mixtaTinFijo: z.number().optional(),
-    mixtaAniosFijos: z.number().optional(),
-    sueloTin: z.number(),
-    taeOficial: z.number().optional(),
+    mixtaTinFijo: zTipoInteres.optional(),
+    mixtaAniosFijos: z.number().int().min(1).max(39).optional(),
+    sueloTin: zTipoInteres,
+    taeOficial: zPorcentaje.optional(),
     comisiones: zComisiones,
     vinculaciones: z.array(zProductoVinculado),
-    fechaPrimeraCuota: z.string(),
+    fechaPrimeraCuota: zFechaIso,
   })
   .transform((escenario) => {
     // Zod representa los opcionales como `T | undefined`; en dominio son
@@ -258,27 +264,27 @@ export const zEscenarioHipoteca = z
 // ---------------------------------------------------------------------------
 
 const zUmbralesViabilidad = z.object({
-  ratioComodo: z.number(),
-  ratioViable: z.number(),
-  ratioAjustado: z.number(),
+  ratioComodo: zPorcentaje,
+  ratioViable: zPorcentaje,
+  ratioAjustado: zPorcentaje,
 });
 
 export const zAjustes = z.object({
-  ratioBancarioMaximo: z.number(),
-  ratioPersonalObjetivo: z.number(),
-  edadMaximaAlVencimiento: z.number(),
+  ratioBancarioMaximo: zPorcentaje,
+  ratioPersonalObjetivo: zPorcentaje,
+  edadMaximaAlVencimiento: z.number().int().min(18).max(120),
   criterioEdad: zCriterioEdad,
-  crecimientoAnualPrecioVivienda: z.number(),
-  rentabilidadAnualAhorro: z.number(),
+  crecimientoAnualPrecioVivienda: z.number().finite().min(-0.99).max(10),
+  rentabilidadAnualAhorro: z.number().finite().min(-0.99).max(10),
   umbralesViabilidad: z.object({
     ratioComodo: zUmbralesViabilidad.shape.ratioComodo,
     ratioViable: zUmbralesViabilidad.shape.ratioViable,
     ratioAjustado: zUmbralesViabilidad.shape.ratioAjustado,
   }),
   fiscal: z.array(zConfigFiscalCcaa),
-  ltvPorDefecto: z.number(),
-  plazoPorDefecto: z.number(),
-  tinPorDefecto: z.number(),
+  ltvPorDefecto: zPorcentaje,
+  plazoPorDefecto: z.number().int().min(1).max(40),
+  tinPorDefecto: zTipoInteres,
   tinFuente: z
     .union([z.literal('ine'), z.literal('manual')])
     .optional()
@@ -311,7 +317,7 @@ export const zOfertaBancaria = z.object({
   fecha: z.string(),
   estado: zEstadoOferta,
   escenario: zEscenarioHipoteca,
-  taeOficial: z.number().optional(),
+  taeOficial: zPorcentaje.optional(),
   notas: z.string(),
 });
 

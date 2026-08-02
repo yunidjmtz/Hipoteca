@@ -226,6 +226,8 @@ export interface LineaMensual {
   cuota: Cents;
   intereses: Cents;
   principal: Cents;
+  /** Capital cancelado fuera de la cuota ordinaria en este mes. */
+  amortizacionExtraordinaria: Cents;
   pendiente: Cents; // capital pendiente tras esta línea
   costesVinculados: Cents;
   comisiones: Cents; // apertura en mes 0; amortización cuando aplique

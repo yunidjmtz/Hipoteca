@@ -5,10 +5,12 @@ cuándo?» con cifras trazables. Todo el cálculo ocurre en el navegador: no hay
 datos remota. La única petición externa permitida consulta una vez al día el TIN medio oficial de
 las hipotecas sobre viviendas en la API del INE; no se envían datos personales.
 
-El plan completo, con las reglas del dominio y las fases, está en [PLAN.md](PLAN.md). Es la fuente
-de verdad: este README solo explica cómo ejecutar el proyecto.
+Incluye perfil financiero, capacidad de compra, planificación del ahorro, comparación de viviendas
+y ofertas, simulación de hipotecas fijas, variables y mixtas, y amortización anticipada.
 
-**Estado:** Fase 0 (andamiaje) cerrada. El motor financiero llega en la Fase 1a.
+**Fiscalidad:** Aragón tiene una configuración específica revisada. El resto de comunidades usa una
+estimación genérica editable que la interfaz identifica expresamente y que debe verificarse antes de
+tomar una decisión.
 
 ---
 
@@ -61,7 +63,7 @@ Copia el contenido de `dist/` donde quieras servirlo.
 
 > **No basta abrir `dist/index.html` con doble clic.** Los módulos ES no se cargan desde `file://`,
 > así que hace falta servir la carpeta por HTTP (un hosting estático, o un servidor local en la red
-> de casa). La PWA opcional de la Fase 3 resolvería el uso completamente offline.
+> de casa). Después de la primera carga, la PWA instalada puede abrir la interfaz sin conexión.
 
 ## Estructura
 
@@ -71,11 +73,11 @@ src/
   components/   # interfaz reutilizable
   pages/        # una por sección de §6 del plan
   styles/       # tokens de color y capa base de Tailwind
-  core/         # (Fase 1a) dinero, fechas, formato — sin dominio
-  domain/       # (Fase 1a) tipos y esquemas Zod
-  config/       # (Fase 1a) fiscalidad por CCAA, fechada
-  finance/      # (Fase 1a) motor de cálculo, funciones puras
-  storage/      # (Fase 1b) localStorage versionado y migraciones
+  core/         # dinero, fechas y formato — sin dominio
+  domain/       # tipos y esquemas Zod
+  config/       # fiscalidad fechada
+  finance/      # motor de cálculo, funciones puras
+  storage/      # localStorage versionado, recuperación y migraciones
 tests/          # unitarias e invariantes (Vitest + fast-check)
 e2e/            # Playwright, pocos y significativos
 ```

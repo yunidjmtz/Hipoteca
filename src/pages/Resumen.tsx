@@ -22,6 +22,7 @@ import {
   calcularDeudasMensuales,
   calcularGastosFijosActualesMensuales,
   calcularIngresoMensualNormalizado,
+  calcularOtrosIngresosMensuales,
   evaluarPrecio,
 } from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
@@ -257,7 +258,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
 
   const ingresosMensuales = addCents(
     calcularIngresoMensualNormalizado(perfil.titulares),
-    perfil.otrosIngresosMensuales,
+    calcularOtrosIngresosMensuales(perfil),
   );
   const resumenVacio = ingresosMensuales <= ZERO && preferencias.precioObjetivo <= ZERO;
   const deudasMensuales = calcularDeudasMensuales(perfil.deudas);
@@ -301,14 +302,13 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
   const porComodo = useMemo(
     () =>
       buscarPrecioMaximo(
-        (e) => e.ratioBancario <= ajustes.ratioPersonalObjetivo,
+        (e) => e.ratioPersonal <= ajustes.ratioPersonalObjetivo,
         ctxFactory,
         rangoIngresos,
       ),
     [ctxFactory, rangoIngresos, ajustes.ratioPersonalObjetivo],
   );
-  const hipotecaNoViablePorIngresos =
-    evaluacion.ratioBancario > ajustes.ratioBancarioMaximo;
+  const hipotecaNoViablePorIngresos = evaluacion.ratioBancario > ajustes.ratioBancarioMaximo;
 
   useEffect(() => {
     if (!resumenVacio) return;
@@ -359,10 +359,10 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
 
   return (
     <div className="flex flex-col gap-5">
-      {!['Aragón', 'Genérica (editable)'].includes(preferencias.ccaa) && (
+      {preferencias.ccaa !== '' && preferencias.ccaa !== 'Aragón' && (
         <div className="rounded-medio border border-revisar/40 bg-revisar-tenue px-4 py-3 text-sm text-tinta">
-          Los impuestos de {preferencias.ccaa} son una estimación genérica. Revisa el tipo de ITP
-          antes de tomar una decisión.
+          Los impuestos de {preferencias.ccaa} usan una estimación genérica: ITP del 8 % y AJD del
+          1,5 %, sin bonificaciones autonómicas. Confírmalos antes de tomar una decisión.
         </div>
       )}
 
@@ -517,16 +517,17 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
           <section className="aparece-3 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
             <div className="border-b border-linea bg-acento-tenue px-5 py-3">
               <p className="rotulo">Capacidad de compra</p>
+              <h3 className="mt-1 font-display text-lg text-tinta">Qué precio puedes asumir hoy</h3>
             </div>
             <div className="p-5">
               <BarrasCapacidad
-              ahorro={porAhorro.precioMaximo !== null ? fromCents(porAhorro.precioMaximo) : null}
-              ingresos={
-                porIngresos.precioMaximo !== null ? fromCents(porIngresos.precioMaximo) : null
-              }
-              comodo={porComodo.precioMaximo !== null ? fromCents(porComodo.precioMaximo) : null}
+                ahorro={porAhorro.precioMaximo !== null ? fromCents(porAhorro.precioMaximo) : null}
+                ingresos={
+                  porIngresos.precioMaximo !== null ? fromCents(porIngresos.precioMaximo) : null
+                }
+                comodo={porComodo.precioMaximo !== null ? fromCents(porComodo.precioMaximo) : null}
                 ratioIngresos={ajustes.ratioBancarioMaximo}
-              ratioComodo={ajustes.ratioPersonalObjetivo}
+                ratioComodo={ajustes.ratioPersonalObjetivo}
               />
             </div>
           </section>
@@ -592,54 +593,56 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
             </section>
           ) : (
             <>
-          <section className="rounded-grande border border-linea bg-superficie px-6 py-5 shadow-papel">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="rotulo mb-1">Desembolso inicial</p>
-                <h3 className="font-display text-[1.1rem] leading-snug text-tinta">
-                  Todo lo que necesitas para comprar
-                </h3>
-              </div>
-              <ProgresoEntrada
-                ahorro={evaluacion.ahorroDisponible}
-                necesario={evaluacion.dineroMinimo}
-                faltante={evaluacion.faltante}
-              />
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
-              {desgloseDesembolso.map(([etiqueta, valor]) => (
-                <div key={etiqueta}>
-                  <p className="text-xs leading-snug text-tinta-media">{etiqueta}</p>
-                  <p className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-                    {formatEuros(valor)}
-                  </p>
+              <section className="rounded-grande border border-linea bg-superficie px-6 py-5 shadow-papel">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="rotulo mb-1">Desembolso inicial</p>
+                    <h3 className="font-display text-[1.1rem] leading-snug text-tinta">
+                      Todo lo que necesitas para comprar
+                    </h3>
+                  </div>
+                  <ProgresoEntrada
+                    ahorro={evaluacion.ahorroDisponible}
+                    necesario={evaluacion.dineroMinimo}
+                    faltante={evaluacion.faltante}
+                  />
                 </div>
-              ))}
-              <div className="border-l-2 border-acento pl-3">
-                <p className="text-xs leading-snug text-tinta-media">Mínimo total</p>
-                <p className="mt-1 font-cifra font-semibold tabular-nums text-acento">
-                  {formatEuros(evaluacion.dineroMinimo)}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-tinta-suave">
-              <span>Puedes cambiar estas estimaciones, incluido el porcentaje de inmobiliaria, en</span>
-              <button
-                type="button"
-                onClick={abrirAjustes}
-                className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
-              >
-                Ajustes →
-              </button>
-              <span>.</span>
-            </div>
-          </section>
+                <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
+                  {desgloseDesembolso.map(([etiqueta, valor]) => (
+                    <div key={etiqueta}>
+                      <p className="text-xs leading-snug text-tinta-media">{etiqueta}</p>
+                      <p className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
+                        {formatEuros(valor)}
+                      </p>
+                    </div>
+                  ))}
+                  <div className="border-l-2 border-acento pl-3">
+                    <p className="text-xs leading-snug text-tinta-media">Mínimo total</p>
+                    <p className="mt-1 font-cifra font-semibold tabular-nums text-acento">
+                      {formatEuros(evaluacion.dineroMinimo)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-tinta-suave">
+                  <span>
+                    Puedes cambiar estas estimaciones, incluido el porcentaje de inmobiliaria, en
+                  </span>
+                  <button
+                    type="button"
+                    onClick={abrirAjustes}
+                    className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+                  >
+                    Ajustes →
+                  </button>
+                  <span>.</span>
+                </div>
+              </section>
 
-          {evaluacion.faltante > 0 && (
-            <section className="aparece-3 flex flex-col gap-4" aria-label="Meta de ahorro">
-              <Meta />
-            </section>
-          )}
+              {evaluacion.faltante > 0 && (
+                <section className="aparece-3 flex flex-col gap-4" aria-label="Meta de ahorro">
+                  <Meta />
+                </section>
+              )}
             </>
           )}
         </div>

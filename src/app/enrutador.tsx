@@ -1,43 +1,91 @@
 ﻿import { createHashRouter } from 'react-router';
 import { Disposicion } from '@/app/Disposicion';
-import { Navigate, useLocation } from 'react-router';
-import { Ajustes } from '@/pages/Ajustes';
-import { Amortizacion } from '@/pages/Amortizacion';
-import { EscalaPrecios } from '@/pages/EscalaPrecios';
-import { NoEncontrado } from '@/pages/NoEncontrado';
-import { EditorVivienda, Ofertas } from '@/pages/Ofertas';
-import { Perfil } from '@/pages/Perfil';
-import { Resumen } from '@/pages/Resumen';
-import { Simulador } from '@/pages/Simulador';
+import { Navigate } from 'react-router';
+import { RedireccionSimulador } from '@/app/RedireccionSimulador';
 
 /**
  * Router por hash (§2.1): así el enlace profundo y el recargado funcionan en
  * cualquier hosting estático, sin reglas de reescritura en el servidor.
  */
-function RedireccionSimulador() {
-  const { search } = useLocation();
-  return <Navigate to={`/ofertas/simulador${search}`} replace />;
-}
-
 export const enrutador = createHashRouter([
   {
     path: '/',
     element: <Disposicion />,
     children: [
-      { index: true, element: <Perfil /> },
-      { path: 'resumen', element: <Resumen /> },
-      { path: 'plan-hipotecario', element: <Resumen modo="plan" /> },
+      {
+        index: true,
+        lazy: async () => {
+          const { Perfil } = await import('@/pages/Perfil');
+          return { Component: Perfil };
+        },
+      },
+      {
+        path: 'resumen',
+        lazy: async () => {
+          const { Resumen } = await import('@/pages/Resumen');
+          return { Component: Resumen };
+        },
+      },
+      {
+        path: 'plan-hipotecario',
+        lazy: async () => {
+          const { Resumen } = await import('@/pages/Resumen');
+          return { Component: () => <Resumen modo="plan" /> };
+        },
+      },
       { path: 'capacidad', element: <Navigate to="/plan-hipotecario" replace /> },
       { path: 'meta', element: <Navigate to="/plan-hipotecario" replace /> },
-      { path: 'escala', element: <EscalaPrecios /> },
-      { path: 'ofertas', element: <Ofertas /> },
-      { path: 'ofertas/vivienda', element: <EditorVivienda /> },
-      { path: 'ofertas/simulador', element: <Simulador /> },
+      {
+        path: 'escala',
+        lazy: async () => {
+          const { EscalaPrecios } = await import('@/pages/EscalaPrecios');
+          return { Component: EscalaPrecios };
+        },
+      },
+      {
+        path: 'ofertas',
+        lazy: async () => {
+          const { Ofertas } = await import('@/pages/Ofertas');
+          return { Component: Ofertas };
+        },
+      },
+      {
+        path: 'ofertas/vivienda',
+        lazy: async () => {
+          const { EditorVivienda } = await import('@/pages/Ofertas');
+          return { Component: EditorVivienda };
+        },
+      },
+      {
+        path: 'ofertas/simulador',
+        lazy: async () => {
+          const { Simulador } = await import('@/pages/Simulador');
+          return { Component: Simulador };
+        },
+      },
       // Conserva los enlaces antiguos al simulador, ahora integrado en Ofertas.
       { path: 'simulador', element: <RedireccionSimulador /> },
-      { path: 'amortizacion', element: <Amortizacion /> },
-      { path: 'ajustes', element: <Ajustes /> },
-      { path: '*', element: <NoEncontrado /> },
+      {
+        path: 'amortizacion',
+        lazy: async () => {
+          const { Amortizacion } = await import('@/pages/Amortizacion');
+          return { Component: Amortizacion };
+        },
+      },
+      {
+        path: 'ajustes',
+        lazy: async () => {
+          const { Ajustes } = await import('@/pages/Ajustes');
+          return { Component: Ajustes };
+        },
+      },
+      {
+        path: '*',
+        lazy: async () => {
+          const { NoEncontrado } = await import('@/pages/NoEncontrado');
+          return { Component: NoEncontrado };
+        },
+      },
     ],
   },
 ]);

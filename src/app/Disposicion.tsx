@@ -1,9 +1,18 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Icono } from '@/components/Icono';
 import { SECCIONES } from '@/app/secciones';
-import { Ajustes } from '@/pages/Ajustes';
 import { useEstado } from '@/app/EstadoProvider';
+
+const AjustesPanel = lazy(async () => {
+  const { Ajustes } = await import('@/pages/Ajustes');
+  return { default: Ajustes };
+});
+
+const AyudaPanel = lazy(async () => {
+  const { Ayuda } = await import('@/pages/Ayuda');
+  return { default: Ayuda };
+});
 
 const COMUNIDADES_AUTONOMAS = [
   'Andalucía',
@@ -31,6 +40,14 @@ function rutaDe(ruta: string): string {
   return ruta === '' ? '/' : `/${ruta}`;
 }
 
+function elementosEnfocables(contenedor: HTMLElement): HTMLElement[] {
+  return [
+    ...contenedor.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ].filter((elemento) => !elemento.hasAttribute('inert'));
+}
+
 function Marca({ compacta = false }: { readonly compacta?: boolean }) {
   return (
     <div className={compacta ? 'flex items-center gap-3' : 'block'}>
@@ -56,31 +73,87 @@ function Marca({ compacta = false }: { readonly compacta?: boolean }) {
 
 export function Disposicion() {
   const { pathname } = useLocation();
-  const { estado, actualizarPreferencias } = useEstado();
+  const { estado, actualizarPreferencias, estadoPersistencia } = useEstado();
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+  const [ayudaAbierta, setAyudaAbierta] = useState(false);
   const [ccaaInicial, setCcaaInicial] = useState('');
+  const ajustesRef = useRef<HTMLElement>(null);
+  const ayudaRef = useRef<HTMLElement>(null);
+  const dialogoCcaaRef = useRef<HTMLDivElement>(null);
+  const focoAnteriorRef = useRef<HTMLElement | null>(null);
   const necesitaElegirCcaa = estado.preferencias.ccaa === '';
 
   function abrirAjustes() {
+    focoAnteriorRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAyudaAbierta(false);
     setAjustesAbiertos(true);
   }
   function cerrarAjustes() {
     setAjustesAbiertos(false);
+    window.requestAnimationFrame(() => focoAnteriorRef.current?.focus());
+  }
+  function abrirAyuda() {
+    focoAnteriorRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAjustesAbiertos(false);
+    setAyudaAbierta(true);
+  }
+  function cerrarAyuda() {
+    setAyudaAbierta(false);
+    window.requestAnimationFrame(() => focoAnteriorRef.current?.focus());
   }
 
   useEffect(() => {
-    if (!ajustesAbiertos) return;
+    const contenedor = necesitaElegirCcaa
+      ? dialogoCcaaRef.current
+      : ajustesAbiertos
+        ? ajustesRef.current
+        : ayudaAbierta
+          ? ayudaRef.current
+          : null;
+    if (contenedor === null) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const preferido = contenedor.querySelector<HTMLElement>('[data-autofocus]');
+      (preferido ?? elementosEnfocables(contenedor)[0])?.focus();
+    });
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cerrarAjustes();
+      if (e.key === 'Escape' && !necesitaElegirCcaa) {
+        setAjustesAbiertos(false);
+        setAyudaAbierta(false);
+        window.requestAnimationFrame(() => focoAnteriorRef.current?.focus());
+        return;
+      }
+      if (e.key === 'Tab') {
+        const enfocables = elementosEnfocables(contenedor);
+        const primero = enfocables[0];
+        const ultimo = enfocables.at(-1);
+        if (primero === undefined || ultimo === undefined) return;
+        if (e.shiftKey && document.activeElement === primero) {
+          e.preventDefault();
+          ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault();
+          primero.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [ajustesAbiertos]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [ajustesAbiertos, ayudaAbierta, necesitaElegirCcaa]);
 
   return (
     <div className="relative z-10 min-h-svh lg:grid lg:min-h-dvh lg:grid-cols-[17rem_1fr]">
       {/* Raíl lateral: tableta horizontal y escritorio */}
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex">
+      <aside
+        inert={necesitaElegirCcaa}
+        className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex"
+      >
         <div className="px-1">
           <Marca />
         </div>
@@ -132,6 +205,16 @@ export function Disposicion() {
         </nav>
 
         <div className="mt-6 flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={abrirAyuda}
+            className="flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chico bg-superficie-2 text-tinta-suave">
+              <Icono nombre="ayuda" tamano={16} />
+            </span>
+            <span className="flex-1 leading-tight">Ayuda</span>
+          </button>
           {/* Botón ajustes en sidebar */}
           <button
             type="button"
@@ -147,11 +230,22 @@ export function Disposicion() {
       </aside>
 
       {/* Cabecera compacta: tableta vertical y móvil */}
-      <header className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/95 px-4 backdrop-blur-sm lg:hidden">
+      <header
+        inert={necesitaElegirCcaa}
+        className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/95 px-4 backdrop-blur-sm lg:hidden"
+      >
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <Marca compacta />
           </div>
+          <button
+            type="button"
+            onClick={abrirAyuda}
+            aria-label="Abrir ayuda"
+            className="flex h-9 w-9 items-center justify-center rounded-medio border border-linea text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+          >
+            <Icono nombre="ayuda" tamano={18} />
+          </button>
           <button
             type="button"
             onClick={abrirAjustes}
@@ -164,6 +258,7 @@ export function Disposicion() {
       </header>
 
       <main
+        inert={necesitaElegirCcaa}
         className={[
           'mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-10',
           pathname === '/escala'
@@ -171,11 +266,21 @@ export function Disposicion() {
             : 'pt-6 pb-32 lg:pt-8 lg:pb-12',
         ].join(' ')}
       >
+        {estadoPersistencia === 'error' && (
+          <div
+            role="alert"
+            className="mb-4 rounded-medio border border-no-viable bg-no-viable-tenue px-4 py-3 text-sm text-tinta"
+          >
+            No se han podido guardar los últimos cambios. Abre Ajustes y descarga una copia de
+            seguridad.
+          </div>
+        )}
         <Outlet key={pathname} context={{ abrirAjustes }} />
       </main>
 
       {/* Navegación inferior: móvil y tableta vertical */}
       <nav
+        inert={necesitaElegirCcaa}
         aria-label="Secciones"
         className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
       >
@@ -210,14 +315,18 @@ export function Disposicion() {
       <div
         className={[
           'fixed inset-0 z-40 bg-tinta/20 backdrop-blur-sm transition-opacity duration-300',
-          ajustesAbiertos ? 'opacity-100' : 'opacity-0 pointer-events-none',
+          ajustesAbiertos || ayudaAbierta ? 'opacity-100' : 'opacity-0 pointer-events-none',
         ].join(' ')}
-        onClick={cerrarAjustes}
+        onClick={() => {
+          cerrarAjustes();
+          cerrarAyuda();
+        }}
         aria-hidden="true"
       />
 
       {/* Panel */}
       <aside
+        ref={ajustesRef}
         className={[
           'fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col',
           'border-l border-linea bg-superficie shadow-elevado',
@@ -226,6 +335,9 @@ export function Disposicion() {
         ].join(' ')}
         aria-label="Panel de ajustes"
         aria-hidden={!ajustesAbiertos}
+        aria-modal={ajustesAbiertos}
+        role="dialog"
+        inert={!ajustesAbiertos || necesitaElegirCcaa}
       >
         {/* Header del drawer */}
         <div className="flex items-center justify-between border-b border-linea bg-superficie px-6 py-4 shrink-0">
@@ -235,6 +347,7 @@ export function Disposicion() {
           </div>
           <button
             type="button"
+            data-autofocus
             onClick={cerrarAjustes}
             aria-label="Cerrar ajustes"
             className="flex h-8 w-8 items-center justify-center rounded-medio border border-linea text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta text-lg leading-none"
@@ -244,11 +357,56 @@ export function Disposicion() {
         </div>
 
         {/* Contenido scrollable */}
-        <div className="flex-1 overflow-y-auto p-6">{ajustesAbiertos && <Ajustes />}</div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {ajustesAbiertos && (
+            <Suspense fallback={<p className="text-sm text-tinta-suave">Cargando ajustes…</p>}>
+              <AjustesPanel />
+            </Suspense>
+          )}
+        </div>
+      </aside>
+
+      <aside
+        ref={ayudaRef}
+        className={[
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col',
+          'border-l border-linea bg-superficie shadow-elevado',
+          'transition-transform duration-300',
+          ayudaAbierta ? 'translate-x-0' : 'translate-x-full',
+        ].join(' ')}
+        aria-label="Manual de ayuda"
+        aria-hidden={!ayudaAbierta}
+        aria-modal={ayudaAbierta}
+        role="dialog"
+        inert={!ayudaAbierta || necesitaElegirCcaa}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-linea bg-superficie px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Icono nombre="ayuda" tamano={18} className="text-acento" />
+            <h2 className="font-display text-lg text-tinta">Ayuda</h2>
+          </div>
+          <button
+            type="button"
+            data-autofocus
+            onClick={cerrarAyuda}
+            aria-label="Cerrar ayuda"
+            className="flex h-8 w-8 items-center justify-center rounded-medio border border-linea text-lg leading-none text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {ayudaAbierta && (
+            <Suspense fallback={<p className="text-sm text-tinta-suave">Cargando ayuda…</p>}>
+              <AyudaPanel onNavegar={cerrarAyuda} />
+            </Suspense>
+          )}
+        </div>
       </aside>
 
       {necesitaElegirCcaa && (
         <div
+          ref={dialogoCcaaRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-ccaa-inicial"
@@ -260,11 +418,17 @@ export function Disposicion() {
               ¿Dónde quieres comprar?
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-tinta-media">
-              Selecciona tu comunidad autónoma para estimar correctamente los impuestos de compra.
+              Selecciona tu comunidad autónoma. Aragón tiene una configuración revisada; para las
+              demás se usará una estimación genérica editable que deberás confirmar.
             </p>
-            <label htmlFor="ccaa-inicial" className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta">
+            <label
+              htmlFor="ccaa-inicial"
+              className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta"
+            >
               Comunidad autónoma
               <select
+                autoFocus
+                data-autofocus
                 id="ccaa-inicial"
                 value={ccaaInicial}
                 onChange={(e) => setCcaaInicial(e.target.value)}
@@ -274,17 +438,27 @@ export function Disposicion() {
                 {COMUNIDADES_AUTONOMAS.map((ccaa) => (
                   <option key={ccaa} value={ccaa}>
                     {ccaa}
+                    {ccaa === 'Aragón' ? ' · revisada' : ' · estimación genérica'}
                   </option>
                 ))}
               </select>
             </label>
+            {ccaaInicial !== '' && ccaaInicial !== 'Aragón' && (
+              <p role="status" className="mt-3 text-xs leading-relaxed text-revisar">
+                Se usará una estimación genérica: no se aplicarán automáticamente los tipos ni las
+                bonificaciones específicas de {ccaaInicial}. Revisa la fiscalidad en Ajustes antes
+                de tomar una decisión.
+              </p>
+            )}
             <button
               type="button"
               disabled={ccaaInicial === ''}
               onClick={() => actualizarPreferencias({ ccaa: ccaaInicial })}
               className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Continuar
+              {ccaaInicial !== '' && ccaaInicial !== 'Aragón'
+                ? 'Continuar con estimación genérica'
+                : 'Continuar'}
             </button>
           </section>
         </div>

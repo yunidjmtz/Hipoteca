@@ -1,5 +1,5 @@
 ﻿import type { Page } from '@playwright/test';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const ORIGEN_LOCAL = 'http://127.0.0.1:';
 const ENDPOINT_INE = 'https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA/24457?nult=1&tip=A';

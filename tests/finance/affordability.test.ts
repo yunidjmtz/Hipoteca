@@ -1,6 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
 import {
   calcularCapacidadAhorroActual,
+  calcularOtrosIngresosMensuales,
   calcularIngresoMensualNormalizado,
   calcularPlazoEfectivo,
   evaluarPrecio,
@@ -196,6 +197,24 @@ describe('calcularCapacidadAhorroActual', () => {
   });
 });
 
+describe('calcularOtrosIngresosMensuales', () => {
+  it('deriva el total desde la lista aunque el escalar antiguo esté desactualizado', () => {
+    const perfilConIngresos = {
+      ...perfil(),
+      otrosIngresosMensuales: ZERO,
+      otrosIngresos: [
+        {
+          id: 'extra',
+          concepto: 'Ingreso trimestral',
+          importe: toCents(900),
+          periodicidad: 'trimestral' as const,
+        },
+      ],
+    };
+    expect(calcularOtrosIngresosMensuales(perfilConIngresos)).toBe(toCents(300));
+  });
+});
+
 // ---------------------------------------------------------------------------
 // §9.1 · casos 11 y 26: plazo efectivo por edad — R4
 // ---------------------------------------------------------------------------
@@ -308,14 +327,14 @@ describe('evaluarPrecio', () => {
 describe('factorLimitante', () => {
   it('ninguno — ahorro y cuota OK', () => {
     const e = evaluarPrecio(toCents(100_000), ctx({ precio: 100_000, ahorro: 80_000 }));
-    expect(factorLimitante(e)).toBe('ninguno');
+    expect(factorLimitante(e, AJUSTES_STD.ratioBancarioMaximo)).toBe('ninguno');
   });
 
   it('ahorro — falta ahorro pero cuota OK', () => {
     const e = evaluarPrecio(toCents(100_000), ctx({ precio: 100_000, ahorro: 5_000 }));
     // faltante > 0, ratioBancario bajo
     if (e.faltante > 0 && e.ratioBancario <= 0.35) {
-      expect(factorLimitante(e)).toBe('ahorro');
+      expect(factorLimitante(e, AJUSTES_STD.ratioBancarioMaximo)).toBe('ahorro');
     }
   });
 
@@ -326,8 +345,19 @@ describe('factorLimitante', () => {
     );
     // con ingresos muy bajos: cuota excesiva
     if (e.faltante === 0 && e.ratioBancario > 0.35) {
-      expect(factorLimitante(e)).toBe('cuota');
+      expect(factorLimitante(e, AJUSTES_STD.ratioBancarioMaximo)).toBe('cuota');
     }
+  });
+
+  it('respeta un límite bancario personalizado por encima del 35 %', () => {
+    const base = evaluarPrecio(toCents(100_000), ctx({ precio: 100_000, ahorro: 80_000 }));
+    const evaluacion = {
+      ...base,
+      faltante: ZERO,
+      ratioBancario: 0.37,
+      estado: 'viable' as const,
+    };
+    expect(factorLimitante(evaluacion, 0.4)).toBe('ninguno');
   });
 });
 

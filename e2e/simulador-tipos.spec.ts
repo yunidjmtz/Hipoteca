@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('añadir una oferta abre su simulador', async ({ page }) => {
   await page.goto('/#/ofertas?tab=hipotecas');
@@ -28,11 +28,14 @@ test('una vivienda compara el precio de venta con su reforma', async ({ page }) 
   await modalReformas.getByRole('button', { name: 'Guardar reforma' }).click();
   await page.getByRole('button', { name: 'Guardar vivienda' }).click();
 
-  await expect(page.getByText('Piso reformado')).toBeVisible();
-  await expect(page.getByText('Calle Ejemplo, 12')).toBeVisible();
-  await expect(page.getByText('240.000,00 €')).toBeVisible();
-  await expect(page.getByText('85 m²')).toBeVisible();
-  await expect(page.getByText('Exterior')).toBeVisible();
+  const viviendaGuardada = page.getByRole('article').filter({ hasText: 'Piso reformado' });
+  await expect(
+    viviendaGuardada.getByRole('heading', { name: 'Piso reformado', exact: true }),
+  ).toBeVisible();
+  await expect(viviendaGuardada.getByText('Calle Ejemplo, 12')).toBeVisible();
+  await expect(viviendaGuardada.getByText('240.000,00 €')).toBeVisible();
+  await expect(viviendaGuardada.getByText('85 m²')).toBeVisible();
+  await expect(viviendaGuardada.getByText('Exterior')).toBeVisible();
 });
 
 test('seleccionar Mixto inicializa y calcula el tramo fijo mostrado', async ({ page }) => {

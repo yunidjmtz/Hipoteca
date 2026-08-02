@@ -13,12 +13,7 @@ interface Props {
  * Envoltorio que garantiza scroll horizontal en pantallas estrechas.
  * minWidth se pasa como estilo inline para evitar clases dinámicas de Tailwind.
  */
-export function TablaResponsive({
-  minWidth = '600px',
-  children,
-  className = '',
-  cabecera,
-}: Props) {
+export function TablaResponsive({ minWidth = '600px', children, className = '', cabecera }: Props) {
   return (
     <div className={`overflow-x-auto [-webkit-overflow-scrolling:touch] ${className}`}>
       {cabecera}

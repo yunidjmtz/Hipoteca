@@ -567,11 +567,19 @@ export function Perfil() {
       {/* ── Panel con tabs ────────────────────────────────────────────── */}
       <div className="rounded-grande border border-linea bg-superficie shadow-papel overflow-hidden">
         {/* Tab bar */}
-        <div className="flex border-b border-linea bg-superficie-2/60">
+        <div
+          role="tablist"
+          aria-label="Datos para el cálculo"
+          className="flex border-b border-linea bg-superficie-2/60"
+        >
           {TABS.map((tab) => (
             <button
               key={tab.id}
+              id={`tab-${tab.id}`}
               type="button"
+              role="tab"
+              aria-selected={tabActiva === tab.id}
+              aria-controls={`panel-${tab.id}`}
               onClick={() => setTabActiva(tab.id)}
               className={[
                 'flex flex-1 items-center justify-center gap-2 px-3 py-3.5 text-sm font-medium',
@@ -589,7 +597,12 @@ export function Perfil() {
         </div>
 
         {/* Tab content */}
-        <div className="p-6">
+        <div
+          id={`panel-${tabActiva}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${tabActiva}`}
+          className="p-6"
+        >
           {/* ── TAB: Vivienda ──────────────────────────────────────── */}
           {tabActiva === 'vivienda' && (
             <div className="flex flex-col gap-5">
@@ -658,10 +671,11 @@ export function Perfil() {
                 </Campo>
               </div>
 
-              {!['Aragón', 'Genérica (editable)'].includes(preferencias.ccaa) && (
+              {preferencias.ccaa !== '' && preferencias.ccaa !== 'Aragón' && (
                 <div className="rounded-medio border border-revisar/40 bg-revisar-tenue px-4 py-3 text-sm text-tinta">
-                  Para {preferencias.ccaa} usamos una estimación fiscal genérica. Puedes cambiar el
-                  tipo de ITP desde Ajustes.
+                  Para {preferencias.ccaa} usamos provisionalmente un ITP del 8 % y un AJD del 1,5
+                  %, sin bonificaciones autonómicas. Confirma los tipos aplicables y corrígelos en
+                  Ajustes antes de decidir.
                 </div>
               )}
 

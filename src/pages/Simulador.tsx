@@ -10,6 +10,7 @@ import {
   ValorEurosTabla,
   ValorPorcentajeTabla,
 } from '@/components/TablaResponsive';
+import { fechaLocalISO } from '@/core/dates';
 import { formatEuros, formatPorcentaje } from '@/core/format';
 import {
   type Cents,
@@ -261,9 +262,7 @@ export function Simulador() {
   const [estadoOferta, setEstadoOferta] = useState<EstadoOferta>(
     ofertaActiva?.estado ?? 'pendiente',
   );
-  const [fechaOferta, setFechaOferta] = useState(
-    ofertaActiva?.fecha ?? new Date().toISOString().slice(0, 10),
-  );
+  const [fechaOferta, setFechaOferta] = useState(ofertaActiva?.fecha ?? fechaLocalISO());
   const [notasOferta, setNotasOferta] = useState(ofertaActiva?.notas ?? '');
   const [errorOferta, setErrorOferta] = useState('');
   const [ofertaGuardada, setOfertaGuardada] = useState(false);

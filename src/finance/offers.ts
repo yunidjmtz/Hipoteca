@@ -9,7 +9,7 @@
  * Por defecto: coste real 40 %, cuota 20 %, desembolso 15 %,
  *              flexibilidad 15 %, vinculaciones 10 %.
  */
-import { type Cents, ZERO, addCents, sumCents } from '@/core/money';
+import { type Cents, ZERO, addCents, maxCents, subtractCents, sumCents } from '@/core/money';
 import type { OfertaBancaria } from '@/domain/types';
 import { construirFlujoDeCaja } from './mortgage';
 import { calcularTaeEstimada } from './apr';
@@ -41,9 +41,9 @@ export interface MetricasOferta {
   cuotaInicial: Cents;
   /** Cuota estimada de la fase variable (solo para mixta) o null. */
   cuotaPostFija: Cents | null;
-  /** Σ cuotas + Σ costes vinculados + comisión apertura + costes iniciales vinculaciones. */
+  /** Aportación al precio + cuotas + vinculaciones y comisiones de la hipoteca. */
   costeRealTotal: Cents;
-  /** Comisión apertura + costes iniciales de vinculaciones. */
+  /** Aportación al precio + comisión de apertura + costes iniciales activos. */
   desembolsoInicial: Cents;
   numVinculacionesObligatorias: number;
   /** 0-100: 100 = sin comisiones de amortización. */
@@ -88,13 +88,19 @@ export function calcularMetricasOferta(oferta: OfertaBancaria): MetricasOferta {
   const sumaCuotas = sumCents(lineasCuotas.map((l) => l.cuota));
   const sumaCostesVinc = sumCents(lineasCuotas.map((l) => l.costesVinculados));
   const comisionApertura = lineas[0]?.comisiones ?? ZERO;
-  const costesInicialesVinc = sumCents(esc.vinculaciones.map((v) => v.costeInicial));
+  const costesInicialesVinc = sumCents(
+    esc.vinculaciones.filter((v) => v.activo).map((v) => v.costeInicial),
+  );
+  const aportacionCompra = maxCents(ZERO, subtractCents(esc.precioCompra, esc.importeSolicitado));
   const costeRealTotal = addCents(
-    addCents(addCents(sumaCuotas, sumaCostesVinc), comisionApertura),
-    costesInicialesVinc,
+    aportacionCompra,
+    addCents(addCents(addCents(sumaCuotas, sumaCostesVinc), comisionApertura), costesInicialesVinc),
   );
 
-  const desembolsoInicial = addCents(comisionApertura, costesInicialesVinc);
+  const desembolsoInicial = addCents(
+    aportacionCompra,
+    addCents(comisionApertura, costesInicialesVinc),
+  );
   const numVinculacionesObligatorias = esc.vinculaciones.filter(
     (v) => v.obligatorio && v.activo,
   ).length;
@@ -114,6 +120,18 @@ export function calcularMetricasOferta(oferta: OfertaBancaria): MetricasOferta {
     numVinculacionesObligatorias,
     indiceFlexibilidad,
   };
+}
+
+/**
+ * Solo etiqueta una oferta como “mejor” cuando todas financian la misma compra.
+ * El importe y el plazo sí pueden variar: forman parte de la decisión.
+ */
+export function sonOfertasComparables(ofertas: readonly OfertaBancaria[]): boolean {
+  const precioBase = ofertas[0]?.escenario.precioCompra;
+  return (
+    precioBase === undefined ||
+    ofertas.every((oferta) => oferta.escenario.precioCompra === precioBase)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +211,7 @@ export function compararOfertas(
   const ofertasConTae = resultados.filter((r) => r.oferta.taeOficial !== undefined);
   const menorTaeOficial =
     ofertasConTae.length > 0
-      ? Math.min(...ofertasConTae.map((r) => r.oferta.taeOficial ?? Infinity))
+      ? Math.min(...ofertasConTae.map((r) => r.oferta.taeOficial as number))
       : Infinity;
 
   for (const r of resultados) {

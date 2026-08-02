@@ -14,21 +14,29 @@ export function parseEuros(input: string): Cents | null {
 
   let normalized: string;
   if (hasDot && hasComma) {
+    if (!/^\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(cleaned)) return null;
     // "1.800,50" → separador de miles (punto), decimal (coma)
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
   } else if (hasComma) {
+    if (!/^\d+(?:,\d{1,2})?$/.test(cleaned)) return null;
     // "1800,5" → solo coma decimal
     normalized = cleaned.replace(',', '.');
   } else if (hasDot) {
     // "1.800" (miles) o "1.5" (decimal)?
-    const afterDot = cleaned.split('.').at(-1) ?? '';
-    normalized = afterDot.length === 3 ? cleaned.replace(/\./g, '') : cleaned;
+    if (/^\d+(?:\.\d{3})+$/.test(cleaned)) {
+      normalized = cleaned.replace(/\./g, '');
+    } else if (/^\d+\.\d{1,2}$/.test(cleaned)) {
+      normalized = cleaned;
+    } else {
+      return null;
+    }
   } else {
+    if (!/^\d+$/.test(cleaned)) return null;
     normalized = cleaned;
   }
 
-  const value = parseFloat(normalized);
-  if (!isFinite(value) || value < 0) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) return null;
   return toCents(value);
 }
 
@@ -37,8 +45,9 @@ export function parseEuros(input: string): Cents | null {
  * devuelve el decimal equivalente (0.0325). Devuelve null si es inválido.
  */
 export function parseDecimalPorcentaje(input: string): number | null {
-  const cleaned = input.replace(/[%\s]/g, '').replace(',', '.');
-  const value = parseFloat(cleaned);
-  if (!isFinite(value) || value < 0 || value > 100) return null;
+  const cleaned = input.replace(/[%\s]/g, '');
+  if (!/^\d+(?:[.,]\d+)?$/.test(cleaned)) return null;
+  const value = Number(cleaned.replace(',', '.'));
+  if (!Number.isFinite(value) || value < 0 || value > 100) return null;
   return value / 100;
 }

@@ -118,8 +118,13 @@ export function Ajustes() {
     refrescarTinIne,
     estadoConsultaTinIne,
     exportarDatos,
+    confirmarCopiaDescargada,
     importarDatos,
     restablecerDatos,
+    copiaSeguridadPendiente,
+    estadoPersistencia,
+    datosRecuperacion,
+    descartarRecuperacion,
   } = useEstado();
   const { ajustes, gastos, preferencias } = estado;
   const periodoTinIne = formatearPeriodoIne(ajustes.tinReferenciaPeriodo);
@@ -141,11 +146,16 @@ export function Ajustes() {
 
   function handleExportar() {
     const json = exportarDatos();
-    const blob = new Blob([json], { type: 'application/json' });
+    descargarTexto(json, 'hipotecas-datos.json', 'application/json');
+    confirmarCopiaDescargada();
+  }
+
+  function descargarTexto(contenido: string, nombre: string, tipo: string) {
+    const blob = new Blob([contenido], { type: tipo });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'hipotecas-datos.json';
+    a.download = nombre;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -286,205 +296,204 @@ export function Ajustes() {
           {/* A. Parámetros de hipoteca */}
           <section className="flex flex-col gap-4">
             <h3 className="font-display text-xl text-tinta">Parámetros de hipoteca</h3>
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-tinta">
-                  Referencia del interés para estimaciones
-                </span>
-                <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-tinta">
+                Referencia del interés para estimaciones
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => actualizarAjustes({ tinFuente: 'ine' })}
+                  className={[
+                    'rounded-medio border px-3 py-2 text-sm font-medium',
+                    ajustes.tinFuente === 'ine'
+                      ? 'border-acento bg-acento/10 text-acento'
+                      : 'border-linea text-tinta hover:bg-superficie-2',
+                  ].join(' ')}
+                >
+                  INE automático
+                </button>
+                <button
+                  type="button"
+                  onClick={() => actualizarAjustes({ tinFuente: 'manual' })}
+                  className={[
+                    'rounded-medio border px-3 py-2 text-sm font-medium',
+                    ajustes.tinFuente === 'manual'
+                      ? 'border-acento bg-acento/10 text-acento'
+                      : 'border-linea text-tinta hover:bg-superficie-2',
+                  ].join(' ')}
+                >
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            <InputPorcentaje
+              id="tin-por-defecto"
+              etiqueta={
+                ajustes.tinFuente === 'ine'
+                  ? 'Tipo de interés medio inicial de las hipotecas sobre viviendas'
+                  : 'Interés anual usado en estimaciones'
+              }
+              valor={ajustes.tinPorDefecto}
+              onChange={(v) => actualizarAjustes({ tinPorDefecto: v })}
+              deshabilitado={ajustes.tinFuente === 'ine'}
+            />
+
+            {ajustes.tinFuente === 'ine' && (
+              <div className="rounded-medio border border-linea bg-superficie-2 px-4 py-3">
+                <p className="text-sm text-tinta">
+                  Fuente: <span className="font-semibold">INE</span>
+                  {periodoTinIne !== null && <> · {periodoTinIne}</>}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-tinta-media">
+                  Es la media de las hipotecas sobre viviendas constituidas e inscritas durante ese
+                  mes, no una oferta bancaria actual. Se consulta como máximo una vez cada 24 horas.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => actualizarAjustes({ tinFuente: 'ine' })}
+                    onClick={() => void refrescarTinIne(true)}
+                    disabled={estadoConsultaTinIne === 'cargando'}
+                    className="rounded-medio border border-linea bg-superficie px-3 py-1.5 text-xs font-medium text-tinta hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {estadoConsultaTinIne === 'cargando' ? 'Consultando…' : 'Actualizar ahora'}
+                  </button>
+                  <span
+                    role="status"
                     className={[
-                      'rounded-medio border px-3 py-2 text-sm font-medium',
-                      ajustes.tinFuente === 'ine'
-                        ? 'border-acento bg-acento/10 text-acento'
-                        : 'border-linea text-tinta hover:bg-superficie-2',
+                      'text-xs',
+                      estadoConsultaTinIne === 'error' || estadoConsultaTinIne === 'respaldo'
+                        ? 'text-no-viable'
+                        : 'text-tinta-suave',
                     ].join(' ')}
                   >
-                    INE automático
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => actualizarAjustes({ tinFuente: 'manual' })}
-                    className={[
-                      'rounded-medio border px-3 py-2 text-sm font-medium',
-                      ajustes.tinFuente === 'manual'
-                        ? 'border-acento bg-acento/10 text-acento'
-                        : 'border-linea text-tinta hover:bg-superficie-2',
-                    ].join(' ')}
-                  >
-                    Manual
-                  </button>
+                    {estadoConsultaTinIne === 'actualizado'
+                      ? 'Dato actualizado desde el INE.'
+                      : estadoConsultaTinIne === 'cache'
+                        ? 'Dato recuperado de la caché.'
+                        : estadoConsultaTinIne === 'respaldo'
+                          ? 'El INE no respondió; se mantiene el último dato guardado.'
+                          : estadoConsultaTinIne === 'error'
+                            ? 'No se pudo consultar el INE; se mantiene el último dato disponible.'
+                            : ''}
+                  </span>
                 </div>
               </div>
+            )}
 
-              <InputPorcentaje
-                id="tin-por-defecto"
-                etiqueta={
-                  ajustes.tinFuente === 'ine'
-                    ? 'Tipo de interés medio inicial de las hipotecas sobre viviendas'
-                    : 'Interés anual usado en estimaciones'
-                }
-                valor={ajustes.tinPorDefecto}
-                onChange={(v) => actualizarAjustes({ tinPorDefecto: v })}
-                deshabilitado={ajustes.tinFuente === 'ine'}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="plazo-por-defecto" className="text-sm font-medium text-tinta">
+                Plazo en años
+              </label>
+              <InputNumeroEntero
+                id="plazo-por-defecto"
+                valor={ajustes.plazoPorDefecto}
+                minimo={5}
+                maximo={40}
+                onChange={(plazoPorDefecto) => actualizarAjustes({ plazoPorDefecto })}
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
+            </div>
 
-              {ajustes.tinFuente === 'ine' && (
-                <div className="rounded-medio border border-linea bg-superficie-2 px-4 py-3">
-                  <p className="text-sm text-tinta">
-                    Fuente: <span className="font-semibold">INE</span>
-                    {periodoTinIne !== null && <> · {periodoTinIne}</>}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-tinta-media">
-                    Es la media de las hipotecas sobre viviendas constituidas e inscritas durante
-                    ese mes, no una oferta bancaria actual. Se consulta como máximo una vez cada 24
-                    horas.
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void refrescarTinIne(true)}
-                      disabled={estadoConsultaTinIne === 'cargando'}
-                      className="rounded-medio border border-linea bg-superficie px-3 py-1.5 text-xs font-medium text-tinta hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {estadoConsultaTinIne === 'cargando' ? 'Consultando…' : 'Actualizar ahora'}
-                    </button>
-                    <span
-                      role="status"
-                      className={[
-                        'text-xs',
-                        estadoConsultaTinIne === 'error' || estadoConsultaTinIne === 'respaldo'
-                          ? 'text-no-viable'
-                          : 'text-tinta-suave',
-                      ].join(' ')}
-                    >
-                      {estadoConsultaTinIne === 'actualizado'
-                        ? 'Dato actualizado desde el INE.'
-                        : estadoConsultaTinIne === 'cache'
-                          ? 'Dato recuperado de la caché.'
-                          : estadoConsultaTinIne === 'respaldo'
-                            ? 'El INE no respondió; se mantiene el último dato guardado.'
-                            : estadoConsultaTinIne === 'error'
-                              ? 'No se pudo consultar el INE; se mantiene el último dato disponible.'
-                              : ''}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="plazo-por-defecto" className="text-sm font-medium text-tinta">
-                  Plazo en años
-                </label>
-                <InputNumeroEntero
-                  id="plazo-por-defecto"
-                  valor={ajustes.plazoPorDefecto}
-                  minimo={5}
-                  maximo={40}
-                  onChange={(plazoPorDefecto) => actualizarAjustes({ plazoPorDefecto })}
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                />
-              </div>
-
-              <InputPorcentaje
-                id="ltv-por-defecto"
-                etiqueta="Porcentaje que financiaría el banco"
-                valor={ajustes.ltvPorDefecto}
-                onChange={(v) => actualizarAjustes({ ltvPorDefecto: v })}
-              />
+            <InputPorcentaje
+              id="ltv-por-defecto"
+              etiqueta="Porcentaje que financiaría el banco"
+              valor={ajustes.ltvPorDefecto}
+              onChange={(v) => actualizarAjustes({ ltvPorDefecto: v })}
+            />
           </section>
 
           {/* B. Ratios y plazos */}
           <section className="mt-5 flex flex-col gap-4 border-t border-linea pt-5">
             <h3 className="font-display text-xl text-tinta">Ratios y plazos</h3>
-              <InputPorcentaje
-                id="ratio-bancario-max"
-                etiqueta="Máximo de ingresos destinado a deudas"
-                valor={ajustes.ratioBancarioMaximo}
-                onChange={(v) => actualizarAjustes({ ratioBancarioMaximo: v })}
+            <InputPorcentaje
+              id="ratio-bancario-max"
+              etiqueta="Máximo de ingresos destinado a deudas"
+              valor={ajustes.ratioBancarioMaximo}
+              onChange={(v) => actualizarAjustes({ ratioBancarioMaximo: v })}
+            />
+
+            <InputPorcentaje
+              id="ratio-personal-objetivo"
+              etiqueta="Objetivo personal para vivienda y deudas"
+              valor={ajustes.ratioPersonalObjetivo}
+              onChange={(v) => actualizarAjustes({ ratioPersonalObjetivo: v })}
+            />
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="edad-maxima-vencimiento" className="text-sm font-medium text-tinta">
+                Edad máxima al vencimiento
+              </label>
+              <InputNumeroEntero
+                id="edad-maxima-vencimiento"
+                valor={ajustes.edadMaximaAlVencimiento}
+                minimo={65}
+                maximo={85}
+                onChange={(edadMaximaAlVencimiento) =>
+                  actualizarAjustes({ edadMaximaAlVencimiento })
+                }
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
+            </div>
 
-              <InputPorcentaje
-                id="ratio-personal-objetivo"
-                etiqueta="Objetivo personal para vivienda y deudas"
-                valor={ajustes.ratioPersonalObjetivo}
-                onChange={(v) => actualizarAjustes({ ratioPersonalObjetivo: v })}
-              />
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="edad-maxima-vencimiento" className="text-sm font-medium text-tinta">
-                  Edad máxima al vencimiento
-                </label>
-                <InputNumeroEntero
-                  id="edad-maxima-vencimiento"
-                  valor={ajustes.edadMaximaAlVencimiento}
-                  minimo={65}
-                  maximo={85}
-                  onChange={(edadMaximaAlVencimiento) =>
-                    actualizarAjustes({ edadMaximaAlVencimiento })
-                  }
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="criterio-edad" className="text-sm font-medium text-tinta">
-                  Criterio de edad
-                </label>
-                <select
-                  id="criterio-edad"
-                  value={ajustes.criterioEdad}
-                  onChange={(e) =>
-                    actualizarAjustes({
-                      criterioEdad: e.target.value as 'mayor' | 'menor',
-                    })
-                  }
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                >
-                  <option value="mayor">Titular de más edad</option>
-                  <option value="menor">Titular de menos edad</option>
-                </select>
-              </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="criterio-edad" className="text-sm font-medium text-tinta">
+                Criterio de edad
+              </label>
+              <select
+                id="criterio-edad"
+                value={ajustes.criterioEdad}
+                onChange={(e) =>
+                  actualizarAjustes({
+                    criterioEdad: e.target.value as 'mayor' | 'menor',
+                  })
+                }
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              >
+                <option value="mayor">Titular de más edad</option>
+                <option value="menor">Titular de menos edad</option>
+              </select>
+            </div>
           </section>
 
           {/* C. Rango de exploración */}
           <section className="mt-5 flex flex-col gap-4 border-t border-linea pt-5">
             <h3 className="font-display text-xl text-tinta">Rango de exploración</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <InputMoneda
-                  id="precio-min"
-                  etiqueta="Precio mínimo"
-                  valor={preferencias.precioMinExplorar}
-                  onChange={(v) => actualizarPreferencias({ precioMinExplorar: v })}
-                  ayuda="El precio más bajo que aparecerá en la tabla de escala. Ajústalo a tu rango real para que las filas sean útiles."
-                />
-                <InputMoneda
-                  id="precio-max"
-                  etiqueta="Precio máximo"
-                  valor={preferencias.precioMaxExplorar}
-                  onChange={(v) => actualizarPreferencias({ precioMaxExplorar: v })}
-                  ayuda="El precio más alto de la tabla. Puedes fijarlo por encima de tu límite para ver cuánto necesitarías en cada escenario."
-                />
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="paso-escala" className="text-sm font-medium text-tinta">
-                    Paso de escala
-                  </label>
-                  <select
-                    id="paso-escala"
-                    value={preferencias.pasoEscala}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      const paso = val === 5000 ? 5000 : val === 20000 ? 20000 : 10000;
-                      actualizarPreferencias({ pasoEscala: paso });
-                    }}
-                    className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                  >
-                    <option value={5000}>5.000 €</option>
-                    <option value={10000}>10.000 €</option>
-                    <option value={20000}>20.000 €</option>
-                  </select>
-                </div>
+              <InputMoneda
+                id="precio-min"
+                etiqueta="Precio mínimo"
+                valor={preferencias.precioMinExplorar}
+                onChange={(v) => actualizarPreferencias({ precioMinExplorar: v })}
+                ayuda="El precio más bajo que aparecerá en la tabla de escala. Ajústalo a tu rango real para que las filas sean útiles."
+              />
+              <InputMoneda
+                id="precio-max"
+                etiqueta="Precio máximo"
+                valor={preferencias.precioMaxExplorar}
+                onChange={(v) => actualizarPreferencias({ precioMaxExplorar: v })}
+                ayuda="El precio más alto de la tabla. Puedes fijarlo por encima de tu límite para ver cuánto necesitarías en cada escenario."
+              />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="paso-escala" className="text-sm font-medium text-tinta">
+                  Paso de escala
+                </label>
+                <select
+                  id="paso-escala"
+                  value={preferencias.pasoEscala}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    const paso = val === 5000 ? 5000 : val === 20000 ? 20000 : 10000;
+                    actualizarPreferencias({ pasoEscala: paso });
+                  }}
+                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                >
+                  <option value={5000}>5.000 €</option>
+                  <option value={10000}>10.000 €</option>
+                  <option value={20000}>20.000 €</option>
+                </select>
+              </div>
             </div>
           </section>
 
@@ -494,14 +503,14 @@ export function Ajustes() {
             {ajustes.fiscal
               .filter((cfg) => cfg.ccaa !== 'Aragón')
               .map((cfg) => (
-              <FiscalCcaaEditor
-                key={cfg.ccaa}
-                config={cfg}
-                onCambiar={(nueva) => {
-                  const fiscal = ajustes.fiscal.map((f) => (f.ccaa === cfg.ccaa ? nueva : f));
-                  actualizarAjustes({ fiscal });
-                }}
-              />
+                <FiscalCcaaEditor
+                  key={cfg.ccaa}
+                  config={cfg}
+                  onCambiar={(nueva) => {
+                    const fiscal = ajustes.fiscal.map((f) => (f.ccaa === cfg.ccaa ? nueva : f));
+                    actualizarAjustes({ fiscal });
+                  }}
+                />
               ))}
           </section>
         </div>
@@ -510,6 +519,58 @@ export function Ajustes() {
       {/* E. Datos y privacidad */}
       <Panel titulo="Datos y privacidad">
         <div className="flex flex-col gap-4">
+          {estadoPersistencia === 'error' && (
+            <p
+              role="alert"
+              className="rounded-medio border border-no-viable bg-no-viable-tenue px-4 py-3 text-sm text-tinta"
+            >
+              El navegador no ha podido guardar los últimos cambios. Descarga una copia ahora y
+              comprueba que el almacenamiento local no esté bloqueado o lleno.
+            </p>
+          )}
+
+          {datosRecuperacion !== null && (
+            <div className="rounded-medio border border-revisar bg-revisar-tenue px-4 py-3 text-sm text-tinta">
+              <p>
+                Se encontró un estado anterior que la aplicación no pudo validar. Se ha conservado
+                sin sobrescribirlo para que puedas revisarlo.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    descargarTexto(
+                      datosRecuperacion,
+                      'hipotecas-recuperacion.txt',
+                      'text/plain;charset=utf-8',
+                    )
+                  }
+                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-xs font-medium text-tinta"
+                >
+                  Descargar datos recuperados
+                </button>
+                <button
+                  type="button"
+                  onClick={descartarRecuperacion}
+                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-xs text-tinta-media"
+                >
+                  Descartar aviso
+                </button>
+              </div>
+            </div>
+          )}
+
+          {copiaSeguridadPendiente && (
+            <p
+              role="status"
+              className="rounded-medio border border-revisar bg-revisar-tenue px-4 py-3 text-sm text-tinta"
+            >
+              Hay cambios posteriores a la última copia externa. Se guardan automáticamente en este
+              navegador; descarga el JSON periódicamente para protegerte si borras sus datos o
+              cambias de dispositivo.
+            </p>
+          )}
+
           <div className="flex flex-wrap gap-3">
             {/* Exportar */}
             <button
@@ -517,7 +578,7 @@ export function Ajustes() {
               onClick={handleExportar}
               className="rounded-medio border border-linea bg-superficie px-4 py-2 text-sm text-tinta transition-colors hover:bg-superficie-2 hover:text-tinta"
             >
-              Exportar datos (JSON)
+              Descargar copia de seguridad (JSON)
             </button>
 
             {/* Importar */}
@@ -562,7 +623,6 @@ export function Ajustes() {
               {mensajeImport.texto}
             </p>
           )}
-
         </div>
       </Panel>
 

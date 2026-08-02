@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toCents, ZERO } from '@/core/money';
 import { ESTADO_INICIAL } from '@/storage/defaults';
-import { cargarEstado, limpiarDatosConservandoConfiguracion } from '@/storage/store';
+import {
+  cargarEstado,
+  guardarEstadoAhora,
+  limpiarDatosConservandoConfiguracion,
+  obtenerDatosRecuperacion,
+} from '@/storage/store';
 import type { EstadoPersistido } from '@/domain/types';
 
 function estadoConDatos(): EstadoPersistido {
@@ -49,6 +54,10 @@ function estadoConDatos(): EstadoPersistido {
 describe('limpieza de datos', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('parte sin importes personales ni ejemplos precargados', () => {
@@ -122,14 +131,30 @@ describe('limpieza de datos', () => {
       schemaVersion: 6,
     };
     delete sinViviendas.viviendas;
-    localStorage.setItem(
-      'hipotecas-v1',
-      JSON.stringify(sinViviendas),
-    );
+    localStorage.setItem('hipotecas-v1', JSON.stringify(sinViviendas));
 
     const cargado = cargarEstado();
 
     expect(cargado.schemaVersion).toBe(10);
     expect(cargado.viviendas).toEqual([]);
+  });
+
+  it('conserva para recuperación un estado que no puede validar', () => {
+    const raw = '{"schemaVersion":10,"perfil":"dañado"}';
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    localStorage.setItem('hipotecas-v1', raw);
+
+    expect(cargarEstado()).toEqual(ESTADO_INICIAL);
+    expect(obtenerDatosRecuperacion()).toBe(raw);
+  });
+
+  it('informa del fallo si el navegador rechaza una escritura', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Cuota agotada', 'QuotaExceededError');
+    });
+
+    expect(guardarEstadoAhora(ESTADO_INICIAL)).toBe(false);
+    setItem.mockRestore();
   });
 });

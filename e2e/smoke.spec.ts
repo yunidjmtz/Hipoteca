@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import type { Page } from '@playwright/test';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 function navegacionVisible(pagina: Page) {
   return pagina.locator('nav:visible').first();
@@ -12,7 +12,7 @@ async function abrirAjustes(pagina: Page) {
     .getByRole('button', { name: /ajustes/i })
     .first()
     .click();
-  await expect(pagina.getByRole('complementary', { name: 'Panel de ajustes' })).toBeVisible();
+  await expect(pagina.getByRole('dialog', { name: 'Panel de ajustes' })).toBeVisible();
 }
 
 /**
@@ -21,7 +21,7 @@ async function abrirAjustes(pagina: Page) {
  */
 test('los datos del perfil persisten al recargar la página', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Titulares' }).click();
+  await page.getByRole('tab', { name: 'Titulares' }).click();
   await expect(page.getByLabel('Ahorros actuales')).toBeVisible();
 
   // Cambiar ahorros a 50.000 €
@@ -35,7 +35,7 @@ test('los datos del perfil persisten al recargar la página', async ({ page }) =
 
   // Recargar la página desde el mismo hash
   await page.reload();
-  await page.getByRole('button', { name: 'Titulares' }).click();
+  await page.getByRole('tab', { name: 'Titulares' }).click();
   await expect(page.getByLabel('Ahorros actuales')).toBeVisible();
 
   // El valor debe mantenerse con el formato monetario español.
@@ -64,7 +64,10 @@ test('cambiar el precio objetivo actualiza el Resumen y la Escala', async ({ pag
   // La fila compacta del Resumen muestra el precio objetivo.
   await expect(page.getByRole('cell', { name: '200.000,00 €', exact: true }).first()).toBeVisible();
 
-  // Abrir la Escala de precios desde el resumen
+  // Abrir el plan y, desde él, la Escala de precios.
+  await navegacionVisible(page)
+    .getByRole('link', { name: /Mi plan/i })
+    .click();
   await page.getByRole('link', { name: /Ver escala completa/i }).click();
 
   // La fila del precio objetivo lleva el marcador ◀
@@ -96,7 +99,7 @@ test('exportar → restablecer → importar restaura el estado', async ({ page }
   await abrirAjustes(page);
 
   const descargaPromesa = page.waitForEvent('download');
-  await page.getByRole('button', { name: /Exportar datos/ }).click();
+  await page.getByRole('button', { name: /copia de seguridad/ }).click();
   const descarga = await descargaPromesa;
 
   const rutaTmp = path.join(os.tmpdir(), 'hipotecas-smoke.json');
@@ -105,6 +108,18 @@ test('exportar → restablecer → importar restaura el estado', async ({ page }
   // Paso 3: restablecer los datos
   await page.getByRole('button', { name: 'Restablecer datos' }).click();
   await page.getByRole('button', { name: 'Sí, restablecer' }).click();
+  const dialogoInicial = page.getByRole('dialog', { name: '¿Dónde quieres comprar?' });
+  await dialogoInicial.getByLabel('Comunidad autónoma').selectOption('Aragón');
+  await dialogoInicial.getByRole('button', { name: 'Continuar' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('hipotecas-v1');
+        if (raw === null) return null;
+        return (JSON.parse(raw) as { preferencias?: { ccaa?: string } }).preferencias?.ccaa;
+      }),
+    )
+    .toBe('Aragón');
   await page.getByRole('button', { name: 'Cerrar ajustes' }).click();
 
   // Verificar que el estado volvió limpio (sin precio de demostración)

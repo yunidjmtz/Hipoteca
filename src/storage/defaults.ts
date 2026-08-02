@@ -1,4 +1,5 @@
 ﻿import type { EstadoPersistido } from '@/domain/types';
+import { primerDiaMesSiguienteLocal } from '@/core/dates';
 import { toCents, ZERO } from '@/core/money';
 import {
   ANIOS_FIJOS_MIXTO_POR_DEFECTO,
@@ -123,8 +124,6 @@ export const ESTADO_INICIAL: EstadoPersistido = {
       otras: ZERO,
     },
     vinculaciones: [],
-    fechaPrimeraCuota: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-      .toISOString()
-      .slice(0, 10),
+    fechaPrimeraCuota: primerDiaMesSiguienteLocal(),
   },
 };

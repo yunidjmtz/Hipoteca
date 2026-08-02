@@ -1,4 +1,5 @@
 ﻿import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useReducer } from 'react';
 import type { ReactNode } from 'react';
 import type {
   Ajustes,
@@ -13,13 +14,20 @@ import type {
 } from '@/domain/types';
 import {
   cargarEstado,
+  descartarDatosRecuperacion,
   exportarJSON,
   guardarEstadoAhora,
   guardarEstadoConDebounce,
   importarJSON,
   limpiarDatosConservandoConfiguracion,
+  obtenerDatosRecuperacion,
 } from '@/storage/store';
 import { fetchAverageMortgageTin } from '@/services/ineMortgageRate';
+import {
+  confirmarCopiaSeguridad,
+  hayCopiaSeguridadPendiente,
+  marcarCopiaSeguridadPendiente,
+} from '@/storage/backup';
 
 // ---------------------------------------------------------------------------
 // Contrato público del contexto
@@ -35,10 +43,15 @@ interface AccionesEstado {
   actualizarOfertas: (ofertas: OfertaBancaria[]) => void;
   actualizarViviendas: (viviendas: ViviendaGuardada[]) => void;
   exportarDatos: () => string;
+  confirmarCopiaDescargada: () => void;
   importarDatos: (json: string) => boolean;
   restablecerDatos: () => void;
   refrescarTinIne: (forzar?: boolean) => Promise<void>;
   estadoConsultaTinIne: 'inactivo' | 'cargando' | 'actualizado' | 'cache' | 'respaldo' | 'error';
+  copiaSeguridadPendiente: boolean;
+  estadoPersistencia: 'guardado' | 'guardando' | 'error';
+  datosRecuperacion: string | null;
+  descartarRecuperacion: () => void;
 }
 
 type ValorContexto = { estado: EstadoPersistido } & AccionesEstado;
@@ -57,6 +70,18 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoPersistido>(() => cargarEstado());
   const [estadoConsultaTinIne, setEstadoConsultaTinIne] =
     useState<AccionesEstado['estadoConsultaTinIne']>('inactivo');
+  const [estadoPersistencia, setEstadoPersistencia] =
+    useState<AccionesEstado['estadoPersistencia']>('guardado');
+  const [datosRecuperacion, setDatosRecuperacion] = useState<string | null>(() =>
+    obtenerDatosRecuperacion(),
+  );
+  const [, actualizarRevisionCopiaSeguridad] = useReducer((revision: number) => revision + 1, 0);
+  const copiaSeguridadPendiente = hayCopiaSeguridadPendiente();
+
+  const registrarCambioSinCopia = useCallback(() => {
+    marcarCopiaSeguridadPendiente();
+    actualizarRevisionCopiaSeguridad();
+  }, []);
 
   const refrescarTinIne = useCallback(async (forzar = false): Promise<void> => {
     setEstadoConsultaTinIne('cargando');
@@ -85,7 +110,9 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
 
   // Persiste cada vez que el estado cambia.
   useEffect(() => {
-    guardarEstadoConDebounce(estado);
+    guardarEstadoConDebounce(estado, (guardado) =>
+      setEstadoPersistencia(guardado ? 'guardado' : 'error'),
+    );
   }, [estado]);
 
   useEffect(() => {
@@ -121,72 +148,120 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     };
   }, [estado.ajustes.tinFuente]);
 
-  const actualizarPerfil = useCallback((cambios: Partial<PerfilFinanciero>) => {
-    setEstado((prev) => ({
-      ...prev,
-      perfil: { ...prev.perfil, ...cambios },
-    }));
-  }, []);
+  const actualizarPerfil = useCallback(
+    (cambios: Partial<PerfilFinanciero>) => {
+      setEstado((prev) => ({
+        ...prev,
+        perfil: { ...prev.perfil, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarPreferencias = useCallback((cambios: Partial<PreferenciasCompra>) => {
-    setEstado((prev) => ({
-      ...prev,
-      preferencias: { ...prev.preferencias, ...cambios },
-    }));
-  }, []);
+  const actualizarPreferencias = useCallback(
+    (cambios: Partial<PreferenciasCompra>) => {
+      setEstado((prev) => ({
+        ...prev,
+        preferencias: { ...prev.preferencias, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarGastos = useCallback((cambios: Partial<GastosCompra>) => {
-    setEstado((prev) => ({
-      ...prev,
-      gastos: { ...prev.gastos, ...cambios },
-    }));
-  }, []);
+  const actualizarGastos = useCallback(
+    (cambios: Partial<GastosCompra>) => {
+      setEstado((prev) => ({
+        ...prev,
+        gastos: { ...prev.gastos, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarCostesRecurrentes = useCallback((cambios: Partial<CostesRecurrentes>) => {
-    setEstado((prev) => ({
-      ...prev,
-      costesRecurrentes: { ...prev.costesRecurrentes, ...cambios },
-    }));
-  }, []);
+  const actualizarCostesRecurrentes = useCallback(
+    (cambios: Partial<CostesRecurrentes>) => {
+      setEstado((prev) => ({
+        ...prev,
+        costesRecurrentes: { ...prev.costesRecurrentes, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarAjustes = useCallback((cambios: Partial<Ajustes>) => {
-    setEstado((prev) => ({
-      ...prev,
-      ajustes: { ...prev.ajustes, ...cambios },
-    }));
-  }, []);
+  const actualizarAjustes = useCallback(
+    (cambios: Partial<Ajustes>) => {
+      setEstado((prev) => ({
+        ...prev,
+        ajustes: { ...prev.ajustes, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarEscenarioSimulador = useCallback((cambios: Partial<EscenarioHipoteca>) => {
-    setEstado((prev) => ({
-      ...prev,
-      escenarioSimulador: { ...prev.escenarioSimulador, ...cambios },
-    }));
-  }, []);
+  const actualizarEscenarioSimulador = useCallback(
+    (cambios: Partial<EscenarioHipoteca>) => {
+      setEstado((prev) => ({
+        ...prev,
+        escenarioSimulador: { ...prev.escenarioSimulador, ...cambios },
+      }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarOfertas = useCallback((ofertas: OfertaBancaria[]) => {
-    setEstado((prev) => ({ ...prev, ofertas }));
-  }, []);
+  const actualizarOfertas = useCallback(
+    (ofertas: OfertaBancaria[]) => {
+      setEstado((prev) => ({ ...prev, ofertas }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const actualizarViviendas = useCallback((viviendas: ViviendaGuardada[]) => {
-    setEstado((prev) => ({ ...prev, viviendas }));
-  }, []);
+  const actualizarViviendas = useCallback(
+    (viviendas: ViviendaGuardada[]) => {
+      setEstado((prev) => ({ ...prev, viviendas }));
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
 
-  const exportarDatos = useCallback(() => exportarJSON(estado), [estado]);
+  const exportarDatos = useCallback(() => {
+    return exportarJSON(estado);
+  }, [estado]);
+
+  const confirmarCopiaDescargada = useCallback(() => {
+    confirmarCopiaSeguridad();
+    actualizarRevisionCopiaSeguridad();
+  }, []);
 
   const importarDatos = useCallback((json: string): boolean => {
     const resultado = importarJSON(json);
     if (resultado === null) return false;
-    guardarEstadoAhora(resultado);
+    const guardado = guardarEstadoAhora(resultado);
+    setEstadoPersistencia(guardado ? 'guardado' : 'error');
     setEstado(resultado);
+    confirmarCopiaSeguridad();
+    actualizarRevisionCopiaSeguridad();
     return true;
   }, []);
 
   const restablecerDatos = useCallback(() => {
-    setEstado((prev) => {
-      const estadoLimpio = limpiarDatosConservandoConfiguracion(prev);
-      guardarEstadoAhora(estadoLimpio);
-      return estadoLimpio;
-    });
+    const estadoLimpio = limpiarDatosConservandoConfiguracion(estado);
+    confirmarCopiaSeguridad();
+    actualizarRevisionCopiaSeguridad();
+    const guardado = guardarEstadoAhora(estadoLimpio);
+    setEstadoPersistencia(guardado ? 'guardado' : 'error');
+    setEstado(estadoLimpio);
+  }, [estado]);
+
+  const descartarRecuperacion = useCallback(() => {
+    descartarDatosRecuperacion();
+    setDatosRecuperacion(null);
   }, []);
 
   const valor: ValorContexto = {
@@ -200,10 +275,15 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     actualizarOfertas,
     actualizarViviendas,
     exportarDatos,
+    confirmarCopiaDescargada,
     importarDatos,
     restablecerDatos,
     refrescarTinIne,
     estadoConsultaTinIne: estado.ajustes.tinFuente === 'ine' ? estadoConsultaTinIne : 'inactivo',
+    copiaSeguridadPendiente,
+    estadoPersistencia,
+    datosRecuperacion,
+    descartarRecuperacion,
   };
 
   return <EstadoContexto.Provider value={valor}>{children}</EstadoContexto.Provider>;

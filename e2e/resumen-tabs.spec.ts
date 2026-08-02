@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 async function completarDatosMinimos(page: Page) {
@@ -10,7 +10,7 @@ async function completarDatosMinimos(page: Page) {
   await precio.press('Tab');
   await expect(precio).toHaveValue(/200\.000,00/);
 
-  await page.getByRole('button', { name: 'Titulares' }).click();
+  await page.getByRole('tab', { name: 'Titulares' }).click();
   const ingreso = page.getByLabel('Neto por paga').first();
   await ingreso.click();
   await ingreso.fill('2500');

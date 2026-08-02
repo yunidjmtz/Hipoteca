@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useEstado } from '@/app/EstadoProvider';
 import { Panel } from '@/components/Panel';
@@ -12,7 +13,6 @@ import { formatEuros, formatPorcentaje } from '@/core/format';
 import { type Cents, ZERO, sumCents } from '@/core/money';
 import { simulacionDesdeOferta } from '@/domain/mortgageOffer';
 import { construirFlujoDeCaja } from '@/finance/mortgage';
-import { calcularPlazoEfectivo } from '@/finance/affordability';
 import { flujoInputDesdeEscenario } from '@/finance/scenario';
 import { simularAmortizacionAnticipada, type OpcionAmortizacion } from '@/finance/prepayment';
 import { descargarPDFAmortizacion } from '@/storage/exportar';
@@ -26,7 +26,7 @@ interface PropsTabla {
   readonly lineas: LineaMensual[];
   readonly colorCapital?: string;
   readonly mostrarTodoInicialmente?: boolean;
-  readonly accionEncabezado?: import('react').ReactNode;
+  readonly accionEncabezado?: ReactNode;
 }
 
 function formatMesAnio(fecha: string): string {
@@ -47,7 +47,7 @@ function TablaAmortizacion({
   return (
     <Panel contenidoClassName="p-0">
       <TablaResponsive
-        minWidth="520px"
+        minWidth="680px"
         className="max-h-[32rem] overflow-x-auto overflow-y-auto"
         cabecera={
           <div className="sticky top-0 z-20 flex min-h-[3.75rem] items-center justify-between gap-4 border-b border-linea bg-superficie px-6 py-3">
@@ -75,6 +75,9 @@ function TablaAmortizacion({
             <th className="sticky top-[3.75rem] z-10 bg-superficie py-2 pr-3 font-medium shadow-[0_1px_0_var(--c-linea)]">
               <EncabezadoConUnidad titulo="Principal" unidad="€" />
             </th>
+            <th className="sticky top-[3.75rem] z-10 bg-superficie py-2 pr-3 font-medium shadow-[0_1px_0_var(--c-linea)]">
+              <EncabezadoConUnidad titulo="Amortización extra" unidad="€" />
+            </th>
             <th className="sticky top-[3.75rem] z-10 bg-superficie py-2 font-medium shadow-[0_1px_0_var(--c-linea)]">
               <EncabezadoConUnidad titulo="Pendiente" unidad="€" />
             </th>
@@ -96,6 +99,9 @@ function TablaAmortizacion({
               </td>
               <td className="py-2 pr-3 font-mono text-tinta-media">
                 <ValorEurosTabla valor={linea.principal} />
+              </td>
+              <td className="py-2 pr-3 font-mono text-acento">
+                <ValorEurosTabla valor={linea.amortizacionExtraordinaria} />
               </td>
               <td className={`py-2 font-mono ${colorCapital || 'text-tinta'}`}>
                 <ValorEurosTabla valor={linea.pendiente} />
@@ -131,7 +137,7 @@ function TablaAmortizacion({
 export function Amortizacion() {
   const { estado } = useEstado();
   const navegar = useNavigate();
-  const { ajustes, escenarioSimulador, ofertas, perfil } = estado;
+  const { escenarioSimulador, ofertas } = estado;
   const [idOfertaSeleccionada, setIdOfertaSeleccionada] = useState<string>(
     () => ofertas[0]?.id ?? '',
   );
@@ -139,9 +145,7 @@ export function Amortizacion() {
     ofertas.find((oferta) => oferta.id === idOfertaSeleccionada) ?? ofertas[0] ?? null;
   const escenarioBase = useMemo(
     () =>
-      ofertaSeleccionada === null
-        ? escenarioSimulador
-        : simulacionDesdeOferta(ofertaSeleccionada),
+      ofertaSeleccionada === null ? escenarioSimulador : simulacionDesdeOferta(ofertaSeleccionada),
     [escenarioSimulador, ofertaSeleccionada],
   );
 
@@ -149,15 +153,9 @@ export function Amortizacion() {
   // Cuadro base (parte de la hipoteca guardada seleccionada)
   // --------------------------------------------------------------------------
 
-  const plazoAnios = calcularPlazoEfectivo(
-    escenarioBase.plazoAnios,
-    ajustes,
-    perfil.titulares,
-  );
-
   const inputBase: FlujoInput = useMemo<FlujoInput>(
-    () => flujoInputDesdeEscenario(escenarioBase, plazoAnios),
-    [escenarioBase, plazoAnios],
+    () => flujoInputDesdeEscenario(escenarioBase),
+    [escenarioBase],
   );
 
   const flujoBase = useMemo(() => construirFlujoDeCaja(inputBase), [inputBase]);
@@ -179,19 +177,16 @@ export function Amortizacion() {
   const [hastaMes, setHastaMes] = useState(24);
   const [opcion, setOpcion] = useState<OpcionAmortizacion>('cuota');
   const [mostrarResultado, setMostrarResultado] = useState(false);
-  const aportacionesValidas = useMemo(
-    () => {
-      if (importeAportacion <= ZERO) return [];
-      const inicio = Math.min(Math.max(desdeMes, 1), plazoMeses);
-      const fin = Math.min(Math.max(hastaMes, inicio), plazoMeses);
+  const aportacionesValidas = useMemo(() => {
+    if (importeAportacion <= ZERO) return [];
+    const inicio = Math.min(Math.max(desdeMes, 1), plazoMeses);
+    const fin = Math.min(Math.max(hastaMes, inicio), plazoMeses);
 
-      return Array.from({ length: fin - inicio + 1 }, (_, indice) => ({
-        importe: importeAportacion,
-        enMes: inicio + indice,
-      }));
-    },
-    [importeAportacion, desdeMes, hastaMes, plazoMeses],
-  );
+    return Array.from({ length: fin - inicio + 1 }, (_, indice) => ({
+      importe: importeAportacion,
+      enMes: inicio + indice,
+    }));
+  }, [importeAportacion, desdeMes, hastaMes, plazoMeses]);
 
   const comisionParcial = escenarioBase.comisiones.amortizacionParcial;
 
@@ -202,13 +197,7 @@ export function Amortizacion() {
       opcion,
       comisionParcial,
     });
-  }, [
-    mostrarResultado,
-    aportacionesValidas,
-    opcion,
-    comisionParcial,
-    inputBase,
-  ]);
+  }, [mostrarResultado, aportacionesValidas, opcion, comisionParcial, inputBase]);
 
   function simular() {
     setMostrarResultado(true);
@@ -269,182 +258,187 @@ export function Amortizacion() {
       {resultadoAmort === null && (
         <Panel>
           <div className="flex flex-col gap-5">
-      <section>
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="hipoteca-guardada" className="sr-only">
-              Hipoteca guardada
-            </label>
-            <select
-              id="hipoteca-guardada"
-              value={ofertaSeleccionada.id}
-              onChange={(e) => {
-                setIdOfertaSeleccionada(e.target.value);
-                setMostrarResultado(false);
-              }}
-              className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-            >
-              {ofertas.map((oferta) => (
-                <option key={oferta.id} value={oferta.id}>
-                  {oferta.banco === oferta.nombre
-                    ? oferta.banco
-                    : `${oferta.banco} · ${oferta.nombre}`}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="border-t border-linea pt-5">
-            <p className="rotulo mb-4">Hipoteca {escenarioBase.tipo}</p>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-suave">Capital</span>
-                <span className="font-mono font-semibold text-tinta">{formatEuros(capital)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-suave">Cuota mensual</span>
-                <span className="font-mono font-semibold text-tinta">{formatEuros(cuota)}</span>
-              </div>
-              <div className="order-4 col-span-3 flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-suave">Intereses totales</span>
-                <span className="font-mono font-semibold text-tinta">
-                  {formatEuros(interesesTotales)}
-                </span>
-              </div>
-              <div className="order-3 flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-suave">Plazo</span>
-                <span className="font-mono font-semibold text-tinta">{plazoAnios} años</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Amortización anticipada ──────────────────────────────── */}
-      <section className="flex flex-col gap-5 border-t border-linea pt-5">
-          <div className="flex flex-col gap-3">
-            <InputMoneda
-              id="amort-importe"
-              etiqueta="Aportación en cada cuota"
-              valor={importeAportacion}
-              onChange={(importe) => {
-                setImporteAportacion(importe);
-                setMostrarResultado(false);
-              }}
-            />
-            <p className="text-xs text-tinta-media">
-              Aplicaremos esta misma cantidad a cada cuota del intervalo que indiques.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 border-t border-linea pt-5">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="amort-desde" className="text-sm font-medium text-tinta">
-                Desde la cuota nº
-              </label>
-              <input
-                id="amort-desde"
-                type="number"
-                min="1"
-                max={plazoMeses}
-                value={Math.min(desdeMes, plazoMeses)}
-                onChange={(e) => {
-                  const nuevoDesde = Math.max(1, parseInt(e.target.value, 10) || 1);
-                  setDesdeMes(nuevoDesde);
-                  setHastaMes((actual) => Math.max(actual, nuevoDesde));
-                  setMostrarResultado(false);
-                }}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-mono text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="amort-hasta" className="text-sm font-medium text-tinta">
-                Hasta la cuota nº
-              </label>
-              <input
-                id="amort-hasta"
-                type="number"
-                min="1"
-                max={plazoMeses}
-                value={Math.min(hastaMes, plazoMeses)}
-                onChange={(e) => {
-                  setHastaMes(Math.max(desdeMes, parseInt(e.target.value, 10) || desdeMes));
-                  setMostrarResultado(false);
-                }}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-mono text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-tinta">Destinar a</span>
-              <details className="relative">
-                <summary
-                  aria-label="Información sobre reducir cuota o plazo"
-                  className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full border border-linea text-xs font-semibold text-tinta-media transition-colors hover:border-acento hover:text-acento [&::-webkit-details-marker]:hidden"
-                >
-                  i
-                </summary>
-                <div
-                  role="note"
-                  className="absolute top-full left-0 z-10 mt-2 w-72 rounded-medio border border-linea bg-superficie p-3 text-sm leading-relaxed text-tinta-media shadow-elevado"
-                >
-                  <p>
-                    <strong>Reducir cuota</strong>: pagas menos cada mes, pero el préstamo dura lo
-                    mismo.
-                  </p>
-                  <p className="mt-2">
-                    <strong>Reducir plazo</strong>: mantienes la cuota y terminas antes, por lo que
-                    normalmente ahorras más intereses.
-                  </p>
-                </div>
-              </details>
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="flex gap-2">
-                {(['cuota', 'plazo'] as OpcionAmortizacion[]).map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    onClick={() => {
-                      setOpcion(o);
+            <section>
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="hipoteca-guardada" className="sr-only">
+                    Hipoteca guardada
+                  </label>
+                  <select
+                    id="hipoteca-guardada"
+                    value={ofertaSeleccionada.id}
+                    onChange={(e) => {
+                      setIdOfertaSeleccionada(e.target.value);
                       setMostrarResultado(false);
                     }}
-                    className={[
-                      'rounded-medio border px-4 py-2 text-sm font-medium',
-                      opcion === o
-                        ? 'border-acento bg-acento/10 text-acento'
-                        : 'border-linea text-tinta hover:bg-superficie-2',
-                    ].join(' ')}
+                    className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
                   >
-                    {o === 'cuota' ? 'Reducir cuota' : 'Reducir plazo'}
-                  </button>
-                ))}
+                    {ofertas.map((oferta) => (
+                      <option key={oferta.id} value={oferta.id}>
+                        {oferta.banco === oferta.nombre
+                          ? oferta.banco
+                          : `${oferta.banco} · ${oferta.nombre}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="border-t border-linea pt-5">
+                  <p className="rotulo mb-4">Hipoteca {escenarioBase.tipo}</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-tinta-suave">Capital</span>
+                      <span className="font-mono font-semibold text-tinta">
+                        {formatEuros(capital)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-tinta-suave">Cuota mensual</span>
+                      <span className="font-mono font-semibold text-tinta">
+                        {formatEuros(cuota)}
+                      </span>
+                    </div>
+                    <div className="order-4 col-span-3 flex flex-col gap-0.5">
+                      <span className="text-xs text-tinta-suave">Intereses totales</span>
+                      <span className="font-mono font-semibold text-tinta">
+                        {formatEuros(interesesTotales)}
+                      </span>
+                    </div>
+                    <div className="order-3 flex flex-col gap-0.5">
+                      <span className="text-xs text-tinta-suave">Plazo</span>
+                      <span className="font-mono font-semibold text-tinta">
+                        {escenarioBase.plazoAnios} años
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </section>
 
-          {comisionParcial > 0 && (
-            <p className="text-xs text-tinta-media">
-              Comisión de amortización parcial aplicada:{' '}
-              <span className="font-mono">{formatPorcentaje(comisionParcial)}</span> (del escenario
-              de la hipoteca guardada)
-            </p>
-          )}
+            {/* ── Amortización anticipada ──────────────────────────────── */}
+            <section className="flex flex-col gap-5 border-t border-linea pt-5">
+              <div className="flex flex-col gap-3">
+                <InputMoneda
+                  id="amort-importe"
+                  etiqueta="Aportación en cada cuota"
+                  valor={importeAportacion}
+                  onChange={(importe) => {
+                    setImporteAportacion(importe);
+                    setMostrarResultado(false);
+                  }}
+                />
+                <p className="text-xs text-tinta-media">
+                  Aplicaremos esta misma cantidad a cada cuota del intervalo que indiques.
+                </p>
+              </div>
 
-          <div>
-            <button
-              type="button"
-              onClick={simular}
-              disabled={aportacionesValidas.length === 0}
-              className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Simular amortización
-            </button>
-          </div>
+              <div className="grid grid-cols-2 gap-3 border-t border-linea pt-5">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="amort-desde" className="text-sm font-medium text-tinta">
+                    Desde la cuota nº
+                  </label>
+                  <input
+                    id="amort-desde"
+                    type="number"
+                    min="1"
+                    max={plazoMeses}
+                    value={Math.min(desdeMes, plazoMeses)}
+                    onChange={(e) => {
+                      const nuevoDesde = Math.max(1, parseInt(e.target.value, 10) || 1);
+                      setDesdeMes(nuevoDesde);
+                      setHastaMes((actual) => Math.max(actual, nuevoDesde));
+                      setMostrarResultado(false);
+                    }}
+                    className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-mono text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="amort-hasta" className="text-sm font-medium text-tinta">
+                    Hasta la cuota nº
+                  </label>
+                  <input
+                    id="amort-hasta"
+                    type="number"
+                    min="1"
+                    max={plazoMeses}
+                    value={Math.min(hastaMes, plazoMeses)}
+                    onChange={(e) => {
+                      setHastaMes(Math.max(desdeMes, parseInt(e.target.value, 10) || desdeMes));
+                      setMostrarResultado(false);
+                    }}
+                    className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-mono text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  />
+                </div>
+              </div>
 
-      </section>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-tinta">Destinar a</span>
+                  <details className="relative">
+                    <summary
+                      aria-label="Información sobre reducir cuota o plazo"
+                      className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full border border-linea text-xs font-semibold text-tinta-media transition-colors hover:border-acento hover:text-acento [&::-webkit-details-marker]:hidden"
+                    >
+                      i
+                    </summary>
+                    <div
+                      role="note"
+                      className="absolute top-full left-0 z-10 mt-2 w-72 rounded-medio border border-linea bg-superficie p-3 text-sm leading-relaxed text-tinta-media shadow-elevado"
+                    >
+                      <p>
+                        <strong>Reducir cuota</strong>: pagas menos cada mes, pero el préstamo dura
+                        lo mismo.
+                      </p>
+                      <p className="mt-2">
+                        <strong>Reducir plazo</strong>: mantienes la cuota y terminas antes, por lo
+                        que normalmente ahorras más intereses.
+                      </p>
+                    </div>
+                  </details>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-2">
+                    {(['cuota', 'plazo'] as OpcionAmortizacion[]).map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        onClick={() => {
+                          setOpcion(o);
+                          setMostrarResultado(false);
+                        }}
+                        className={[
+                          'rounded-medio border px-4 py-2 text-sm font-medium',
+                          opcion === o
+                            ? 'border-acento bg-acento/10 text-acento'
+                            : 'border-linea text-tinta hover:bg-superficie-2',
+                        ].join(' ')}
+                      >
+                        {o === 'cuota' ? 'Reducir cuota' : 'Reducir plazo'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {comisionParcial > 0 && (
+                <p className="text-xs text-tinta-media">
+                  Comisión de amortización parcial aplicada:{' '}
+                  <span className="font-mono">{formatPorcentaje(comisionParcial)}</span> (del
+                  escenario de la hipoteca guardada)
+                </p>
+              )}
+
+              <div>
+                <button
+                  type="button"
+                  onClick={simular}
+                  disabled={aportacionesValidas.length === 0}
+                  className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Simular amortización
+                </button>
+              </div>
+            </section>
           </div>
         </Panel>
       )}
@@ -481,7 +475,9 @@ export function Amortizacion() {
               </div>
               <div className="order-3 flex flex-col gap-0.5">
                 <span className="text-xs text-tinta-suave">Plazo</span>
-                <span className="font-mono font-semibold text-tinta">{plazoAnios} años</span>
+                <span className="font-mono font-semibold text-tinta">
+                  {escenarioBase.plazoAnios} años
+                </span>
               </div>
             </div>
           </div>

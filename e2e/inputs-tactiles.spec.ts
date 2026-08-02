@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('los importes y las edades se sustituyen al editarlos en una tableta', async ({ page }) => {
   await page.goto('/');
@@ -10,7 +10,7 @@ test('los importes y las edades se sustituyen al editarlos en una tableta', asyn
   await page.keyboard.press('Tab');
   await expect(precio).toHaveValue(/180\.000,00/);
 
-  await page.getByRole('button', { name: 'Titulares' }).click();
+  await page.getByRole('tab', { name: 'Titulares' }).click();
   const edad = page.getByLabel('Edad').first();
   await edad.click();
   await expect(edad).toHaveValue('');

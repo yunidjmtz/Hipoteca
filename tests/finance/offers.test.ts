@@ -1,5 +1,10 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { compararOfertas, calcularMetricasOferta, PESOS_POR_DEFECTO } from '@/finance/offers';
+import {
+  compararOfertas,
+  calcularMetricasOferta,
+  PESOS_POR_DEFECTO,
+  sonOfertasComparables,
+} from '@/finance/offers';
 import { toCents, ZERO } from '@/core/money';
 import type { OfertaBancaria, EscenarioHipoteca } from '@/domain/types';
 
@@ -159,6 +164,25 @@ describe('compararOfertas', () => {
     );
     expect(resultadoRigido?.metricas.numVinculacionesObligatorias).toBe(1);
   });
+
+  it('no considera comparables compras con precios distintos', () => {
+    expect(
+      sonOfertasComparables([
+        crearOferta('a', 0.03, 100_000, 20),
+        crearOferta('b', 0.03, 150_000, 20),
+      ]),
+    ).toBe(false);
+  });
+
+  it('permite comparar distinta financiación sobre la misma compra', () => {
+    const a = crearOferta('a', 0.03, 100_000, 20);
+    const bBase = crearOferta('b', 0.03, 90_000, 25);
+    const b = {
+      ...bBase,
+      escenario: { ...bBase.escenario, precioCompra: a.escenario.precioCompra },
+    };
+    expect(sonOfertasComparables([a, b])).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -215,5 +239,37 @@ describe('calcularMetricasOferta', () => {
     const metricas = calcularMetricasOferta(mixta);
     expect(metricas.cuotaPostFija).not.toBeNull();
     expect(metricas.cuotaPostFija).toBeGreaterThan(metricas.cuotaInicial);
+  });
+
+  it('incluye la aportación al precio en el desembolso y el coste total', () => {
+    const oferta = crearOferta('x', 0.03, 100_000, 20);
+    const metricas = calcularMetricasOferta(oferta);
+    expect(metricas.desembolsoInicial).toBe(toCents(25_000));
+    expect(metricas.costeRealTotal).toBeGreaterThan(oferta.escenario.precioCompra);
+  });
+
+  it('ignora el coste inicial de productos desactivados', () => {
+    const oferta = crearOferta('x', 0.03, 100_000, 20);
+    const conProductoInactivo: OfertaBancaria = {
+      ...oferta,
+      escenario: {
+        ...oferta.escenario,
+        vinculaciones: [
+          {
+            id: 'inactivo',
+            nombre: 'Seguro descartado',
+            activo: false,
+            bonificacionTin: 0,
+            costeInicial: toCents(2_000),
+            costeAnual: toCents(500),
+            incrementoAnual: 0,
+            aniosExigidos: null,
+            obligatorio: false,
+            observaciones: '',
+          },
+        ],
+      },
+    };
+    expect(calcularMetricasOferta(conProductoInactivo)).toEqual(calcularMetricasOferta(oferta));
   });
 });

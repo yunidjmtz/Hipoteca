@@ -25,6 +25,21 @@ export function seccionPorId(id: string): Seccion {
 
 export const SECCIONES: readonly Seccion[] = [
   {
+    id: 'perfil',
+    ruta: '',
+    etiqueta: 'Tus datos',
+    etiquetaCorta: 'Datos',
+    icono: 'perfil',
+    fase: 'Fase 1b',
+    resumen: 'Los datos básicos que necesitamos para hacer los cálculos.',
+    contenidos: [
+      'Titulares e ingresos',
+      'Ahorros actuales',
+      'Deudas y gastos mensuales',
+      'Vivienda que buscas',
+    ],
+  },
+  {
     id: 'resumen',
     ruta: 'resumen',
     etiqueta: 'Resumen',
@@ -86,21 +101,6 @@ export const SECCIONES: readonly Seccion[] = [
       'Vencimientos anclados al día de la primera cuota, sin derivas de calendario',
       'Amortización anticipada: reducir cuota o reducir plazo, con su comisión (Fase 3)',
       'Ahorro neto de intereses de cada amortización simulada (Fase 3)',
-    ],
-  },
-  {
-    id: 'perfil',
-    ruta: '',
-    etiqueta: 'Tus datos',
-    etiquetaCorta: 'Datos',
-    icono: 'perfil',
-    fase: 'Fase 1b',
-    resumen: 'Los datos básicos que necesitamos para hacer los cálculos.',
-    contenidos: [
-      'Titulares e ingresos',
-      'Ahorros actuales',
-      'Deudas y gastos mensuales',
-      'Vivienda que buscas',
     ],
   },
 ];

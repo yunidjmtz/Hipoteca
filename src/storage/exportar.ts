@@ -33,6 +33,7 @@ export function generarCSVAmortizacion(lineas: readonly LineaMensual[]): string 
     'Cuota (€)',
     'Intereses (€)',
     'Principal (€)',
+    'Amortización extraordinaria (€)',
     'Pendiente (€)',
     'Costes vinculados (€)',
   ];
@@ -45,6 +46,7 @@ export function generarCSVAmortizacion(lineas: readonly LineaMensual[]): string 
       formatEuros(l.cuota),
       formatEuros(l.intereses),
       formatEuros(l.principal),
+      formatEuros(l.amortizacionExtraordinaria),
       formatEuros(l.pendiente),
       formatEuros(l.costesVinculados),
     ]);
@@ -113,20 +115,24 @@ export async function descargarPDFAmortizacion(lineas: readonly LineaMensual[]):
         'Cuota',
         'Intereses',
         'Principal',
+        'Amortización extra',
         'Pendiente',
         'Costes vinculados',
       ],
     ],
-    body: lineas.slice(1).map((linea) => [
-      String(linea.numero),
-      formatFecha(linea.fecha),
-      formatPorcentaje(linea.tinAplicado),
-      formatEuros(linea.cuota),
-      formatEuros(linea.intereses),
-      formatEuros(linea.principal),
-      formatEuros(linea.pendiente),
-      formatEuros(linea.costesVinculados),
-    ]),
+    body: lineas
+      .slice(1)
+      .map((linea) => [
+        String(linea.numero),
+        formatFecha(linea.fecha),
+        formatPorcentaje(linea.tinAplicado),
+        formatEuros(linea.cuota),
+        formatEuros(linea.intereses),
+        formatEuros(linea.principal),
+        formatEuros(linea.amortizacionExtraordinaria),
+        formatEuros(linea.pendiente),
+        formatEuros(linea.costesVinculados),
+      ]),
     startY: 24,
     margin: { top: 24, right: 10, bottom: 14, left: 10 },
     styles: {
@@ -152,7 +158,8 @@ export async function descargarPDFAmortizacion(lineas: readonly LineaMensual[]):
       4: { halign: 'right', cellWidth: 29 },
       5: { halign: 'right', cellWidth: 29 },
       6: { halign: 'right', cellWidth: 31 },
-      7: { halign: 'right', cellWidth: 37 },
+      7: { halign: 'right', cellWidth: 31 },
+      8: { halign: 'right', cellWidth: 32 },
     },
     didDrawPage: () => {
       documento.setFont('helvetica', 'bold');
