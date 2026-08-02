@@ -30,6 +30,7 @@ import { analizarVinculacion } from '@/finance/linkedProducts';
 import { calcularTaeEstimada } from '@/finance/apr';
 import { flujoInputDesdeEscenario } from '@/finance/scenario';
 import { ofertaDesdeSimulacion, simulacionDesdeOferta } from '@/domain/mortgageOffer';
+import { BANCOS_ESPANA, type BancoEspana } from '@/data/bancosEspana';
 import type {
   EscenarioHipoteca,
   EstadoOferta,
@@ -53,7 +54,6 @@ function FilaVinculacion({
   v,
   input,
   editando,
-  onActivar,
   onEditar,
   onEliminar,
   onGuardar,
@@ -62,83 +62,86 @@ function FilaVinculacion({
   v: ProductoVinculado;
   input: FlujoInput;
   editando: boolean;
-  onActivar: (activo: boolean) => void;
   onEditar: () => void;
   onEliminar: () => void;
   onGuardar: (vinculacion: ProductoVinculado) => void;
   onCancelarEdicion: () => void;
 }) {
   const analisis = useMemo(() => (v.activo ? analizarVinculacion(v, input) : null), [v, input]);
-
-  const etiqueta =
-    analisis === null
-      ? '—'
-      : analisis.recomendacion === 'compensa'
-        ? '✓ Compensa'
-        : analisis.recomendacion === 'no_compensa'
-          ? '✗ No compensa'
-          : '~ Indeterminado';
-
-  const colorEtiqueta =
-    analisis?.recomendacion === 'compensa'
-      ? 'text-comodo'
-      : analisis?.recomendacion === 'no_compensa'
-        ? 'text-no-viable'
-        : 'text-tinta-suave';
+  const resultadoNeto = analisis?.beneficioNeto ?? null;
+  const claseResultado =
+    resultadoNeto === null
+      ? ''
+      : resultadoNeto > 0
+        ? 'bg-comodo-tenue/60'
+        : resultadoNeto < 0
+          ? 'bg-no-viable-tenue/60'
+          : '';
 
   return (
     <>
-      <tr className="border-b border-linea">
+      <tr className={`border-b border-linea ${claseResultado}`}>
         <td className="py-2 pr-3 text-tinta">{v.nombre}</td>
         <td className="py-2 pr-3 font-mono text-tinta-media">
           <ValorPorcentajeTabla valor={v.bonificacionTin} />
         </td>
-        <td className="py-2 pr-3 font-mono text-tinta-media">
-          <ValorEurosTabla valor={v.costeAnual} />
+        <td className="py-2 pr-3 font-mono text-tinta-media">{formatEuros(v.costeAnual)}</td>
+        <td
+          className={[
+            'py-2 pr-3 font-mono font-medium',
+            resultadoNeto === null
+              ? 'text-tinta-suave'
+              : resultadoNeto > 0
+                ? 'text-comodo'
+                : resultadoNeto < 0
+                  ? 'text-no-viable'
+                  : 'text-tinta-media',
+          ].join(' ')}
+        >
+          {resultadoNeto === null ? '—' : formatEuros(resultadoNeto)}
         </td>
-        <td className="py-2 pr-3 font-mono text-tinta-media">
-          {analisis !== null ? <ValorEurosTabla valor={analisis.beneficioNeto} /> : '—'}
-        </td>
-        <td className={`py-2 pr-3 text-sm font-medium ${colorEtiqueta}`}>{etiqueta}</td>
         <td className="py-2 text-right">
-          <div className="flex items-center justify-end gap-3 text-xs">
-            <label className="flex items-center gap-1.5 text-tinta cursor-pointer">
-              <input
-                type="checkbox"
-                checked={v.activo}
-                onChange={(e) => onActivar(e.target.checked)}
-                className="h-4 w-4 accent-acento"
-                aria-label={`Activar ${v.nombre}`}
-              />
-              Activo
-            </label>
-            <button
-              type="button"
-              onClick={onEditar}
-              className="text-acento hover:underline"
-              aria-label={`Editar ${v.nombre}`}
-            >
-              Editar
-            </button>
-            <button
-              type="button"
-              onClick={onEliminar}
-              className="text-no-viable hover:underline"
-              aria-label={`Eliminar ${v.nombre}`}
-            >
-              Eliminar
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onEditar}
+            className="rounded-chico border border-linea px-2 py-1 text-xs font-semibold text-acento hover:bg-superficie"
+          >
+            Ver
+          </button>
         </td>
       </tr>
       {editando && (
         <tr className="border-b border-linea">
-          <td colSpan={6} className="py-3">
-            <EditarVinculacion
-              vinculacion={v}
-              onCancelar={onCancelarEdicion}
-              onGuardar={onGuardar}
-            />
+          <td colSpan={5} className="p-0">
+            <div className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 sm:items-center sm:justify-center">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`titulo-editar-vinculacion-${v.id}`}
+                className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado"
+              >
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="rotulo mb-1">Producto vinculado</p>
+                    <h2
+                      id={`titulo-editar-vinculacion-${v.id}`}
+                      className="font-display text-xl text-tinta"
+                    >
+                      {v.nombre}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onCancelarEdicion}
+                    aria-label="Cerrar edición"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-medio border border-linea text-lg text-tinta-media hover:bg-superficie-2"
+                  >
+                    ×
+                  </button>
+                </div>
+                <EditarVinculacion vinculacion={v} onEliminar={onEliminar} onGuardar={onGuardar} />
+              </div>
+            </div>
           </td>
         </tr>
       )}
@@ -150,6 +153,102 @@ function FilaVinculacion({
 // Página principal
 // ---------------------------------------------------------------------------
 
+function normalizarBusqueda(valor: string): string {
+  return valor
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es-ES');
+}
+
+function InsigniaBanco({ banco }: { readonly banco: BancoEspana }) {
+  const [falloLogo, setFalloLogo] = useState(false);
+
+  return (
+    <span
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-chico px-0.5 text-[9px] font-bold leading-none text-white"
+      style={{ backgroundColor: banco.color }}
+      aria-hidden="true"
+    >
+      {falloLogo ? (
+        banco.iniciales
+      ) : (
+        <img
+          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(banco.dominio)}&sz=64`}
+          alt=""
+          onError={() => setFalloLogo(true)}
+          className="h-6 w-6 rounded-[3px] bg-white object-contain"
+        />
+      )}
+    </span>
+  );
+}
+
+function SelectorBanco({
+  valor,
+  onChange,
+}: {
+  readonly valor: string;
+  readonly onChange: (valor: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const consulta = normalizarBusqueda(valor);
+  const sugerencias = BANCOS_ESPANA.filter((banco) =>
+    [banco.nombre, ...(banco.aliases ?? [])].some((texto) =>
+      normalizarBusqueda(texto).includes(consulta),
+    ),
+  ).slice(0, 8);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={valor}
+        onFocus={() => setAbierto(true)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setAbierto(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setAbierto(false);
+        }}
+        onBlur={() => window.setTimeout(() => setAbierto(false), 120)}
+        placeholder="Escribe o selecciona un banco"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={abierto}
+        aria-controls="sugerencias-banco"
+        className="w-full rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+      />
+      {abierto && sugerencias.length > 0 && (
+        <ul
+          id="sugerencias-banco"
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-medio border border-linea bg-superficie p-1 shadow-elevado"
+        >
+          {sugerencias.map((banco) => (
+            <li key={banco.nombre}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={valor === banco.nombre}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(banco.nombre);
+                  setAbierto(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-chico px-2 py-2 text-left text-sm text-tinta hover:bg-superficie-2"
+              >
+                <InsigniaBanco banco={banco} />
+                {banco.nombre}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Simulador() {
   const { estado, actualizarEscenarioSimulador, actualizarOfertas } = useEstado();
   const navegar = useNavigate();
@@ -157,11 +256,8 @@ export function Simulador() {
   const { escenarioSimulador: esc } = estado;
   const ofertaId = parametros.get('oferta');
   const ofertaActiva = estado.ofertas.find((oferta) => oferta.id === ofertaId) ?? null;
-  const [mostrarFichaOferta, setMostrarFichaOferta] = useState(
-    ofertaId !== null || parametros.get('guardar') === '1',
-  );
+  const [mostrarFichaOferta] = useState(ofertaId !== null || parametros.get('guardar') === '1');
   const [banco, setBanco] = useState(ofertaActiva?.banco ?? '');
-  const [nombreOferta, setNombreOferta] = useState(ofertaActiva?.nombre ?? esc.titulo ?? '');
   const [estadoOferta, setEstadoOferta] = useState<EstadoOferta>(
     ofertaActiva?.estado ?? 'pendiente',
   );
@@ -183,9 +279,8 @@ export function Simulador() {
 
   function guardarComoOferta() {
     const bancoLimpio = banco.trim();
-    const nombreLimpio = nombreOferta.trim();
-    if (bancoLimpio === '' || nombreLimpio === '') {
-      setErrorOferta('Indica el banco y un nombre para guardar la oferta.');
+    if (bancoLimpio === '') {
+      setErrorOferta('Indica el banco para guardar la oferta.');
       return;
     }
 
@@ -193,7 +288,7 @@ export function Simulador() {
     const oferta: OfertaBancaria = ofertaDesdeSimulacion(esc, {
       id,
       banco: bancoLimpio,
-      nombre: nombreLimpio,
+      nombre: bancoLimpio,
       fecha: fechaOferta,
       estado: estadoOferta,
       notas: notasOferta,
@@ -202,7 +297,7 @@ export function Simulador() {
       ? estado.ofertas.map((actual) => (actual.id === oferta.id ? oferta : actual))
       : [...estado.ofertas, oferta];
 
-    actualizarEscenarioSimulador({ titulo: nombreLimpio });
+    actualizarEscenarioSimulador({ titulo: bancoLimpio });
     actualizarOfertas(ofertas);
     setErrorOferta('');
     setOfertaGuardada(true);
@@ -287,66 +382,31 @@ export function Simulador() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="rotulo mb-1">
-              {ofertaActiva === null ? 'Simulador hipotecario' : `Oferta de ${ofertaActiva.banco}`}
+              {ofertaActiva === null ? 'Nueva oferta bancaria' : `Oferta de ${ofertaActiva.banco}`}
             </p>
             <h1 className="font-display text-2xl text-tinta">
-              {ofertaActiva === null ? '¿Cómo quedaría tu hipoteca?' : ofertaActiva.nombre}
+              {ofertaActiva === null ? 'Simula las condiciones de la oferta' : ofertaActiva.nombre}
             </h1>
           </div>
           <div className="flex flex-wrap gap-2">
-            {ofertaActiva !== null && (
-              <button
-                type="button"
-                onClick={() => void navegar('/ofertas')}
-                className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
-              >
-                Volver a ofertas
-              </button>
-            )}
             <button
               type="button"
-              onClick={() => {
-                setMostrarFichaOferta((visible) => !visible);
-                setOfertaGuardada(false);
-              }}
-              className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
+              onClick={() => void navegar('/ofertas?tab=hipotecas')}
+              className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
             >
-              {ofertaActiva === null ? 'Guardar como oferta' : 'Datos de la oferta'}
+              Volver a ofertas
             </button>
           </div>
         </div>
       </header>
 
       {mostrarFichaOferta && (
-        <Panel
-          rotulo="Oferta bancaria"
-          titulo={ofertaActiva === null ? 'Guardar esta simulación' : 'Datos de la oferta'}
-        >
+        <Panel rotulo="Oferta bancaria" titulo="Datos de la oferta">
           <div className="flex flex-col gap-4">
-            <p className="text-sm leading-relaxed text-tinta-media">
-              La oferta guardará exactamente las condiciones que estás simulando. Si después las
-              cambias, vuelve a guardar para actualizar la comparativa.
-            </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
                 Banco
-                <input
-                  type="text"
-                  value={banco}
-                  onChange={(e) => setBanco(e.target.value)}
-                  placeholder="Nombre del banco"
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-                Nombre de la oferta
-                <input
-                  type="text"
-                  value={nombreOferta}
-                  onChange={(e) => setNombreOferta(e.target.value)}
-                  placeholder="Ej. Hipoteca fija 3 %"
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                />
+                <SelectorBanco valor={banco} onChange={setBanco} />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
                 Estado
@@ -383,28 +443,6 @@ export function Simulador() {
                 className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
             </label>
-            {errorOferta !== '' && <p className="text-sm text-no-viable">{errorOferta}</p>}
-            {ofertaGuardada && (
-              <p className="text-sm font-medium text-comodo">
-                Oferta guardada. Ya aparece en la comparativa.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={guardarComoOferta}
-                className="rounded-medio bg-acento px-5 py-2 text-sm font-medium text-white hover:bg-acento/90"
-              >
-                {ofertaActiva === null ? 'Guardar oferta' : 'Actualizar oferta'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void navegar('/ofertas')}
-                className="rounded-medio border border-linea px-5 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
-              >
-                Ver comparativa
-              </button>
-            </div>
           </div>
         </Panel>
       )}
@@ -446,7 +484,6 @@ export function Simulador() {
               id="sim-precio"
               etiqueta="Precio de compra"
               valor={esc.precioCompra}
-              vaciarAlEnfocar
               onChange={(v) => {
                 act('precioCompra', v);
                 if (esc.valorTasacion === esc.precioCompra) act('valorTasacion', v);
@@ -456,7 +493,6 @@ export function Simulador() {
               id="sim-importe"
               etiqueta="Cuánto aportarás"
               valor={maxCents(ZERO, subtractCents(esc.precioCompra, esc.importeSolicitado))}
-              vaciarAlEnfocar
               onChange={(aporte) =>
                 act('importeSolicitado', maxCents(ZERO, subtractCents(esc.precioCompra, aporte)))
               }
@@ -472,7 +508,6 @@ export function Simulador() {
               id="sim-tasacion"
               etiqueta="Tasación de la vivienda"
               valor={esc.valorTasacion}
-              vaciarAlEnfocar
               onChange={(v) => act('valorTasacion', v)}
               ayuda="Valor que asigna una tasadora. Si es inferior al precio, el banco suele prestar menos."
             />
@@ -627,15 +662,17 @@ export function Simulador() {
       </Panel>
 
       {/* ── Vinculaciones ──────────────────────────────────── */}
-      <Panel rotulo="Productos del banco" titulo="¿Merecen la pena los seguros y otros productos?">
+      <Panel rotulo="Productos del banco" contenidoClassName="pt-3">
         <div className="flex flex-col gap-4">
-          <NuevaVinculacion
-            onAnadir={(v) =>
-              actualizarEscenarioSimulador({
-                vinculaciones: [...esc.vinculaciones, v],
-              })
-            }
-          />
+          <div className="flex justify-end">
+            <NuevaVinculacion
+              onAnadir={(v) =>
+                actualizarEscenarioSimulador({
+                  vinculaciones: [...esc.vinculaciones, v],
+                })
+              }
+            />
+          </div>
 
           {esc.vinculaciones.length === 0 ? (
             <p className="text-sm text-tinta-suave">
@@ -643,20 +680,15 @@ export function Simulador() {
               impacto en el TIN y el coste real.
             </p>
           ) : (
-            <TablaResponsive minWidth="500px">
+            <TablaResponsive minWidth="0">
               <thead>
                 <tr className="border-b border-linea text-left text-xs text-tinta-suave">
                   <th className="py-2 pr-3 font-medium">Producto</th>
                   <th className="py-2 pr-3 font-medium">
-                    <EncabezadoConUnidad titulo="Descuento" unidad="%" />
+                    <EncabezadoConUnidad titulo="Desc." unidad="%" />
                   </th>
-                  <th className="py-2 pr-3 font-medium">
-                    <EncabezadoConUnidad titulo="Coste anual" unidad="€/año" />
-                  </th>
-                  <th className="py-2 pr-3 font-medium">
-                    <EncabezadoConUnidad titulo="Ahorro neto" unidad="€" />
-                  </th>
-                  <th className="py-2 font-medium">¿Interesa?</th>
+                  <th className="py-2 pr-3 font-medium">Coste anual</th>
+                  <th className="py-2 pr-3 font-medium">Ahorro/Pérdida</th>
                   <th className="py-2 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
@@ -667,13 +699,6 @@ export function Simulador() {
                     v={v}
                     input={flujoInput}
                     editando={vinculacionEditada === v.id}
-                    onActivar={(activo) =>
-                      actualizarEscenarioSimulador({
-                        vinculaciones: esc.vinculaciones.map((vv) =>
-                          vv.id === v.id ? { ...vv, activo } : vv,
-                        ),
-                      })
-                    }
                     onEditar={() => setVinculacionEditada(v.id)}
                     onEliminar={() => {
                       setVinculacionEditada((id) => (id === v.id ? null : id));
@@ -698,235 +723,282 @@ export function Simulador() {
         </div>
       </Panel>
 
+      {mostrarFichaOferta && (
+        <Panel
+          rotulo="Oferta bancaria"
+          titulo={ofertaActiva === null ? 'Guardar esta simulación' : 'Actualizar esta oferta'}
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-sm leading-relaxed text-tinta-media">
+              Ya has revisado las condiciones y los productos del banco. Guarda ahora la oferta para
+              añadirla a la comparativa.
+            </p>
+            {errorOferta !== '' && <p className="text-sm text-no-viable">{errorOferta}</p>}
+            {ofertaGuardada && (
+              <p className="text-sm font-medium text-comodo">
+                Oferta guardada. Ya aparece en la comparativa.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={guardarComoOferta}
+                className="rounded-medio bg-acento px-5 py-2 text-sm font-medium text-white hover:bg-acento/90"
+              >
+                {ofertaActiva === null ? 'Guardar oferta' : 'Actualizar oferta'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void navegar('/ofertas?tab=hipotecas')}
+                className="rounded-medio border border-linea px-5 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
+              >
+                Ver comparativa
+              </button>
+            </div>
+          </div>
+        </Panel>
+      )}
+
       {/* ── Resultados ─────────────────────────────────────── */}
-      <Panel rotulo="Resultado" titulo="Tu hipoteca en resumen" acento>
-        <div className="flex flex-col gap-4">
-          {esc.plazoAnios === 1 && (
-            <div className="rounded-medio border border-revisar/50 bg-revisar-tenue p-3 text-sm text-tinta">
-              El plazo está configurado en <span className="font-semibold">1 año</span>, por eso la
-              cuota es tan alta. En <span className="font-semibold">Plazo (años)</span> indica, por
-              ejemplo, 25 y sal del campo para recalcularla.
-            </div>
-          )}
-          {/* Aviso tasación inferior (R5) */}
-          {tasacionInferior && (
-            <div className="rounded-medio border border-ajustado/50 bg-ajustado/10 p-3 text-sm text-tinta">
-              Como la tasación es inferior al precio, el máximo financiable configurado baja a{' '}
-              <span className="font-semibold">{formatEuros(importeMaxLtv)}</span>.
-            </div>
-          )}
-          {superaLtv && (
-            <div className="rounded-medio border border-revisar/50 bg-revisar-tenue p-3 text-sm text-tinta">
-              Ahora aportarías{' '}
-              <span className="font-semibold">{formatEuros(aportacionActual)}</span>, pero el banco
-              presta como máximo {formatEuros(importeMaxLtv)}. Necesitas aportar{' '}
-              <span className="font-semibold">{formatEuros(aporteExtra)} más</span> (un total de{' '}
-              {formatEuros(aportacionMinima)}).
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {esc.tipo === 'mixta' ? (
-              <>
+      {!mostrarFichaOferta && (
+        <Panel rotulo="Resultado" titulo="Tu hipoteca en resumen" acento>
+          <div className="flex flex-col gap-4">
+            {esc.plazoAnios === 1 && (
+              <div className="rounded-medio border border-revisar/50 bg-revisar-tenue p-3 text-sm text-tinta">
+                El plazo está configurado en <span className="font-semibold">1 año</span>, por eso
+                la cuota es tan alta. En <span className="font-semibold">Plazo (años)</span> indica,
+                por ejemplo, 25 y sal del campo para recalcularla.
+              </div>
+            )}
+            {/* Aviso tasación inferior (R5) */}
+            {tasacionInferior && (
+              <div className="rounded-medio border border-ajustado/50 bg-ajustado/10 p-3 text-sm text-tinta">
+                Como la tasación es inferior al precio, el máximo financiable configurado baja a{' '}
+                <span className="font-semibold">{formatEuros(importeMaxLtv)}</span>.
+              </div>
+            )}
+            {superaLtv && (
+              <div className="rounded-medio border border-revisar/50 bg-revisar-tenue p-3 text-sm text-tinta">
+                Ahora aportarías{' '}
+                <span className="font-semibold">{formatEuros(aportacionActual)}</span>, pero el
+                banco presta como máximo {formatEuros(importeMaxLtv)}. Necesitas aportar{' '}
+                <span className="font-semibold">{formatEuros(aporteExtra)} más</span> (un total de{' '}
+                {formatEuros(aportacionMinima)}).
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {esc.tipo === 'mixta' ? (
+                <>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-tinta-suave">
+                      Durante el período fijo pagarás
+                    </span>
+                    <span className="font-mono text-xl font-semibold text-tinta">
+                      {formatEuros(cuotaFija)}
+                      <span className="text-xs font-normal">/mes</span>
+                    </span>
+                    <span className="text-xs text-tinta-suave">
+                      {aniosFijos} años al {formatPorcentaje(tinConVinculaciones)} efectivo
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-tinta-suave">
+                      Después pagarás aproximadamente
+                    </span>
+                    <span className="font-mono text-xl font-semibold text-tinta">
+                      {formatEuros(cuotaVariable)}
+                      <span className="text-xs font-normal">/mes</span>
+                    </span>
+                    <span className="text-xs text-tinta-suave">
+                      Euríbor {formatPorcentaje(esc.euribor ?? 0)} + diferencial{' '}
+                      {formatPorcentaje(esc.diferencial ?? 0)}; TIN estimado{' '}
+                      {formatPorcentaje(tinVariableEstimado)}
+                    </span>
+                  </div>
+                </>
+              ) : (
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-tinta-suave">Durante el período fijo pagarás</span>
+                  <span className="text-xs text-tinta-suave">
+                    {esc.tipo === 'variable'
+                      ? 'Cuota inicial hasta la próxima revisión'
+                      : 'Cada mes pagarás'}
+                  </span>
                   <span className="font-mono text-xl font-semibold text-tinta">
                     {formatEuros(cuotaFija)}
                     <span className="text-xs font-normal">/mes</span>
                   </span>
                   <span className="text-xs text-tinta-suave">
-                    {aniosFijos} años al {formatPorcentaje(tinConVinculaciones)} efectivo
+                    {esc.tipo === 'variable'
+                      ? `con el TIN actual del ${formatPorcentaje(tinConVinculaciones)}`
+                      : `durante ${esc.plazoAnios} años al ${formatPorcentaje(tinConVinculaciones)}`}
                   </span>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-tinta-suave">Después pagarás aproximadamente</span>
-                  <span className="font-mono text-xl font-semibold text-tinta">
-                    {formatEuros(cuotaVariable)}
-                    <span className="text-xs font-normal">/mes</span>
-                  </span>
-                  <span className="text-xs text-tinta-suave">
-                    Euríbor {formatPorcentaje(esc.euribor ?? 0)} + diferencial{' '}
-                    {formatPorcentaje(esc.diferencial ?? 0)}; TIN estimado{' '}
-                    {formatPorcentaje(tinVariableEstimado)}
-                  </span>
-                </div>
-              </>
-            ) : (
+              )}
+
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-suave">
-                  {esc.tipo === 'variable'
-                    ? 'Cuota inicial hasta la próxima revisión'
-                    : 'Cada mes pagarás'}
-                </span>
+                <span className="text-xs text-tinta-media">El banco te presta</span>
                 <span className="font-mono text-xl font-semibold text-tinta">
-                  {formatEuros(cuotaFija)}
-                  <span className="text-xs font-normal">/mes</span>
-                </span>
-                <span className="text-xs text-tinta-suave">
-                  {esc.tipo === 'variable'
-                    ? `con el TIN actual del ${formatPorcentaje(tinConVinculaciones)}`
-                    : `durante ${esc.plazoAnios} años al ${formatPorcentaje(tinConVinculaciones)}`}
+                  {formatEuros(esc.importeSolicitado)}
                 </span>
               </div>
-            )}
 
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-tinta-media">El banco te presta</span>
-              <span className="font-mono text-xl font-semibold text-tinta">
-                {formatEuros(esc.importeSolicitado)}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-tinta-media">Tú aportas al comprar</span>
-              <span className="font-mono text-xl font-semibold text-tinta">
-                {formatEuros(aportacionActual)}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 border-t border-linea pt-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-tinta-media">
-                {esc.tipo === 'fija'
-                  ? 'Intereses durante toda la hipoteca'
-                  : 'Intereses estimados si el Euríbor se mantiene'}
-              </span>
-              <span className="font-mono font-semibold text-tinta">
-                {formatEuros(interesesTotales)}
-              </span>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-tinta-media">
-                {esc.tipo === 'fija'
-                  ? 'TAE calculada para comparar ofertas'
-                  : 'TAE estimada con el escenario actual'}
-              </span>
-              <span className="font-mono font-semibold text-tinta">
-                {taeEstimada > 0 ? formatPorcentaje(taeEstimada) : '—'}
-              </span>
-            </div>
-            {esc.taeOficial !== undefined && esc.taeOficial > 0 && (
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-tinta-media">TAE de la oferta / FEIN</span>
-                <span className="font-mono font-semibold text-acento">
-                  {formatPorcentaje(esc.taeOficial)}
+                <span className="text-xs text-tinta-media">Tú aportas al comprar</span>
+                <span className="font-mono text-xl font-semibold text-tinta">
+                  {formatEuros(aportacionActual)}
                 </span>
               </div>
-            )}
-          </div>
-          {esc.tipo !== 'fija' && (
-            <p className="border-t border-linea pt-3 text-xs leading-relaxed text-tinta-media">
-              Estas cifras proyectan el Euríbor indicado durante el resto del préstamo. La cuota se
-              recalculará en cada revisión con el índice aplicable, el capital pendiente y el plazo
-              restante.
-            </p>
-          )}
-          {esc.taeOficial !== undefined &&
-            esc.taeOficial > 0 &&
-            Math.abs(esc.taeOficial - taeEstimada) >= 0.001 && (
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 border-t border-linea pt-4 sm:grid-cols-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-tinta-media">
+                  {esc.tipo === 'fija'
+                    ? 'Intereses durante toda la hipoteca'
+                    : 'Intereses estimados si el Euríbor se mantiene'}
+                </span>
+                <span className="font-mono font-semibold text-tinta">
+                  {formatEuros(interesesTotales)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-tinta-media">
+                  {esc.tipo === 'fija'
+                    ? 'TAE calculada para comparar ofertas'
+                    : 'TAE estimada con el escenario actual'}
+                </span>
+                <span className="font-mono font-semibold text-tinta">
+                  {taeEstimada > 0 ? formatPorcentaje(taeEstimada) : '—'}
+                </span>
+              </div>
+              {esc.taeOficial !== undefined && esc.taeOficial > 0 && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-tinta-media">TAE de la oferta / FEIN</span>
+                  <span className="font-mono font-semibold text-acento">
+                    {formatPorcentaje(esc.taeOficial)}
+                  </span>
+                </div>
+              )}
+            </div>
+            {esc.tipo !== 'fija' && (
               <p className="border-t border-linea pt-3 text-xs leading-relaxed text-tinta-media">
-                La diferencia con la TAE de la oferta suele deberse a costes obligatorios que aún no
-                has añadido al simulador, como seguros, cuenta vinculada, tasación o comisiones.
+                Estas cifras proyectan el Euríbor indicado durante el resto del préstamo. La cuota
+                se recalculará en cada revisión con el índice aplicable, el capital pendiente y el
+                plazo restante.
               </p>
             )}
+            {esc.taeOficial !== undefined &&
+              esc.taeOficial > 0 &&
+              Math.abs(esc.taeOficial - taeEstimada) >= 0.001 && (
+                <p className="border-t border-linea pt-3 text-xs leading-relaxed text-tinta-media">
+                  La diferencia con la TAE de la oferta suele deberse a costes obligatorios que aún
+                  no has añadido al simulador, como seguros, cuenta vinculada, tasación o
+                  comisiones.
+                </p>
+              )}
 
-          {hayBonificaciones && (
-            <div className="border-t border-linea pt-3 text-sm text-tinta-media">
-              Con los productos del banco que has seleccionado, el interés baja del{' '}
-              <span className="font-mono font-semibold text-tinta">
-                {formatPorcentaje(tinSinVinculaciones)}
-              </span>{' '}
-              al{' '}
-              <span className="font-mono font-semibold text-comodo">
-                {formatPorcentaje(tinConVinculaciones)}
-              </span>
-              .
-            </div>
-          )}
-        </div>
-      </Panel>
+            {hayBonificaciones && (
+              <div className="border-t border-linea pt-3 text-sm text-tinta-media">
+                Con los productos del banco que has seleccionado, el interés baja del{' '}
+                <span className="font-mono font-semibold text-tinta">
+                  {formatPorcentaje(tinSinVinculaciones)}
+                </span>{' '}
+                al{' '}
+                <span className="font-mono font-semibold text-comodo">
+                  {formatPorcentaje(tinConVinculaciones)}
+                </span>
+                .
+              </div>
+            )}
+          </div>
+        </Panel>
+      )}
 
       {/* ── Comparador de plazos ───────────────────────────── */}
-      <Panel rotulo="Comparador" titulo="Plazos alternativos">
-        <TablaResponsive minWidth="460px">
-          <thead>
-            <tr className="border-b border-linea text-left text-xs text-tinta-suave">
-              <th className="py-2 pr-3 font-medium">
-                <EncabezadoConUnidad titulo="Plazo" unidad="años" />
-              </th>
-              <th className="py-2 pr-3 font-medium">
-                <EncabezadoConUnidad titulo="Cuota" unidad="€" />
-              </th>
-              <th className="py-2 pr-3 font-medium">
-                <EncabezadoConUnidad titulo="Diferencia" unidad="€/mes" />
-              </th>
-              <th className="py-2 pr-3 font-medium">
-                <EncabezadoConUnidad titulo="Intereses" unidad="€" />
-              </th>
-              <th className="py-2 font-medium">
-                <EncabezadoConUnidad titulo="Diferencia" unidad="€" />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {plazosDisponibles.map((plazoAnios) => {
-              const inputPlazo: FlujoInput = {
-                ...flujoInput,
-                plazoMeses: plazoAnios * 12,
-              };
-              const flujoPlazo = construirFlujoDeCaja(inputPlazo);
-              const cuota = flujoPlazo[1]?.cuota ?? ZERO;
-              const intereses = sumCents(flujoPlazo.slice(1).map((l) => l.intereses));
-              const interesesBase = sumCents(flujo.slice(1).map((l) => l.intereses));
-              const cuotaBase2 = flujo[1]?.cuota ?? ZERO;
-
-              return (
-                <tr
-                  key={plazoAnios}
-                  className={[
-                    'border-b border-linea last:border-b-0',
-                    plazoAnios === esc.plazoAnios ? 'bg-superficie-2 font-medium' : '',
-                  ].join(' ')}
-                >
-                  <td className="py-2 pr-3 text-tinta">
-                    {plazoAnios}
-                    <span className="hidden sm:inline"> años</span>
-                    {plazoAnios === esc.plazoAnios && (
-                      <span className="ml-1 text-xs text-tinta-suave">(actual)</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-tinta">
-                    <ValorEurosTabla valor={cuota} />
-                  </td>
-                  <td
-                    className={`py-2 pr-3 font-mono ${subtractCents(cuota, cuotaBase2) > 0 ? 'text-no-viable' : 'text-comodo'}`}
-                  >
-                    {subtractCents(cuota, cuotaBase2) >= 0 ? '+' : ''}
-                    <ValorEurosTabla valor={subtractCents(cuota, cuotaBase2)} />
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-tinta">
-                    <ValorEurosTabla valor={intereses} />
-                  </td>
-                  <td
-                    className={`py-2 font-mono ${subtractCents(intereses, interesesBase) > 0 ? 'text-no-viable' : 'text-comodo'}`}
-                  >
-                    {subtractCents(intereses, interesesBase) >= 0 ? '+' : ''}
-                    <ValorEurosTabla valor={subtractCents(intereses, interesesBase)} />
-                  </td>
+      {!mostrarFichaOferta && (
+        <>
+          <Panel rotulo="Comparador" titulo="Plazos alternativos">
+            <TablaResponsive minWidth="460px">
+              <thead>
+                <tr className="border-b border-linea text-left text-xs text-tinta-suave">
+                  <th className="py-2 pr-3 font-medium">
+                    <EncabezadoConUnidad titulo="Plazo" unidad="años" />
+                  </th>
+                  <th className="py-2 pr-3 font-medium">
+                    <EncabezadoConUnidad titulo="Cuota" unidad="€" />
+                  </th>
+                  <th className="py-2 pr-3 font-medium">
+                    <EncabezadoConUnidad titulo="Diferencia" unidad="€/mes" />
+                  </th>
+                  <th className="py-2 pr-3 font-medium">
+                    <EncabezadoConUnidad titulo="Intereses" unidad="€" />
+                  </th>
+                  <th className="py-2 font-medium">
+                    <EncabezadoConUnidad titulo="Diferencia" unidad="€" />
+                  </th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </TablaResponsive>
-        <p className="mt-3 text-xs leading-relaxed text-tinta-suave">
-          Compara la misma financiación desde el inicio. En una hipoteca fija, las cifras son
-          exactas con las condiciones indicadas; en una variable o mixta, estiman que el Euríbor
-          actual se mantendrá.
-        </p>
-      </Panel>
+              </thead>
+              <tbody>
+                {plazosDisponibles.map((plazoAnios) => {
+                  const inputPlazo: FlujoInput = {
+                    ...flujoInput,
+                    plazoMeses: plazoAnios * 12,
+                  };
+                  const flujoPlazo = construirFlujoDeCaja(inputPlazo);
+                  const cuota = flujoPlazo[1]?.cuota ?? ZERO;
+                  const intereses = sumCents(flujoPlazo.slice(1).map((l) => l.intereses));
+                  const interesesBase = sumCents(flujo.slice(1).map((l) => l.intereses));
+                  const cuotaBase2 = flujo[1]?.cuota ?? ZERO;
 
-      {/* ── Comparador de entrada adicional ───────────────── */}
-      <ComparadorEntrada flujoInput={flujoInput} esc={esc} />
+                  return (
+                    <tr
+                      key={plazoAnios}
+                      className={[
+                        'border-b border-linea last:border-b-0',
+                        plazoAnios === esc.plazoAnios ? 'bg-superficie-2 font-medium' : '',
+                      ].join(' ')}
+                    >
+                      <td className="py-2 pr-3 text-tinta">
+                        {plazoAnios}
+                        <span className="hidden sm:inline"> años</span>
+                        {plazoAnios === esc.plazoAnios && (
+                          <span className="ml-1 text-xs text-tinta-suave">(actual)</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-tinta">
+                        <ValorEurosTabla valor={cuota} />
+                      </td>
+                      <td
+                        className={`py-2 pr-3 font-mono ${subtractCents(cuota, cuotaBase2) > 0 ? 'text-no-viable' : 'text-comodo'}`}
+                      >
+                        {subtractCents(cuota, cuotaBase2) >= 0 ? '+' : ''}
+                        <ValorEurosTabla valor={subtractCents(cuota, cuotaBase2)} />
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-tinta">
+                        <ValorEurosTabla valor={intereses} />
+                      </td>
+                      <td
+                        className={`py-2 font-mono ${subtractCents(intereses, interesesBase) > 0 ? 'text-no-viable' : 'text-comodo'}`}
+                      >
+                        {subtractCents(intereses, interesesBase) >= 0 ? '+' : ''}
+                        <ValorEurosTabla valor={subtractCents(intereses, interesesBase)} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </TablaResponsive>
+            <p className="mt-3 text-xs leading-relaxed text-tinta-suave">
+              Compara la misma financiación desde el inicio. En una hipoteca fija, las cifras son
+              exactas con las condiciones indicadas; en una variable o mixta, estiman que el Euríbor
+              actual se mantendrá.
+            </p>
+          </Panel>
+
+          {/* ── Comparador de entrada adicional ───────────────── */}
+          <ComparadorEntrada flujoInput={flujoInput} esc={esc} />
+        </>
+      )}
     </div>
   );
 }
@@ -968,7 +1040,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="w-full rounded-medio border border-dashed border-linea py-2 text-sm text-tinta-suave hover:border-acento hover:text-acento"
+        className="rounded-medio border border-dashed border-linea px-3 py-2 text-sm text-tinta-suave hover:border-acento hover:text-acento"
       >
         + Añadir producto vinculado
       </button>
@@ -976,7 +1048,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
   }
 
   return (
-    <div className="rounded-medio border border-linea bg-superficie p-4 flex flex-col gap-3">
+    <div className="w-full rounded-medio border border-linea bg-superficie p-4 flex flex-col gap-3">
       <p className="text-sm font-medium text-tinta">Nuevo producto vinculado</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -1003,7 +1075,6 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
           id="vinc-coste"
           etiqueta="Coste anual"
           valor={costeAnual}
-          vaciarAlEnfocar
           onChange={setCosteAnual}
         />
         <div className="flex flex-col gap-1">
@@ -1060,16 +1131,17 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
 function EditarVinculacion({
   vinculacion,
   onGuardar,
-  onCancelar,
+  onEliminar,
 }: {
   vinculacion: ProductoVinculado;
   onGuardar: (vinculacion: ProductoVinculado) => void;
-  onCancelar: () => void;
+  onEliminar: () => void;
 }) {
   const [nombre, setNombre] = useState(vinculacion.nombre);
   const [bonificacion, setBonificacion] = useState(vinculacion.bonificacionTin);
   const [costeAnual, setCosteAnual] = useState<Cents>(vinculacion.costeAnual);
   const [obligatorio, setObligatorio] = useState(vinculacion.obligatorio);
+  const [activo, setActivo] = useState(vinculacion.activo);
   const [aniosExigidos, setAniosExigidos] = useState<number | null>(vinculacion.aniosExigidos);
   const idBase = `vinc-editar-${vinculacion.id}`;
 
@@ -1082,6 +1154,7 @@ function EditarVinculacion({
       costeAnual,
       aniosExigidos,
       obligatorio,
+      activo,
     });
   }
 
@@ -1113,7 +1186,6 @@ function EditarVinculacion({
           id={`${idBase}-coste`}
           etiqueta="Coste anual"
           valor={costeAnual}
-          vaciarAlEnfocar
           onChange={setCosteAnual}
         />
         <div className="flex flex-col gap-1">
@@ -1143,6 +1215,15 @@ function EditarVinculacion({
         />
         El banco lo exige para obtener las condiciones del préstamo
       </label>
+      <label className="flex items-center gap-2 text-sm text-tinta cursor-pointer">
+        <input
+          type="checkbox"
+          checked={activo}
+          onChange={(e) => setActivo(e.target.checked)}
+          className="h-4 w-4 accent-acento"
+        />
+        Incluir este producto en el cálculo
+      </label>
       <div className="flex gap-2">
         <button
           type="button"
@@ -1154,10 +1235,10 @@ function EditarVinculacion({
         </button>
         <button
           type="button"
-          onClick={onCancelar}
-          className="rounded-medio border border-linea px-4 py-2 text-sm text-tinta hover:bg-superficie-2"
+          onClick={onEliminar}
+          className="rounded-medio border border-no-viable/40 px-4 py-2 text-sm font-medium text-no-viable hover:bg-no-viable-tenue"
         >
-          Cancelar
+          Eliminar producto
         </button>
       </div>
     </div>

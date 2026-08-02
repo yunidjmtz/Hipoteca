@@ -5,15 +5,16 @@ import type { Cents } from '@/core/money';
 interface Props {
   minWidth?: string;
   children: ReactNode;
+  className?: string;
 }
 
 /**
  * Envoltorio que garantiza scroll horizontal en pantallas estrechas.
  * minWidth se pasa como estilo inline para evitar clases dinámicas de Tailwind.
  */
-export function TablaResponsive({ minWidth = '600px', children }: Props) {
+export function TablaResponsive({ minWidth = '600px', children, className = '' }: Props) {
   return (
-    <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+    <div className={`overflow-x-auto [-webkit-overflow-scrolling:touch] ${className}`}>
       <table
         className="tabla-responsive w-full border-collapse text-sm"
         style={{ '--tabla-min-width': minWidth } as CSSProperties}
@@ -54,9 +55,8 @@ export function EncabezadoConUnidad({
   readonly unidad: string;
 }) {
   return (
-    <span className="inline-block leading-tight">
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap leading-tight">
       {titulo}
-      <br />
       <span className="font-normal">{unidad}</span>
     </span>
   );

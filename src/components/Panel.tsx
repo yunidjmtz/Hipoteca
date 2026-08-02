@@ -6,9 +6,17 @@ interface PropsPanel {
   readonly acento?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
+  readonly contenidoClassName?: string;
 }
 
-export function Panel({ titulo, rotulo, acento = false, children, className = '' }: PropsPanel) {
+export function Panel({
+  titulo,
+  rotulo,
+  acento = false,
+  children,
+  className = '',
+  contenidoClassName = '',
+}: PropsPanel) {
   return (
     <section
       className={[
@@ -28,7 +36,7 @@ export function Panel({ titulo, rotulo, acento = false, children, className = ''
           )}
         </header>
       )}
-      <div className="px-6 py-5">{children}</div>
+      <div className={`px-6 py-5 ${contenidoClassName}`}>{children}</div>
     </section>
   );
 }

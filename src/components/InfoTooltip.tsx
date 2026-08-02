@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-export function InfoTooltip({ texto }: { readonly texto: string }) {
+export function InfoTooltip({
+  texto,
+  alineado = 'centro',
+}: {
+  readonly texto: string;
+  readonly alineado?: 'centro' | 'derecha';
+}) {
   const [visible, setVisible] = useState(false);
   const tooltipId = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -56,14 +62,18 @@ export function InfoTooltip({ texto }: { readonly texto: string }) {
         <div
           id={tooltipId}
           role="tooltip"
-          className="tooltip-anima absolute bottom-full left-1/2 z-50 mb-3 w-72 -translate-x-1/2"
+          className={`tooltip-anima absolute bottom-full z-50 mb-3 w-72 ${
+            alineado === 'derecha' ? 'right-0' : 'left-1/2 -translate-x-1/2'
+          }`}
         >
           <div className="rounded-grande border border-linea bg-superficie p-4 shadow-elevado">
             <p className="text-[0.8125rem] leading-relaxed text-tinta-media">{texto}</p>
           </div>
           <div
             aria-hidden="true"
-            className="absolute -bottom-[5px] left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-b border-r border-linea bg-superficie"
+            className={`absolute -bottom-[5px] h-2.5 w-2.5 rotate-45 border-b border-r border-linea bg-superficie ${
+              alineado === 'derecha' ? 'right-[7px]' : 'left-1/2 -translate-x-1/2'
+            }`}
           />
         </div>
       )}

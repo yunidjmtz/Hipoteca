@@ -9,6 +9,7 @@ import type {
   OfertaBancaria,
   PerfilFinanciero,
   PreferenciasCompra,
+  ViviendaGuardada,
 } from '@/domain/types';
 import {
   cargarEstado,
@@ -32,6 +33,7 @@ interface AccionesEstado {
   actualizarAjustes: (cambios: Partial<Ajustes>) => void;
   actualizarEscenarioSimulador: (cambios: Partial<EscenarioHipoteca>) => void;
   actualizarOfertas: (ofertas: OfertaBancaria[]) => void;
+  actualizarViviendas: (viviendas: ViviendaGuardada[]) => void;
   exportarDatos: () => string;
   importarDatos: (json: string) => boolean;
   restablecerDatos: () => void;
@@ -165,6 +167,10 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     setEstado((prev) => ({ ...prev, ofertas }));
   }, []);
 
+  const actualizarViviendas = useCallback((viviendas: ViviendaGuardada[]) => {
+    setEstado((prev) => ({ ...prev, viviendas }));
+  }, []);
+
   const exportarDatos = useCallback(() => exportarJSON(estado), [estado]);
 
   const importarDatos = useCallback((json: string): boolean => {
@@ -192,6 +198,7 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     actualizarAjustes,
     actualizarEscenarioSimulador,
     actualizarOfertas,
+    actualizarViviendas,
     exportarDatos,
     importarDatos,
     restablecerDatos,

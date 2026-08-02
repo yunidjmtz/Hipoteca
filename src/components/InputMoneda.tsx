@@ -13,7 +13,6 @@ interface PropsInputMoneda {
   readonly error?: string;
   readonly deshabilitado?: boolean;
   readonly minimo?: Cents;
-  readonly vaciarAlEnfocar?: boolean;
 }
 
 export function InputMoneda({
@@ -25,15 +24,15 @@ export function InputMoneda({
   error,
   deshabilitado = false,
   minimo,
-  vaciarAlEnfocar = false,
 }: PropsInputMoneda) {
   const [texto, setTexto] = useState<string>(() => formatEuros(valor));
   const [editando, setEditando] = useState(false);
 
-  function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
-    setTexto(vaciarAlEnfocar ? '' : formatEurosMientrasSeEscribe(formatEuros(valor)));
+  function handleFocus() {
+    // En móviles la selección de texto puede perderse al abrir el teclado.
+    // Vaciar el valor evita que lo escrito se añada al importe anterior.
+    setTexto('');
     setEditando(true);
-    if (!vaciarAlEnfocar) e.currentTarget.select();
   }
 
   function handleBlur() {

@@ -220,7 +220,7 @@ export function Amortizacion() {
             <button
               type="button"
               onClick={() => {
-                void navegar('/simulador?guardar=1');
+                void navegar('/ofertas/simulador?guardar=1');
               }}
               className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
             >

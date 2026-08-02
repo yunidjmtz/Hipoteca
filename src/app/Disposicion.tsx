@@ -137,8 +137,15 @@ export function Disposicion() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-4 pt-6 pb-32 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
-        <Outlet key={pathname} />
+      <main
+        className={[
+          'mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-10',
+          pathname === '/escala'
+            ? 'flex h-[calc(100dvh-3.75rem)] overflow-hidden pt-4 pb-20 lg:h-dvh lg:pt-8 lg:pb-8'
+            : 'pt-6 pb-32 lg:pt-8 lg:pb-12',
+        ].join(' ')}
+      >
+        <Outlet key={pathname} context={{ abrirAjustes }} />
       </main>
 
       {/* Navegación inferior: móvil y tableta vertical */}

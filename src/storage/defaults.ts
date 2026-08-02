@@ -7,7 +7,7 @@ import {
 import { FISCAL_POR_DEFECTO } from '@/config/fiscal';
 
 export const ESTADO_INICIAL: EstadoPersistido = {
-  schemaVersion: 6,
+  schemaVersion: 10,
 
   perfil: {
     titulares: [
@@ -95,6 +95,7 @@ export const ESTADO_INICIAL: EstadoPersistido = {
 
   simulaciones: [],
   ofertas: [],
+  viviendas: [],
   metas: [],
 
   escenarioSimulador: {

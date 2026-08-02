@@ -56,7 +56,7 @@ test('cambiar el precio objetivo actualiza el Resumen y la Escala', async ({ pag
   await inputPrecio.fill('200000');
   await page.keyboard.press('Tab');
 
-  // Navegar al Resumen
+  // Navegar al Resumen.
   await navegacionVisible(page)
     .getByRole('link', { name: /Resumen/ })
     .click();
@@ -65,10 +65,16 @@ test('cambiar el precio objetivo actualiza el Resumen y la Escala', async ({ pag
   await expect(page.getByRole('cell', { name: '200.000,00 €', exact: true }).first()).toBeVisible();
 
   // Abrir la Escala de precios desde el resumen
-  await page.getByRole('link', { name: /Ver completa/i }).click();
+  await page.getByRole('link', { name: /Ver escala completa/i }).click();
 
   // La fila del precio objetivo lleva el marcador ◀
   await expect(page.getByText('◀')).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Precio €' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Mínimo €' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Impuestos €' })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Ratio %' })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Estado' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: /^200 K/ })).toBeVisible();
 });
 
 /**

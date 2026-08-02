@@ -52,7 +52,7 @@ describe('limpieza de datos', () => {
   });
 
   it('parte sin importes personales ni ejemplos precargados', () => {
-    expect(ESTADO_INICIAL.schemaVersion).toBe(6);
+    expect(ESTADO_INICIAL.schemaVersion).toBe(10);
     expect(ESTADO_INICIAL.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(ESTADO_INICIAL.perfil.ahorrosActuales).toBe(ZERO);
     expect(ESTADO_INICIAL.preferencias.precioObjetivo).toBe(ZERO);
@@ -71,6 +71,7 @@ describe('limpieza de datos', () => {
     expect(limpio.escenarioSimulador.precioCompra).toBe(ZERO);
     expect(limpio.simulaciones).toEqual([]);
     expect(limpio.ofertas).toEqual([]);
+    expect(limpio.viviendas).toEqual([]);
     expect(limpio.metas).toEqual([]);
 
     expect(limpio.gastos).toEqual(previo.gastos);
@@ -86,7 +87,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(6);
+    expect(cargado.schemaVersion).toBe(10);
     expect(cargado.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(cargado.preferencias.precioObjetivo).toBe(ZERO);
     expect(cargado.escenarioSimulador.importeSolicitado).toBe(ZERO);
@@ -109,9 +110,26 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(6);
+    expect(cargado.schemaVersion).toBe(10);
     expect(cargado.ajustes.tinFuente).toBe('ine');
     expect(cargado.ajustes.tinPorDefecto).toBe(0.0298);
     expect(cargado.ajustes.tinReferenciaPeriodo).toBe('2026-05');
+  });
+
+  it('añade una colección de viviendas vacía a los datos anteriores', () => {
+    const sinViviendas: Partial<EstadoPersistido> = {
+      ...ESTADO_INICIAL,
+      schemaVersion: 6,
+    };
+    delete sinViviendas.viviendas;
+    localStorage.setItem(
+      'hipotecas-v1',
+      JSON.stringify(sinViviendas),
+    );
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(10);
+    expect(cargado.viviendas).toEqual([]);
   });
 });

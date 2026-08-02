@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useEstado } from '@/app/EstadoProvider';
 import { InputMoneda } from '@/components/InputMoneda';
+import { InputNumeroEntero } from '@/components/InputNumeroEntero';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { Icono } from '@/components/Icono';
 import type { NombreIcono } from '@/components/Icono';
@@ -273,16 +274,12 @@ function TitularForm({
         </Campo>
 
         <Campo htmlFor={`edad-T${n}`} etiqueta="Edad" ayuda={AYUDAS.edad}>
-          <input
+          <InputNumeroEntero
             id={`edad-T${n}`}
-            type="number"
-            min={18}
-            max={80}
-            value={titular.edad}
-            onChange={(e) => {
-              const edad = Math.min(80, Math.max(18, Number(e.target.value)));
-              onChange({ ...titular, edad });
-            }}
+            valor={titular.edad}
+            minimo={18}
+            maximo={80}
+            onChange={(edad) => onChange({ ...titular, edad })}
             className={claseSelect}
           />
         </Campo>

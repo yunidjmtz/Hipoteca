@@ -13,14 +13,16 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
   // en conflicto con exactOptionalPropertyTypes. El cast es seguro (misma forma).
   const escenarioSimulador: EscenarioHipoteca =
     data.escenarioSimulador ?? ESTADO_INICIAL.escenarioSimulador;
+  const viviendas = data.viviendas ?? [];
   return {
     ...(data as EstadoPersistido),
     escenarioSimulador,
+    viviendas,
   };
 }
 
 const CLAVE = 'hipotecas-v1';
-const SCHEMA_ACTUAL = 6;
+const SCHEMA_ACTUAL = 10;
 
 // Referencia al timer de debounce; vive a nivel de módulo para persistir entre llamadas.
 let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -97,6 +99,50 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
           ? { tinReferenciaPeriodo: ESTADO_INICIAL.ajustes.tinReferenciaPeriodo }
           : {}),
       },
+    };
+  }
+  if (versionInicial < 7) {
+    data = {
+      ...data,
+      schemaVersion: 7,
+      viviendas: [],
+    };
+  }
+  if (versionInicial < 8) {
+    data = {
+      ...data,
+      schemaVersion: 8,
+      viviendas: data.viviendas.map((vivienda) => ({
+        ...vivienda,
+        reformas:
+          vivienda.reformas.length > 0 ||
+          (vivienda.reforma === '' && vivienda.presupuestoReforma === 0)
+            ? vivienda.reformas
+            : [
+                {
+                  id: crypto.randomUUID(),
+                  concepto: vivienda.reforma === '' ? 'Reforma estimada' : vivienda.reforma,
+                  costeEstimado: vivienda.presupuestoReforma,
+                },
+              ],
+      })),
+    };
+  }
+  if (versionInicial < 9) {
+    data = {
+      ...data,
+      schemaVersion: 9,
+      viviendas: data.viviendas.map((vivienda) => ({
+        ...vivienda,
+        nombre: vivienda.nombre === '' ? vivienda.direccion : vivienda.nombre,
+      })),
+    };
+  }
+  if (versionInicial < 10) {
+    data = {
+      ...data,
+      schemaVersion: 10,
+      viviendas: data.viviendas.map((vivienda) => ({ ...vivienda, fecha: vivienda.fecha })),
     };
   }
   return data;

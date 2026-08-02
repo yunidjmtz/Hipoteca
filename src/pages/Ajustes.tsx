@@ -3,6 +3,7 @@ import { useEstado } from '@/app/EstadoProvider';
 import { Panel } from '@/components/Panel';
 import { InputPorcentaje } from '@/components/InputPorcentaje';
 import { InputMoneda } from '@/components/InputMoneda';
+import { InputNumeroEntero } from '@/components/InputNumeroEntero';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import type { ConfigFiscalCcaa } from '@/domain/types';
 
@@ -376,16 +377,12 @@ export function Ajustes() {
                 <label htmlFor="plazo-por-defecto" className="text-sm font-medium text-tinta">
                   Plazo en años
                 </label>
-                <input
+                <InputNumeroEntero
                   id="plazo-por-defecto"
-                  type="number"
-                  min={5}
-                  max={40}
-                  value={ajustes.plazoPorDefecto}
-                  onChange={(e) => {
-                    const v = Math.min(40, Math.max(5, Number(e.target.value)));
-                    actualizarAjustes({ plazoPorDefecto: v });
-                  }}
+                  valor={ajustes.plazoPorDefecto}
+                  minimo={5}
+                  maximo={40}
+                  onChange={(plazoPorDefecto) => actualizarAjustes({ plazoPorDefecto })}
                   className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
                 />
               </div>
@@ -420,16 +417,14 @@ export function Ajustes() {
                 <label htmlFor="edad-maxima-vencimiento" className="text-sm font-medium text-tinta">
                   Edad máxima al vencimiento
                 </label>
-                <input
+                <InputNumeroEntero
                   id="edad-maxima-vencimiento"
-                  type="number"
-                  min={65}
-                  max={85}
-                  value={ajustes.edadMaximaAlVencimiento}
-                  onChange={(e) => {
-                    const v = Math.min(85, Math.max(65, Number(e.target.value)));
-                    actualizarAjustes({ edadMaximaAlVencimiento: v });
-                  }}
+                  valor={ajustes.edadMaximaAlVencimiento}
+                  minimo={65}
+                  maximo={85}
+                  onChange={(edadMaximaAlVencimiento) =>
+                    actualizarAjustes({ edadMaximaAlVencimiento })
+                  }
                   className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
                 />
               </div>

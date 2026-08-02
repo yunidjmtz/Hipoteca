@@ -17,7 +17,7 @@ function navegacionVisible(pagina: Page) {
  * La etiqueta corta de la barra inferior es siempre un fragmento de la larga
  * del raíl, así que una expresión regular sirve para las dos disposiciones.
  */
-const SECCIONES = ['Resumen', 'Simulador', 'Ofertas', 'Amortización'];
+const SECCIONES = ['Resumen', 'Ofertas', 'Amortización'];
 
 /**
  * El dist solo puede consultar el endpoint estadístico oficial del INE.

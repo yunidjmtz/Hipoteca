@@ -41,7 +41,7 @@ export function EstadoBadge({ estado }: PropsEstadoBadge) {
   const { texto, clases } = CONFIG[estado];
   return (
     <span
-      className={`inline-flex items-center rounded-chico border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${clases}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${clases}`}
     >
       {texto}
     </span>

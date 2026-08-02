@@ -366,6 +366,30 @@ export interface OfertaBancaria {
   notas: string;
 }
 
+/** Vivienda candidata que se está valorando, independiente de la hipoteca. */
+export interface PartidaReforma {
+  id: string;
+  concepto: string;
+  costeEstimado: Cents;
+}
+
+export interface ViviendaGuardada {
+  id: string;
+  nombre: string;
+  fecha: string;
+  direccion: string;
+  precioVenta: Cents;
+  /** Campos conservados para migrar los datos creados con la primera versión. */
+  presupuestoReforma: Cents;
+  reforma: string;
+  superficieM2: number;
+  esExterior: boolean;
+  tieneTrastero: boolean;
+  tieneGaraje: boolean;
+  reformas: PartidaReforma[];
+  notas: string;
+}
+
 // ---------------------------------------------------------------------------
 // Estado persistido
 // ---------------------------------------------------------------------------
@@ -379,6 +403,7 @@ export interface EstadoPersistido {
   ajustes: Ajustes;
   simulaciones: SimulacionGuardada[];
   ofertas: OfertaBancaria[];
+  viviendas: ViviendaGuardada[];
   metas: Meta[];
   escenarioSimulador: EscenarioHipoteca; // v2 — escenario activo en el Simulador
 }
