@@ -122,8 +122,10 @@ function BarrasCapacidad({
           <div key={label} className="rounded-medio bg-superficie-2/70 px-4 py-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-base font-semibold text-tinta">
-                  {label}
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+                    {label}
+                  </span>
                   {ratio !== undefined && (
                     <span className="rounded-full bg-superficie-2 px-2 py-0.5 font-cifra text-[0.7rem] font-semibold text-acento tabular-nums">
                       {Math.round(ratio * 100)} %
@@ -171,7 +173,12 @@ function TarjetaResumen({
             : 'border-linea bg-superficie-2',
       ].join(' ')}
     >
-      <p className="rotulo">{rotulo}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="whitespace-nowrap text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+          {rotulo}
+        </p>
+        {detalle && <InfoTooltip texto={detalle} alineado="derecha" />}
+      </div>
       <p
         className={[
           'font-cifra tabular-nums text-lg font-semibold leading-tight',
@@ -180,7 +187,6 @@ function TarjetaResumen({
       >
         {valor}
       </p>
-      {detalle && <p className="mt-0.5 text-xs leading-tight text-tinta-media">{detalle}</p>}
     </div>
   );
 }
@@ -396,7 +402,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                   detalle={`${formatPorcentaje(ajustes.ratioBancarioMaximo)} de ingresos − deudas`}
                 />
                 <TarjetaResumen
-                  rotulo="Capacidad de ahorro actual"
+                  rotulo="Capacidad de ahorro"
                   valor={ingresosMensuales > 0 ? formatEuros(capacidadAhorroActual) : '—'}
                   detalle="Incluye alquiler y gastos actuales"
                   alerta={ingresosMensuales > 0 && capacidadAhorroActual === 0}
@@ -425,18 +431,55 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                   {preferencias.precioObjetivo > 0 && <EstadoBadge estado={evaluacion.estado} />}
                 </div>
               </div>
-              <Link
-                to="/plan-hipotecario"
-                className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
-              >
-                Ir a mi plan →
-              </Link>
+              {evaluacion.estado !== 'no_viable' && (
+                <Link
+                  to="/plan-hipotecario"
+                  className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+                >
+                  Ir a mi plan →
+                </Link>
+              )}
             </div>
-            {preferencias.precioObjetivo > 0 ? (
+            {preferencias.precioObjetivo > 0 && evaluacion.estado === 'no_viable' ? (
+              <div className="flex flex-col items-center px-6 py-7 text-center">
+                <p className="max-w-sm text-sm leading-relaxed text-tinta-media">
+                  Una vivienda de{' '}
+                  <strong className="font-cifra font-semibold text-tinta">
+                    {formatEuros(evaluacion.precio)}
+                  </strong>{' '}
+                  tendría una cuota equivalente al{' '}
+                  <strong className="font-cifra font-semibold text-no-viable">
+                    {formatPorcentaje(evaluacion.ratioBancario)}
+                  </strong>{' '}
+                  de tus ingresos, pero el banco admite como máximo el{' '}
+                  <strong className="font-cifra font-semibold text-tinta">
+                    {formatPorcentaje(ajustes.ratioBancarioMaximo)}
+                  </strong>
+                  .
+                </p>
+                {evaluacion.faltante > 0 && (
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-tinta-media">
+                    Además, te faltan{' '}
+                    <strong className="font-cifra font-semibold text-no-viable">
+                      {formatEuros(evaluacion.faltante)}
+                    </strong>{' '}
+                    para cubrir la entrada y los gastos iniciales.
+                  </p>
+                )}
+                <Link
+                  to="/plan-hipotecario"
+                  className="mt-4 inline-flex items-center rounded-medio border border-linea bg-superficie px-4 py-2 text-sm font-medium text-acento shadow-papel transition-colors hover:bg-acento-tenue"
+                >
+                  Cambiar el plan →
+                </Link>
+              </div>
+            ) : preferencias.precioObjetivo > 0 ? (
               <>
                 <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:hidden">
                   <div className="rounded-chico bg-superficie-2 px-3 py-2">
-                    <p className="text-xs text-tinta-suave">Precio</p>
+                    <p className="text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+                      Precio
+                    </p>
                     <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
                       {formatEuros(evaluacion.precio)}
                       {Number.isFinite(evaluacion.ratioBancario) && (
@@ -447,19 +490,25 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                     </p>
                   </div>
                   <div className="rounded-chico bg-superficie-2 px-3 py-2">
-                    <p className="text-xs text-tinta-suave">Cuota</p>
+                    <p className="text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+                      Cuota
+                    </p>
                     <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
                       {formatEuros(evaluacion.cuota)}
                     </p>
                   </div>
                   <div className="rounded-chico bg-superficie-2 px-3 py-2">
-                    <p className="text-xs text-tinta-suave">Necesitas reunir</p>
+                    <p className="whitespace-nowrap text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+                      Necesitas reunir
+                    </p>
                     <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
                       {formatEuros(evaluacion.dineroMinimo)}
                     </p>
                   </div>
                   <div className="rounded-chico bg-superficie-2 px-3 py-2">
-                    <p className="text-xs text-tinta-suave">Faltante</p>
+                    <p className="text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+                      Faltante
+                    </p>
                     <p
                       className={`mt-0.5 font-cifra font-semibold tabular-nums ${
                         evaluacion.faltante > 0 ? 'text-no-viable' : 'text-tinta'
@@ -472,11 +521,11 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                 <div className="hidden overflow-x-auto px-5 py-4 sm:block">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-linea text-left text-xs text-tinta-suave">
-                        <th className="pb-2 pr-4 font-medium">Precio</th>
-                        <th className="pb-2 pr-4 text-right font-medium">Cuota</th>
-                        <th className="pb-2 pr-4 text-right font-medium">Necesitas reunir</th>
-                        <th className="pb-2 pr-4 text-right font-medium">Faltante</th>
+                      <tr className="border-b border-linea text-left text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-tinta-media">
+                        <th className="pb-2 pr-4 font-semibold">Precio</th>
+                        <th className="pb-2 pr-4 text-right font-semibold">Cuota</th>
+                        <th className="pb-2 pr-4 text-right font-semibold">Necesitas reunir</th>
+                        <th className="pb-2 pr-4 text-right font-semibold">Faltante</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -517,7 +566,9 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
           <section className="aparece-3 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
             <div className="border-b border-linea bg-acento-tenue px-5 py-3">
               <p className="rotulo">Capacidad de compra</p>
-              <h3 className="mt-1 font-display text-lg text-tinta">Qué precio puedes asumir hoy</h3>
+              <h3 className="mt-1 font-display text-base text-tinta">
+                Qué precio puedes asumir hoy
+              </h3>
             </div>
             <div className="p-5">
               <BarrasCapacidad

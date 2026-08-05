@@ -359,6 +359,8 @@ export interface SimulacionGuardada {
 
 export interface OfertaBancaria {
   id: string;
+  /** Vivienda para la que el banco ha preparado esta oferta. */
+  viviendaId?: string;
   banco: string;
   nombre: string;
   fecha: string;

@@ -26,7 +26,7 @@ export function Panel({
       className={[
         'relative rounded-grande border border-linea bg-superficie shadow-papel',
         'transition-shadow duration-200',
-        acento ? 'border-l-[3px] border-l-acento' : 'hover:shadow-elevado',
+        acento ? 'border-l-[3px] border-l-acento' : 'lg:hover:shadow-elevado',
         className,
       ]
         .filter(Boolean)
@@ -34,7 +34,7 @@ export function Panel({
     >
       {(rotulo ?? titulo) !== undefined && (
         <header
-          className={`flex items-start justify-between gap-4 border-b border-linea px-6 pt-5 pb-4 ${encabezadoClassName}`}
+          className={`flex items-start justify-between gap-4 border-b border-linea px-4 pt-4 pb-3.5 sm:px-6 sm:pt-5 sm:pb-4 ${encabezadoClassName}`}
         >
           <div>
             {rotulo !== undefined && <p className="rotulo mb-1 tracking-widest">{rotulo}</p>}
@@ -45,7 +45,7 @@ export function Panel({
           {accionEncabezado !== undefined && <div className="shrink-0">{accionEncabezado}</div>}
         </header>
       )}
-      <div className={`px-6 py-5 ${contenidoClassName}`}>{children}</div>
+      <div className={`px-4 py-4 sm:px-6 sm:py-5 ${contenidoClassName}`}>{children}</div>
     </section>
   );
 }

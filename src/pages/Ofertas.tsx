@@ -12,7 +12,16 @@ import {
 } from '@/components/TablaResponsive';
 import { fechaLocalISO } from '@/core/dates';
 import { formatEntero, formatEuros } from '@/core/format';
-import { addCents, maxCents, subtractCents, sumCents, toCents, ZERO } from '@/core/money';
+import {
+  addCents,
+  maxCents,
+  minCents,
+  multiplyCents,
+  subtractCents,
+  sumCents,
+  toCents,
+  ZERO,
+} from '@/core/money';
 import { simulacionDesdeOferta } from '@/domain/mortgageOffer';
 import {
   compararOfertas,
@@ -29,6 +38,7 @@ import {
   PESOS_VIVIENDA,
   type ResultadoComparacionVivienda,
 } from '@/finance/housingComparison';
+import { calcularCosteVivienda } from '@/finance/housingCosts';
 import type {
   Cents,
   EscenarioHipoteca,
@@ -37,6 +47,7 @@ import type {
   PartidaReforma,
   ViviendaGuardada,
 } from '@/domain/types';
+import { ESTADO_INICIAL } from '@/storage/defaults';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,9 +103,15 @@ interface PropsRecomendacion {
   readonly comparacion: readonly ResultadoComparacion[];
   readonly puntuacionActiva: boolean;
   readonly onConfigurar: () => void;
+  readonly onVerHipoteca: (id: string) => void;
 }
 
-function Recomendacion({ comparacion, puntuacionActiva, onConfigurar }: PropsRecomendacion) {
+function Recomendacion({
+  comparacion,
+  puntuacionActiva,
+  onConfigurar,
+  onVerHipoteca,
+}: PropsRecomendacion) {
   const mejor = comparacion[0];
 
   if (mejor === undefined) return null;
@@ -106,11 +123,11 @@ function Recomendacion({ comparacion, puntuacionActiva, onConfigurar }: PropsRec
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="rotulo mb-1 text-acento">
-              {comparacion.length > 1 ? 'Mejor hipoteca' : 'Análisis provisional'}
+              {comparacion.length > 1 ? 'Hipoteca más inteligente' : 'Análisis provisional'}
             </p>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h2 className="font-display text-xl leading-tight text-tinta">
-                {mejor.oferta.banco}
+                {comparacion.length > 1 ? mejor.oferta.banco : `Por ahora, ${mejor.oferta.banco}`}
               </h2>
               {puntuacionActiva && (
                 <span className="inline-flex rounded-chico bg-acento-tenue px-2 py-0.5 font-cifra text-sm font-bold tabular-nums text-acento">
@@ -118,39 +135,30 @@ function Recomendacion({ comparacion, puntuacionActiva, onConfigurar }: PropsRec
                   <span className="ml-1 font-texto text-xs font-medium">valoración</span>
                 </span>
               )}
+              <button
+                type="button"
+                onClick={onConfigurar}
+                aria-label="Cómo se calcula la valoración"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-acento/25 bg-acento-tenue text-xs font-bold text-acento transition-colors hover:border-acento/45 hover:bg-acento/15"
+              >
+                i
+              </button>
             </div>
-            <p className="mt-1 text-sm text-tinta-media">
-              {comparacion.length > 1
-                ? 'La recomendación se actualiza con tus prioridades.'
-                : 'Añade otra oferta para confirmar la recomendación.'}
-            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={onConfigurar}
-              className="rounded-medio border border-linea px-3 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
-            >
-              Ajustar
-            </button>
-            {comparacion.length > 1 && <BadgeMejor texto="Mejor opción" />}
-          </div>
+          <button
+            type="button"
+            onClick={() => onVerHipoteca(mejor.oferta.id)}
+            className="shrink-0 rounded-medio border border-linea px-3 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
+          >
+            Ir a la hipoteca
+          </button>
         </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-medio bg-superficie-2 px-3 py-2.5">
-            <dt className="text-xs text-tinta-suave">Coste total estimado</dt>
-            <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-              {formatEuros(mejor.metricas.costeRealTotal)}
-            </dd>
-          </div>
-          <div className="rounded-medio bg-superficie-2 px-3 py-2.5">
-            <dt className="text-xs text-tinta-suave">Cuota inicial</dt>
-            <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-              {formatEuros(mejor.metricas.cuotaInicial)}
-            </dd>
-          </div>
-        </dl>
+        {comparacion.length === 1 && (
+          <p className="mt-3 text-xs text-ajustado">
+            Añade otra oferta para confirmar la recomendación.
+          </p>
+        )}
       </div>
     </section>
   );
@@ -611,80 +619,91 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
   const tinConVinculaciones = calcularTinMes(1, flujoInput, mesesFijos);
 
   return (
-    <article className="rounded-grande border border-linea bg-superficie p-5 shadow-papel">
+    <article id={`hipoteca-${oferta.id}`} tabIndex={-1} className="bg-superficie p-4 sm:p-5">
       <div>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="rotulo mb-1">Hipoteca</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-xl leading-snug text-tinta">{oferta.banco}</h2>
-            </div>
+            <h2 className="font-display text-lg leading-snug text-tinta">{oferta.banco}</h2>
           </div>
-          <div className="flex shrink-0 justify-end gap-3 text-xs font-semibold text-acento">
-            <button type="button" onClick={() => setDetallesAvanzadosAbiertos(true)}>
-              Detalles avanzados
+          <div className="flex shrink-0 gap-1.5">
+            <button
+              type="button"
+              className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
+              onClick={() => setDetallesAvanzadosAbiertos(true)}
+            >
+              Detalles
             </button>
-            <button type="button" onClick={() => onEditar(oferta)}>
+            <button
+              type="button"
+              className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
+              onClick={() => onEditar(oferta)}
+            >
               Editar
             </button>
-            <button type="button" className="text-no-viable" onClick={() => onEliminar(oferta.id)}>
+            <button
+              type="button"
+              className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-no-viable hover:bg-no-viable-tenue"
+              onClick={() => onEliminar(oferta.id)}
+            >
               Eliminar
             </button>
           </div>
         </div>
-        <div className="mt-2 flex items-center gap-1.5 whitespace-nowrap">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <BadgeEstadoOferta estado={oferta.estado} />
-          <span className="inline-flex items-center rounded-chico border border-linea bg-superficie-2 px-2 py-0.5 text-xs font-medium text-tinta-media whitespace-nowrap">
+          <span className="inline-flex items-center whitespace-nowrap rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
             Cuota: {ETIQUETAS_TIPO_HIPOTECA[escenario.tipo]}
           </span>
-          <span className="inline-flex items-center rounded-chico border border-linea bg-superficie-2 px-2 py-0.5 text-xs font-medium text-tinta-media whitespace-nowrap">
+          <span className="inline-flex items-center whitespace-nowrap rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
             {escenario.plazoAnios} años
           </span>
-          <span className="inline-flex items-center rounded-chico border border-linea bg-superficie-2 px-2 py-0.5 text-xs font-medium text-tinta-media whitespace-nowrap">
+          <span className="inline-flex items-center whitespace-nowrap rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
             {metricas.numVinculacionesObligatorias} vinculaciones
           </span>
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-chico bg-superficie-2 px-3 py-2">
-          <dt className="text-xs text-tinta-suave">Coste total estimado</dt>
-          <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-            {formatEuros(metricas.costeRealTotal)}
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <div className="min-w-0 rounded-medio bg-superficie-2 px-3 py-2.5">
+          <dt className="text-[0.6875rem] font-medium text-tinta-media">
+            Aportación y costes iniciales
+          </dt>
+          <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-tinta sm:text-lg">
+            {formatEuros(metricas.desembolsoInicial)}
           </dd>
         </div>
-        <div className="rounded-chico bg-superficie-2 px-3 py-2">
-          <dt className="text-xs text-tinta-suave">Aportación y costes iniciales</dt>
-          <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-            {formatEuros(metricas.desembolsoInicial)}
+        <div className="min-w-0 rounded-medio border border-acento/25 bg-acento-tenue px-3 py-2.5">
+          <dt className="text-[0.6875rem] font-medium text-tinta-media">Coste total estimado</dt>
+          <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-acento sm:text-lg">
+            {formatEuros(metricas.costeRealTotal)}
           </dd>
         </div>
       </dl>
 
-      <section className="mt-5 border-t border-linea pt-4">
-        <h3 className="text-sm font-semibold text-tinta">Tu hipoteca en resumen</h3>
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+      <section className="mt-3">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-xs text-tinta-suave">Cada mes pagarás</dt>
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">Cada mes pagarás</dt>
             <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
               {formatEuros(metricas.cuotaInicial)}
               <span className="ml-0.5 text-xs font-medium text-tinta-media">/mes</span>
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-tinta-suave">El banco te presta</dt>
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">El banco te presta</dt>
             <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
               {formatEuros(escenario.importeSolicitado)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-tinta-suave">Tú aportas al comprar</dt>
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">Tú aportas al comprar</dt>
             <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
               {formatEuros(aportacion)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-tinta-suave">
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">
               {escenario.tipo === 'fija'
                 ? 'Intereses durante toda la hipoteca'
                 : 'Intereses estimados'}
@@ -694,13 +713,13 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-tinta-suave">TAE calculada</dt>
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">TAE calculada</dt>
             <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
               {metricas.taeEstimada === 0 ? '—' : `${(metricas.taeEstimada * 100).toFixed(2)} %`}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-tinta-suave">TIN inicial</dt>
+            <dt className="text-[0.6875rem] font-medium text-tinta-media">TIN inicial</dt>
             <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
               {(tinConVinculaciones * 100).toFixed(2)} %
             </dd>
@@ -709,10 +728,7 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
       </section>
 
       {oferta.notas !== '' && (
-        <section className="mt-5 border-t border-linea pt-4">
-          <h3 className="text-sm font-semibold text-tinta">Notas</h3>
-          <p className="mt-2 text-sm leading-relaxed text-tinta-media">{oferta.notas}</p>
-        </section>
+        <p className="mt-2 text-sm leading-relaxed text-tinta-media">{oferta.notas}</p>
       )}
 
       {detallesAvanzadosAbiertos && (
@@ -753,26 +769,89 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
 function Hipotecas() {
   const { estado, actualizarOfertas, actualizarEscenarioSimulador } = useEstado();
   const navegar = useNavigate();
+  const [parametros, setParametros] = useSearchParams();
   const [indiceActivo, setIndiceActivo] = useState(0);
   const [puntuacionActiva, setPuntuacionActiva] = useState(true);
   const [pesos, setPesos] = useState<PesosComparacion>(PESOS_POR_DEFECTO);
   const [mostrarConfigPesos, setMostrarConfigPesos] = useState(false);
+  const primeraViviendaId = estado.viviendas[0]?.id ?? '';
+  const viviendaSolicitadaId = parametros.get('vivienda') ?? '';
+  const viviendaSeleccionada =
+    estado.viviendas.find((vivienda) => vivienda.id === viviendaSolicitadaId) ??
+    estado.viviendas[0] ??
+    null;
+  const viviendaSeleccionadaId = viviendaSeleccionada?.id ?? '';
+  const ofertasVivienda = estado.ofertas.filter(
+    (oferta) =>
+      oferta.viviendaId === viviendaSeleccionadaId ||
+      (oferta.viviendaId === undefined && viviendaSeleccionadaId === primeraViviendaId),
+  );
 
   const comparacion = useMemo(
-    () => compararOfertas(estado.ofertas, pesos),
-    [estado.ofertas, pesos],
+    () => compararOfertas(ofertasVivienda, pesos),
+    [ofertasVivienda, pesos],
   );
-  const ofertasComparables = sonOfertasComparables(estado.ofertas);
+  const ofertasComparables = sonOfertasComparables(ofertasVivienda);
   const mostrarPuntuacion = puntuacionActiva && ofertasComparables && comparacion.length > 1;
   const indiceVisible = Math.min(indiceActivo, Math.max(comparacion.length - 1, 0));
 
   function abrirNueva() {
-    void navegar('/ofertas/simulador?guardar=1');
+    if (viviendaSeleccionada === null) return;
+    const precioCompra = viviendaSeleccionada.precioVenta;
+    const ltv = estado.ajustes.ltvPorDefecto;
+    actualizarEscenarioSimulador({
+      ...ESTADO_INICIAL.escenarioSimulador,
+      id: crypto.randomUUID(),
+      titulo: 'Nueva hipoteca',
+      precioCompra,
+      valorTasacion: precioCompra,
+      ltv,
+      importeSolicitado: multiplyCents(precioCompra, ltv),
+      plazoAnios: estado.ajustes.plazoPorDefecto,
+      tinFijo: estado.ajustes.tinPorDefecto,
+      comisiones: { ...ESTADO_INICIAL.escenarioSimulador.comisiones },
+      vinculaciones: [],
+      taeOficial: 0,
+      euriborFechaValor: '',
+      euriborPorPeriodos: [],
+    });
+    void navegar(
+      `/ofertas/simulador?guardar=1&vivienda=${encodeURIComponent(viviendaSeleccionada.id)}`,
+    );
+  }
+
+  function igualarPrecioCompra() {
+    if (viviendaSeleccionada === null) return;
+    const precioCompra = viviendaSeleccionada.precioVenta;
+    actualizarOfertas(
+      estado.ofertas.map((oferta) => {
+        const perteneceAVivienda =
+          oferta.viviendaId === viviendaSeleccionada.id ||
+          (oferta.viviendaId === undefined && viviendaSeleccionada.id === primeraViviendaId);
+        if (!perteneceAVivienda) return oferta;
+        const baseFinanciable =
+          oferta.escenario.valorTasacion > ZERO
+            ? minCents(precioCompra, oferta.escenario.valorTasacion)
+            : precioCompra;
+        return {
+          ...oferta,
+          escenario: {
+            ...oferta.escenario,
+            precioCompra,
+            importeSolicitado: multiplyCents(baseFinanciable, oferta.escenario.ltv),
+          },
+        };
+      }),
+    );
   }
 
   function abrirEditar(oferta: OfertaBancaria) {
     actualizarEscenarioSimulador(simulacionDesdeOferta(oferta));
-    void navegar(`/ofertas/simulador?oferta=${encodeURIComponent(oferta.id)}`);
+    void navegar(
+      `/ofertas/simulador?oferta=${encodeURIComponent(oferta.id)}&vivienda=${encodeURIComponent(
+        viviendaSeleccionadaId,
+      )}`,
+    );
   }
 
   function eliminarOferta(id: string) {
@@ -781,24 +860,78 @@ function Hipotecas() {
     setIndiceActivo((indice) => Math.min(indice, Math.max(ofertasRestantes.length - 1, 0)));
   }
 
+  function verHipoteca(id: string) {
+    const indice = comparacion.findIndex((resultado) => resultado.oferta.id === id);
+    if (indice < 0) return;
+    setIndiceActivo(indice);
+    window.requestAnimationFrame(() => {
+      const tarjeta = document.getElementById(`hipoteca-${id}`);
+      tarjeta?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      tarjeta?.focus({ preventScroll: true });
+    });
+  }
+
   return (
     <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem+2.75rem+1.25rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
-      <button
-        type="button"
-        onClick={abrirNueva}
-        className="shrink-0 self-end rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
-      >
-        {estado.ofertas.length === 0 ? '+ Añadir primera oferta' : '+ Añadir oferta'}
-      </button>
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        <label className="min-w-0 flex-1 sm:max-w-xs">
+          <span className="sr-only">Vivienda para comparar hipotecas</span>
+          <select
+            value={viviendaSeleccionadaId}
+            onChange={(evento) => {
+              setIndiceActivo(0);
+              setParametros({ tab: 'hipotecas', vivienda: evento.target.value });
+            }}
+            disabled={estado.viviendas.length === 0}
+            className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:border-acento focus:outline-none focus:ring-2 focus:ring-acento/40 disabled:opacity-50"
+          >
+            {estado.viviendas.length === 0 ? (
+              <option value="">Añade una vivienda</option>
+            ) : (
+              estado.viviendas.map((vivienda) => (
+                <option key={vivienda.id} value={vivienda.id}>
+                  {vivienda.nombre}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={abrirNueva}
+          disabled={viviendaSeleccionada === null}
+          className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {ofertasVivienda.length === 0 ? '+ Añadir primera oferta' : '+ Añadir oferta'}
+        </button>
+      </div>
 
-      {comparacion.length === 0 && (
+      {viviendaSeleccionada === null ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 text-center">
-          <h2 className="font-display text-2xl text-tinta">Compara las hipotecas de los bancos</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-tinta-media">
-            Guarda cada propuesta para conocer su coste total, cuota, desembolso y productos
-            vinculados antes de decidir.
+          <h2 className="font-display text-2xl text-tinta">Primero, añade una vivienda</h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-tinta-media">
+            Cada vivienda tendrá sus propias ofertas hipotecarias.
           </p>
+          <button
+            type="button"
+            onClick={() => void navegar('/ofertas/vivienda')}
+            className="mt-4 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+          >
+            Añadir vivienda
+          </button>
         </div>
+      ) : (
+        comparacion.length === 0 && (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 text-center">
+            <h2 className="font-display text-2xl text-tinta">
+              Compara las hipotecas de los bancos
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-tinta-media">
+              Guarda cada propuesta para conocer su coste total, cuota, desembolso y productos
+              vinculados antes de decidir.
+            </p>
+          </div>
+        )
       )}
 
       {comparacion.length > 0 && (
@@ -808,57 +941,74 @@ function Hipotecas() {
               comparacion={comparacion}
               puntuacionActiva={mostrarPuntuacion}
               onConfigurar={() => setMostrarConfigPesos(true)}
+              onVerHipoteca={verHipoteca}
             />
           ) : (
             <section
               role="status"
               className="rounded-grande border border-revisar/40 bg-revisar-tenue px-5 py-4 text-sm leading-relaxed text-tinta"
             >
-              Estas ofertas corresponden a precios de vivienda distintos. Se muestran sus cifras,
-              pero no se elige una “mejor” hasta que todas comparen la misma compra.
-            </section>
-          )}
-
-          {comparacion.length > 1 && (
-            <nav
-              aria-label="Paginación de hipotecas"
-              className="flex shrink-0 items-center justify-center gap-3 rounded-grande border border-linea bg-superficie px-3 py-2 shadow-papel"
-            >
-              <button
-                type="button"
-                onClick={() => setIndiceActivo((indice) => Math.max(0, indice - 1))}
-                disabled={indiceVisible === 0}
-                className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Anterior
-              </button>
-              <p className="min-w-16 text-center font-cifra text-sm tabular-nums text-tinta-media">
-                {indiceVisible + 1} de {comparacion.length}
+              <p>
+                Estas ofertas tienen precios de compra distintos. Se muestran sus cifras, pero no se
+                elige una “mejor” hasta que todas comparen la misma compra.
+              </p>
+              <p className="mt-2 text-xs text-tinta-media">
+                {ofertasVivienda
+                  .map((oferta) => `${oferta.banco}: ${formatEuros(oferta.escenario.precioCompra)}`)
+                  .join(' · ')}
               </p>
               <button
                 type="button"
-                onClick={() =>
-                  setIndiceActivo((indice) => Math.min(comparacion.length - 1, indice + 1))
-                }
-                disabled={indiceVisible === comparacion.length - 1}
-                className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={igualarPrecioCompra}
+                className="mt-3 rounded-medio border border-revisar/35 bg-superficie px-3 py-1.5 text-xs font-semibold text-tinta hover:bg-superficie-2"
               >
-                Siguiente
+                Igualar al precio de la vivienda
               </button>
-            </nav>
+            </section>
           )}
 
-          <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pr-1">
-            {comparacion.map((resultado, indice) =>
-              indice === indiceVisible ? (
-                <TarjetaHipoteca
-                  key={resultado.oferta.id}
-                  resultado={resultado}
-                  onEditar={abrirEditar}
-                  onEliminar={eliminarOferta}
-                />
-              ) : null,
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-[0_1_auto] flex-col overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
+            {comparacion.length > 1 && (
+              <nav
+                aria-label="Paginación de hipotecas"
+                className="flex shrink-0 items-center justify-center gap-3 border-b border-linea bg-superficie px-3 py-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => setIndiceActivo((indice) => Math.max(0, indice - 1))}
+                  disabled={indiceVisible === 0}
+                  className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Anterior
+                </button>
+                <p className="min-w-16 text-center font-cifra text-sm tabular-nums text-tinta-media">
+                  {indiceVisible + 1} de {comparacion.length}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIndiceActivo((indice) => Math.min(comparacion.length - 1, indice + 1))
+                  }
+                  disabled={indiceVisible === comparacion.length - 1}
+                  className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Siguiente
+                </button>
+              </nav>
             )}
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {comparacion.map((resultado, indice) =>
+                indice === indiceVisible ? (
+                  <TarjetaHipoteca
+                    key={resultado.oferta.id}
+                    resultado={resultado}
+                    onEditar={abrirEditar}
+                    onEliminar={eliminarOferta}
+                  />
+                ) : null,
+              )}
+            </div>
           </div>
         </>
       )}
@@ -1223,7 +1373,7 @@ function FormularioVivienda({
                     }
                     setModalReformasAbierto(false);
                   }}
-                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
+                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
                 >
                   Guardar reforma
                 </button>
@@ -1252,7 +1402,7 @@ function FormularioVivienda({
           <button
             type="button"
             onClick={guardar}
-            className="rounded-medio bg-acento px-5 py-2 text-sm font-medium text-white hover:bg-acento/90"
+            className="rounded-medio bg-acento px-5 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
           >
             {vivienda === null ? 'Guardar vivienda' : 'Guardar cambios'}
           </button>
@@ -1276,9 +1426,11 @@ function precioPorM2Formateado(valor: number): string {
 function RecomendacionVivienda({
   viviendas,
   comparacion,
+  onVerVivienda,
 }: {
   readonly viviendas: readonly ViviendaGuardada[];
   readonly comparacion: readonly ResultadoComparacionVivienda[];
+  readonly onVerVivienda: (id: string) => void;
 }) {
   const [modalCalculoAbierto, setModalCalculoAbierto] = useState(false);
   const mejor = comparacion[0];
@@ -1312,7 +1464,7 @@ function RecomendacionVivienda({
               <p className="rotulo mb-1 text-acento">
                 {esComparacionReal ? 'Compra más inteligente' : 'Análisis provisional'}
               </p>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h2 className="font-display text-xl leading-tight text-tinta">
                   {esComparacionReal
                     ? mejor.vivienda.nombre
@@ -1322,32 +1474,25 @@ function RecomendacionVivienda({
                   {Math.round(mejor.puntuacion)}/100
                   <span className="ml-1 font-texto text-xs font-medium">valoración</span>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setModalCalculoAbierto(true)}
+                  aria-label="Cómo se calcula la valoración"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-acento/25 bg-acento-tenue text-xs font-bold text-acento transition-colors hover:border-acento/45 hover:bg-acento/15"
+                >
+                  i
+                </button>
               </div>
               <p className="mt-1 truncate text-sm text-tinta-media">{mejor.vivienda.direccion}</p>
             </div>
             <button
               type="button"
-              onClick={() => setModalCalculoAbierto(true)}
+              onClick={() => onVerVivienda(mejor.vivienda.id)}
               className="shrink-0 rounded-medio border border-linea px-3 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
             >
-              Cómo se calcula
+              Ir al piso
             </button>
           </div>
-
-          <dl className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-medio bg-superficie-2 px-3 py-2.5">
-              <dt className="text-xs text-tinta-suave">Coste con reformas</dt>
-              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                {formatEuros(mejor.costeTotal)}
-              </dd>
-            </div>
-            <div className="rounded-medio bg-superficie-2 px-3 py-2.5">
-              <dt className="text-xs text-tinta-suave">Coste por m²</dt>
-              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                {precioPorM2Formateado(mejor.costePorM2)}
-              </dd>
-            </div>
-          </dl>
 
           {!esComparacionReal && (
             <p className="mt-3 text-xs text-ajustado">
@@ -1365,12 +1510,12 @@ function RecomendacionVivienda({
       </section>
 
       {modalCalculoAbierto && (
-        <div className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 sm:items-center sm:justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="titulo-calculo-vivienda"
-            className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado"
+            className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1431,7 +1576,7 @@ function RecomendacionVivienda({
               <button
                 type="button"
                 onClick={() => setModalCalculoAbierto(false)}
-                className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
+                className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
               >
                 Entendido
               </button>
@@ -1459,18 +1604,34 @@ function Viviendas() {
     setIndiceActivo((indice) => Math.min(indice, Math.max(viviendasRestantes.length - 1, 0)));
   }
 
+  function verVivienda(id: string) {
+    const indice = estado.viviendas.findIndex((vivienda) => vivienda.id === id);
+    if (indice < 0) return;
+
+    setIndiceActivo(indice);
+    window.requestAnimationFrame(() => {
+      const tarjeta = document.getElementById(`vivienda-${id}`);
+      tarjeta?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      tarjeta?.focus({ preventScroll: true });
+    });
+  }
+
   return (
     <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem+2.75rem+1.25rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
       <button
         type="button"
         onClick={() => void navegar('/ofertas/vivienda')}
-        className="shrink-0 self-end rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
+        className="shrink-0 self-end rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
       >
         + Añadir vivienda
       </button>
 
       {estado.viviendas.length > 0 && (
-        <RecomendacionVivienda viviendas={estado.viviendas} comparacion={comparacionViviendas} />
+        <RecomendacionVivienda
+          viviendas={estado.viviendas}
+          comparacion={comparacionViviendas}
+          onVerVivienda={verVivienda}
+        />
       )}
 
       {estado.viviendas.length === 0 && (
@@ -1486,11 +1647,11 @@ function Viviendas() {
       )}
 
       {estado.viviendas.length > 0 && (
-        <>
+        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-[0_1_auto] flex-col overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
           {estado.viviendas.length > 1 && (
             <nav
               aria-label="Paginación de viviendas"
-              className="flex shrink-0 items-center justify-center gap-3 rounded-grande border border-linea bg-superficie px-3 py-2 shadow-papel"
+              className="flex shrink-0 items-center justify-center gap-3 border-b border-linea bg-superficie px-3 py-2"
             >
               <button
                 type="button"
@@ -1516,27 +1677,29 @@ function Viviendas() {
             </nav>
           )}
 
-          <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {estado.viviendas.map((vivienda, indice) => {
               if (indice !== indiceVisible) return null;
-              const costeReforma = totalReformas(vivienda.reformas);
-              const costeReal = addCents(vivienda.precioVenta, costeReforma);
+              const { costeAntesImpuestos, costeTotal } = calcularCosteVivienda(vivienda, estado);
               return (
                 <article
+                  id={`vivienda-${vivienda.id}`}
                   key={vivienda.id}
-                  className="rounded-grande border border-linea bg-superficie p-5 shadow-papel"
+                  tabIndex={-1}
+                  className="bg-superficie p-4 sm:p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="rotulo mb-1">Vivienda</p>
                       <h3 className="font-display text-lg leading-snug text-tinta">
                         {vivienda.nombre}
                       </h3>
                       <p className="mt-1 text-sm text-tinta-media">{vivienda.direccion}</p>
                     </div>
-                    <div className="flex gap-3 text-xs font-semibold text-acento">
+                    <div className="flex shrink-0 gap-1.5">
                       <button
                         type="button"
+                        className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
                         onClick={() =>
                           void navegar(
                             `/ofertas/vivienda?vivienda=${encodeURIComponent(vivienda.id)}`,
@@ -1547,57 +1710,58 @@ function Viviendas() {
                       </button>
                       <button
                         type="button"
-                        className="text-no-viable"
+                        className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-no-viable hover:bg-no-viable-tenue"
                         onClick={() => eliminar(vivienda.id)}
                       >
                         Eliminar
                       </button>
                     </div>
                   </div>
-                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <dt className="text-tinta-suave">Precio de venta</dt>
-                      <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-                        {formatEuros(vivienda.precioVenta)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-tinta-suave">Reforma estimada</dt>
-                      <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-                        {formatEuros(costeReforma)}
-                      </dd>
-                    </div>
-                    <div className="col-span-2 rounded-chico bg-acento-tenue px-3 py-2">
-                      <dt className="text-xs text-tinta-media">
-                        Coste de vivienda antes de impuestos
-                      </dt>
-                      <dd className="mt-1 font-cifra text-lg font-bold tabular-nums text-acento">
-                        {formatEuros(costeReal)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-linea pt-3 text-xs">
-                    <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-2 py-0.5 font-medium text-tinta-media">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
                       {vivienda.superficieM2 > 0
                         ? `${vivienda.superficieM2} m²`
                         : 'Superficie pendiente'}
                     </span>
+                    {vivienda.superficieM2 > 0 && (
+                      <span className="inline-flex rounded-chico border border-acento/25 bg-acento-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-acento">
+                        {precioPorM2Formateado(costeAntesImpuestos / 100 / vivienda.superficieM2)}
+                      </span>
+                    )}
                     {vivienda.esExterior && (
-                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-2 py-0.5 font-medium text-comodo">
+                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-1.5 py-0.5 text-[0.6875rem] font-medium text-comodo">
                         Exterior
                       </span>
                     )}
                     {vivienda.tieneTrastero && (
-                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-2 py-0.5 font-medium text-comodo">
+                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-1.5 py-0.5 text-[0.6875rem] font-medium text-comodo">
                         Trastero
                       </span>
                     )}
                     {vivienda.tieneGaraje && (
-                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-2 py-0.5 font-medium text-comodo">
+                      <span className="inline-flex rounded-chico border border-comodo/35 bg-comodo-tenue px-1.5 py-0.5 text-[0.6875rem] font-medium text-comodo">
                         Garaje
                       </span>
                     )}
                   </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="min-w-0 rounded-medio bg-superficie-2 px-3 py-2.5">
+                      <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                        Coste sin impuestos
+                      </dt>
+                      <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-tinta sm:text-lg">
+                        {formatEuros(costeAntesImpuestos)}
+                      </dd>
+                    </div>
+                    <div className="min-w-0 rounded-medio border border-acento/25 bg-acento-tenue px-3 py-2.5">
+                      <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                        Coste con impuestos
+                      </dt>
+                      <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-acento sm:text-lg">
+                        {formatEuros(costeTotal)}
+                      </dd>
+                    </div>
+                  </dl>
                   {vivienda.reformas.length > 0 && (
                     <div className="mt-3">
                       <p className="text-xs font-medium text-tinta">Reformas</p>
@@ -1624,7 +1788,7 @@ function Viviendas() {
               );
             })}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

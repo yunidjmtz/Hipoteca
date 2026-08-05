@@ -12,6 +12,7 @@ describe('conversión entre simulación y oferta', () => {
 
     const oferta = ofertaDesdeSimulacion(escenario, {
       id: 'oferta-1',
+      viviendaId: 'vivienda-1',
       banco: ' Banco Ejemplo ',
       nombre: ' Hipoteca fija ',
       fecha: '2026-07-31',
@@ -30,6 +31,7 @@ describe('conversión entre simulación y oferta', () => {
   it('recupera la TAE superior de una oferta antigua dentro de la simulación', () => {
     const oferta = ofertaDesdeSimulacion(ESTADO_INICIAL.escenarioSimulador, {
       id: 'oferta-antigua',
+      viviendaId: 'vivienda-1',
       banco: 'Banco',
       nombre: 'Oferta',
       fecha: '2026-07-31',

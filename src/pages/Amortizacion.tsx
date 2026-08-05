@@ -243,7 +243,7 @@ export function Amortizacion() {
               onClick={() => {
                 void navegar('/ofertas/simulador?guardar=1');
               }}
-              className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white hover:bg-acento/90"
+              className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
             >
               Guardar una hipoteca
             </button>
@@ -433,7 +433,7 @@ export function Amortizacion() {
                   type="button"
                   onClick={simular}
                   disabled={aportacionesValidas.length === 0}
-                  className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Simular amortización
                 </button>

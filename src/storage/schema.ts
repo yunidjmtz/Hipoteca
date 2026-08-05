@@ -312,6 +312,7 @@ export const zSimulacionGuardada = z.object({
 
 export const zOfertaBancaria = z.object({
   id: z.string(),
+  viviendaId: z.string().optional(),
   banco: z.string(),
   nombre: z.string(),
   fecha: z.string(),

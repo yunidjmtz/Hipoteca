@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Panel } from '@/components/Panel';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputPorcentaje } from '@/components/InputPorcentaje';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import {
   EncabezadoConUnidad,
   TablaResponsive,
@@ -253,10 +254,12 @@ function SelectorBanco({
 export function Simulador() {
   const { estado, actualizarEscenarioSimulador, actualizarOfertas } = useEstado();
   const navegar = useNavigate();
-  const [parametros, setParametros] = useSearchParams();
+  const [parametros] = useSearchParams();
   const { escenarioSimulador: esc } = estado;
   const ofertaId = parametros.get('oferta');
   const ofertaActiva = estado.ofertas.find((oferta) => oferta.id === ofertaId) ?? null;
+  const viviendaId =
+    ofertaActiva?.viviendaId ?? parametros.get('vivienda') ?? estado.viviendas[0]?.id ?? '';
   const [mostrarFichaOferta] = useState(ofertaId !== null || parametros.get('guardar') === '1');
   const [banco, setBanco] = useState(ofertaActiva?.banco ?? '');
   const [estadoOferta, setEstadoOferta] = useState<EstadoOferta>(
@@ -265,7 +268,6 @@ export function Simulador() {
   const [fechaOferta, setFechaOferta] = useState(ofertaActiva?.fecha ?? fechaLocalISO());
   const [notasOferta, setNotasOferta] = useState(ofertaActiva?.notas ?? '');
   const [errorOferta, setErrorOferta] = useState('');
-  const [ofertaGuardada, setOfertaGuardada] = useState(false);
   const [plazoTexto, setPlazoTexto] = useState<string | null>(null);
   const [aniosFijosTexto, setAniosFijosTexto] = useState<string | null>(null);
   const [vinculacionEditada, setVinculacionEditada] = useState<string | null>(null);
@@ -278,6 +280,10 @@ export function Simulador() {
 
   function guardarComoOferta() {
     const bancoLimpio = banco.trim();
+    if (viviendaId === '' || !estado.viviendas.some((vivienda) => vivienda.id === viviendaId)) {
+      setErrorOferta('Selecciona una vivienda antes de guardar la hipoteca.');
+      return;
+    }
     if (bancoLimpio === '') {
       setErrorOferta('Indica el banco para guardar la oferta.');
       return;
@@ -286,6 +292,7 @@ export function Simulador() {
     const id = ofertaActiva?.id ?? crypto.randomUUID();
     const oferta: OfertaBancaria = ofertaDesdeSimulacion(esc, {
       id,
+      viviendaId,
       banco: bancoLimpio,
       nombre: bancoLimpio,
       fecha: fechaOferta,
@@ -299,8 +306,7 @@ export function Simulador() {
     actualizarEscenarioSimulador({ titulo: bancoLimpio });
     actualizarOfertas(ofertas);
     setErrorOferta('');
-    setOfertaGuardada(true);
-    setParametros({ oferta: id }, { replace: true });
+    void navegar(`/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`);
   }
 
   function act<K extends keyof EscenarioHipoteca>(campo: K, valor: EscenarioHipoteca[K]) {
@@ -378,41 +384,45 @@ export function Simulador() {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="rotulo mb-1">
+            <p className="rotulo">
               {ofertaActiva === null ? 'Nueva oferta bancaria' : `Oferta de ${ofertaActiva.banco}`}
             </p>
-            <h1 className="font-display text-2xl text-tinta">
-              {ofertaActiva === null ? 'Simula las condiciones de la oferta' : ofertaActiva.nombre}
-            </h1>
+            {ofertaActiva !== null && (
+              <h1 className="mt-1 font-display text-xl text-tinta">{ofertaActiva.nombre}</h1>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void navegar('/ofertas?tab=hipotecas')}
-              className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
-            >
-              Volver a ofertas
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() =>
+              void navegar(
+                viviendaId === ''
+                  ? '/ofertas?tab=hipotecas'
+                  : `/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`,
+              )
+            }
+            className="shrink-0 rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
+          >
+            Volver a ofertas
+          </button>
         </div>
       </header>
 
       {mostrarFichaOferta && (
-        <Panel rotulo="Oferta bancaria" titulo="Datos de la oferta">
+        <Panel rotulo="Oferta bancaria">
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-                Banco
-                <SelectorBanco valor={banco} onChange={setBanco} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+            <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+              Banco
+              <SelectorBanco valor={banco} onChange={setBanco} />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="min-w-0 flex flex-col gap-1 text-sm font-medium text-tinta">
                 Estado
                 <select
                   value={estadoOferta}
                   onChange={(e) => setEstadoOferta(e.target.value as EstadoOferta)}
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
                 >
                   <option value="pendiente">Pendiente</option>
                   <option value="estudio">En estudio</option>
@@ -422,13 +432,13 @@ export function Simulador() {
                   <option value="firmada">Firmada</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+              <label className="min-w-0 flex flex-col gap-1 text-sm font-medium text-tinta">
                 Fecha de la oferta
                 <input
                   type="date"
                   value={fechaOferta}
                   onChange={(e) => setFechaOferta(e.target.value)}
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
                 />
               </label>
             </div>
@@ -447,7 +457,7 @@ export function Simulador() {
       )}
 
       {/* ── Datos del préstamo ─────────────────────────────── */}
-      <Panel rotulo="Hipoteca" titulo="Datos principales">
+      <Panel rotulo="Hipoteca">
         <div className="flex flex-col gap-5">
           {/* Tipo */}
           <div className="flex flex-col gap-1">
@@ -478,43 +488,75 @@ export function Simulador() {
           </div>
 
           {/* Importe y precio */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <InputMoneda
               id="sim-precio"
               etiqueta="Precio de compra"
               valor={esc.precioCompra}
               onChange={(v) => {
-                act('precioCompra', v);
-                if (esc.valorTasacion === esc.precioCompra) act('valorTasacion', v);
+                const valorTasacion =
+                  esc.valorTasacion === esc.precioCompra ? v : esc.valorTasacion;
+                actualizarEscenarioSimulador({
+                  precioCompra: v,
+                  valorTasacion,
+                  importeSolicitado: multiplyCents(minCents(v, valorTasacion), esc.ltv),
+                });
               }}
             />
             <InputMoneda
-              id="sim-importe"
-              etiqueta="Cuánto aportarás"
-              valor={maxCents(ZERO, subtractCents(esc.precioCompra, esc.importeSolicitado))}
-              onChange={(aporte) =>
-                act('importeSolicitado', maxCents(ZERO, subtractCents(esc.precioCompra, aporte)))
-              }
-            />
-            <InputPorcentaje
-              id="sim-ltv-max"
-              etiqueta="Financiación del Banco"
-              valor={esc.ltv}
-              onChange={(ltv) => act('ltv', ltv)}
-              ayuda="Porcentaje máximo aplicado sobre el menor valor entre precio y tasación."
-            />
-            <InputMoneda
               id="sim-tasacion"
-              etiqueta="Tasación de la vivienda"
+              etiqueta="Valor de tasación"
               valor={esc.valorTasacion}
-              onChange={(v) => act('valorTasacion', v)}
-              ayuda="Valor que asigna una tasadora. Si es inferior al precio, el banco suele prestar menos."
+              onChange={(v) =>
+                actualizarEscenarioSimulador({
+                  valorTasacion: v,
+                  importeSolicitado: multiplyCents(minCents(esc.precioCompra, v), esc.ltv),
+                })
+              }
+              ayuda="Valor que asigna una tasadora. El banco aplica la financiación sobre el menor valor entre el precio de compra y la tasación."
             />
+            <div className="col-span-2 rounded-medio border border-linea bg-superficie-2/60 px-4 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs text-tinta-media">Cuánto aportarás</p>
+                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                    {formatEuros(aportacionActual)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center justify-end">
+                    <p className="text-xs text-tinta-media">Financiación del banco</p>
+                    <InfoTooltip texto="Porcentaje aplicado sobre el precio de compra. El préstamo máximo definitivo se calcula sobre el menor valor entre el precio y la tasación." />
+                  </div>
+                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-acento">
+                    {formatPorcentaje(esc.ltv)}
+                  </p>
+                </div>
+              </div>
+              <input
+                id="sim-ltv-max"
+                type="range"
+                min={0}
+                max={100}
+                step={0.5}
+                value={esc.ltv * 100}
+                onChange={(evento) => {
+                  const ltv = Number(evento.target.value) / 100;
+                  actualizarEscenarioSimulador({
+                    ltv,
+                    importeSolicitado: multiplyCents(baseFinanciable, ltv),
+                  });
+                }}
+                aria-label="Financiación del banco"
+                aria-valuetext={`${formatPorcentaje(esc.ltv)}; aportas ${formatEuros(aportacionActual)}`}
+                className="mt-2 h-10 w-full cursor-pointer accent-acento"
+              />
+            </div>
           </div>
 
           {/* Plazo */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 flex flex-col gap-1">
               <label htmlFor="sim-plazo" className="text-sm font-medium text-tinta">
                 Plazo (años)
               </label>
@@ -527,11 +569,11 @@ export function Simulador() {
                 onFocus={() => setPlazoTexto('')}
                 onChange={(e) => setPlazoTexto(e.target.value)}
                 onBlur={guardarPlazo}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="min-w-0 flex flex-col gap-1">
               <label htmlFor="sim-fecha" className="text-sm font-medium text-tinta">
                 Fecha de la primera cuota
               </label>
@@ -540,19 +582,28 @@ export function Simulador() {
                 type="date"
                 value={esc.fechaPrimeraCuota}
                 onChange={(e) => act('fechaPrimeraCuota', e.target.value)}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
             </div>
           </div>
 
           {/* TIN fija */}
           {esc.tipo === 'fija' && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3">
               <InputPorcentaje
                 id="sim-tin-fijo"
                 etiqueta="TIN anual"
                 valor={esc.tinFijo ?? 0.035}
                 onChange={(v) => act('tinFijo', v)}
+              />
+              <InputPorcentaje
+                id="sim-tae-oficial"
+                etiqueta="TAE oferta / FEIN"
+                valor={esc.taeOficial ?? 0}
+                mostrarVacioSiCero
+                onChange={(v) => act('taeOficial', v)}
+                onVaciar={() => act('taeOficial', 0)}
+                ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
               />
             </div>
           )}
@@ -647,15 +698,17 @@ export function Simulador() {
               }
               ayuda="Porcentaje sobre el capital. Habitualmente 0–1 %."
             />
-            <InputPorcentaje
-              id="sim-tae-oficial"
-              etiqueta="TAE de la oferta o FEIN (opcional)"
-              valor={esc.taeOficial ?? 0}
-              mostrarVacioSiCero
-              onChange={(v) => act('taeOficial', v)}
-              onVaciar={() => act('taeOficial', 0)}
-              ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
-            />
+            {esc.tipo !== 'fija' && (
+              <InputPorcentaje
+                id="sim-tae-oficial"
+                etiqueta="TAE de la oferta o FEIN (opcional)"
+                valor={esc.taeOficial ?? 0}
+                mostrarVacioSiCero
+                onChange={(v) => act('taeOficial', v)}
+                onVaciar={() => act('taeOficial', 0)}
+                ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
+              />
+            )}
           </div>
         </div>
       </Panel>
@@ -723,35 +776,29 @@ export function Simulador() {
       </Panel>
 
       {mostrarFichaOferta && (
-        <Panel
-          rotulo="Oferta bancaria"
-          titulo={ofertaActiva === null ? 'Guardar esta simulación' : 'Actualizar esta oferta'}
-        >
+        <Panel>
           <div className="flex flex-col gap-3">
-            <p className="text-sm leading-relaxed text-tinta-media">
-              Ya has revisado las condiciones y los productos del banco. Guarda ahora la oferta para
-              añadirla a la comparativa.
-            </p>
             {errorOferta !== '' && <p className="text-sm text-no-viable">{errorOferta}</p>}
-            {ofertaGuardada && (
-              <p className="text-sm font-medium text-comodo">
-                Oferta guardada. Ya aparece en la comparativa.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={guardarComoOferta}
-                className="rounded-medio bg-acento px-5 py-2 text-sm font-medium text-white hover:bg-acento/90"
+                className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90"
               >
-                {ofertaActiva === null ? 'Guardar oferta' : 'Actualizar oferta'}
+                {ofertaActiva === null ? 'Guardar hipoteca' : 'Actualizar hipoteca'}
               </button>
               <button
                 type="button"
-                onClick={() => void navegar('/ofertas?tab=hipotecas')}
-                className="rounded-medio border border-linea px-5 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
+                onClick={() =>
+                  void navegar(
+                    viviendaId === ''
+                      ? '/ofertas?tab=hipotecas'
+                      : `/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`,
+                  )
+                }
+                className="rounded-medio border border-linea px-5 py-2.5 text-sm font-medium text-tinta hover:bg-superficie-2"
               >
-                Ver comparativa
+                Cancelar
               </button>
             </div>
           </div>
@@ -1014,6 +1061,20 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
   const [obligatorio, setObligatorio] = useState(true);
   const [aniosExigidos, setAniosExigidos] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (!abierto) return;
+    const onKey = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setAbierto(false);
+    };
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [abierto]);
+
   function confirmar() {
     if (nombre.trim() === '') return;
     onAnadir({
@@ -1034,92 +1095,111 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
     setAbierto(false);
   }
 
-  if (!abierto) {
-    return (
+  return (
+    <>
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="rounded-medio border border-dashed border-linea px-3 py-2 text-sm text-tinta-suave hover:border-acento hover:text-acento"
+        className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
       >
-        + Añadir producto vinculado
+        + Añadir producto bancario
       </button>
-    );
-  }
 
-  return (
-    <div className="w-full rounded-medio border border-linea bg-superficie p-4 flex flex-col gap-3">
-      <p className="text-sm font-medium text-tinta">Nuevo producto vinculado</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="vinc-nombre" className="text-sm font-medium text-tinta">
-            Nombre
-          </label>
-          <input
-            id="vinc-nombre"
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Seguro de vida, tarjeta…"
-            className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-          />
-        </div>
-        <InputPorcentaje
-          id="vinc-bonif"
-          etiqueta="Bonificación TIN"
-          valor={bonificacion}
-          onChange={setBonificacion}
-          ayuda="Reducción del TIN por tener este producto."
-        />
-        <InputMoneda
-          id="vinc-coste"
-          etiqueta="Coste anual"
-          valor={costeAnual}
-          onChange={setCosteAnual}
-        />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="vinc-anios" className="text-sm font-medium text-tinta">
-            Años exigidos (vacío = toda la hipoteca)
-          </label>
-          <input
-            id="vinc-anios"
-            type="number"
-            min={1}
-            value={aniosExigidos ?? ''}
-            placeholder="—"
-            onChange={(e) =>
-              setAniosExigidos(e.target.value === '' ? null : parseInt(e.target.value) || null)
-            }
-            className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-          />
-        </div>
-      </div>
-      <label className="flex items-center gap-2 text-sm text-tinta cursor-pointer">
-        <input
-          type="checkbox"
-          checked={obligatorio}
-          onChange={(e) => setObligatorio(e.target.checked)}
-          className="h-4 w-4 accent-acento"
-        />
-        El banco lo exige para obtener las condiciones del préstamo
-      </label>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={confirmar}
-          disabled={nombre.trim() === ''}
-          className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      {abierto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget) setAbierto(false);
+          }}
         >
-          Añadir
-        </button>
-        <button
-          type="button"
-          onClick={() => setAbierto(false)}
-          className="rounded-medio border border-linea px-4 py-2 text-sm text-tinta hover:bg-superficie-2"
-        >
-          Cancelar
-        </button>
-      </div>
-    </div>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-nueva-vinculacion"
+            className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
+          >
+            <p className="rotulo mb-1">Producto bancario</p>
+            <h2 id="titulo-nueva-vinculacion" className="font-display text-xl text-tinta">
+              Añadir producto bancario
+            </h2>
+
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="vinc-nombre" className="text-sm font-medium text-tinta">
+                  Nombre
+                </label>
+                <input
+                  id="vinc-nombre"
+                  type="text"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Seguro de vida, tarjeta…"
+                  autoFocus
+                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                />
+              </div>
+              <InputPorcentaje
+                id="vinc-bonif"
+                etiqueta="Bonificación TIN"
+                valor={bonificacion}
+                onChange={setBonificacion}
+                ayuda="Reducción del TIN por tener este producto."
+              />
+              <InputMoneda
+                id="vinc-coste"
+                etiqueta="Coste anual"
+                valor={costeAnual}
+                onChange={setCosteAnual}
+              />
+              <div className="flex flex-col gap-1">
+                <label htmlFor="vinc-anios" className="text-sm font-medium text-tinta">
+                  Años exigidos (vacío = toda la hipoteca)
+                </label>
+                <input
+                  id="vinc-anios"
+                  type="number"
+                  min={1}
+                  value={aniosExigidos ?? ''}
+                  placeholder="—"
+                  onChange={(e) =>
+                    setAniosExigidos(
+                      e.target.value === '' ? null : parseInt(e.target.value) || null,
+                    )
+                  }
+                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+                />
+              </div>
+            </div>
+            <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-tinta">
+              <input
+                type="checkbox"
+                checked={obligatorio}
+                onChange={(e) => setObligatorio(e.target.checked)}
+                className="h-4 w-4 accent-acento"
+              />
+              El banco lo exige para obtener las condiciones del préstamo
+            </label>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAbierto(false)}
+                className="rounded-medio border border-linea px-4 py-2.5 text-sm font-medium text-tinta hover:bg-superficie-2"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmar}
+                disabled={nombre.trim() === ''}
+                className="rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-sobre-acento disabled:opacity-50"
+              >
+                Añadir producto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1228,7 +1308,7 @@ function EditarVinculacion({
           type="button"
           onClick={guardar}
           disabled={nombre.trim() === ''}
-          className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento disabled:opacity-50"
         >
           Guardar cambios
         </button>

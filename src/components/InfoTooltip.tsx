@@ -1,42 +1,44 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export function InfoTooltip({
   texto,
-  alineado = 'centro',
 }: {
   readonly texto: string;
   readonly alineado?: 'centro' | 'derecha';
 }) {
   const [visible, setVisible] = useState(false);
-  const tooltipId = useId();
-  const ref = useRef<HTMLDivElement>(null);
+  const tituloId = useId();
+  const descripcionId = useId();
+  const entendidoRef = useRef<HTMLButtonElement>(null);
   const cerrar = useCallback(() => setVisible(false), []);
 
   useEffect(() => {
     if (!visible) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cerrar();
+
+    const onKey = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') cerrar();
     };
-    const onMouse = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) cerrar();
-    };
+    const overflowAnterior = document.body.style.overflow;
+
+    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onMouse);
+    entendidoRef.current?.focus();
+
     return () => {
+      document.body.style.overflow = overflowAnterior;
       document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onMouse);
     };
   }, [visible, cerrar]);
 
   return (
-    <div ref={ref} className="relative ml-1.5 inline-flex shrink-0 align-middle">
+    <div className="ml-1.5 inline-flex shrink-0 align-middle">
       <button
         type="button"
-        onClick={() => setVisible((v) => !v)}
+        onClick={() => setVisible(true)}
         aria-label="Más información"
         aria-expanded={visible}
-        aria-controls={tooltipId}
-        aria-describedby={visible ? tooltipId : undefined}
+        aria-controls={visible ? tituloId : undefined}
         className={[
           'relative flex h-5 w-5 items-center justify-center rounded-full',
           'before:absolute before:-inset-3 before:rounded-full',
@@ -58,25 +60,45 @@ export function InfoTooltip({
           <circle cx="12" cy="7.75" r="1" fill="currentColor" />
         </svg>
       </button>
-      {visible && (
-        <div
-          id={tooltipId}
-          role="tooltip"
-          className={`tooltip-anima absolute bottom-full z-50 mb-3 w-72 ${
-            alineado === 'derecha' ? 'right-0' : 'left-1/2 -translate-x-1/2'
-          }`}
-        >
-          <div className="rounded-grande border border-linea bg-superficie p-4 shadow-elevado">
-            <p className="text-[0.8125rem] leading-relaxed text-tinta-media">{texto}</p>
-          </div>
+
+      {visible &&
+        createPortal(
           <div
-            aria-hidden="true"
-            className={`absolute -bottom-[5px] h-2.5 w-2.5 rotate-45 border-b border-r border-linea bg-superficie ${
-              alineado === 'derecha' ? 'right-[7px]' : 'left-1/2 -translate-x-1/2'
-            }`}
-          />
-        </div>
-      )}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4"
+            onMouseDown={(evento) => {
+              if (evento.target === evento.currentTarget) cerrar();
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={tituloId}
+              aria-describedby={descripcionId}
+              className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+            >
+              <div>
+                <p className="rotulo mb-1">Ayuda</p>
+                <h2 id={tituloId} className="font-display text-xl text-tinta">
+                  Más información
+                </h2>
+              </div>
+
+              <p id={descripcionId} className="mt-4 text-sm leading-relaxed text-tinta-media">
+                {texto}
+              </p>
+
+              <button
+                ref={entendidoRef}
+                type="button"
+                onClick={cerrar}
+                className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

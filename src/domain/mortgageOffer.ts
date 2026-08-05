@@ -3,6 +3,7 @@ import type { EscenarioHipoteca, EstadoOferta, OfertaBancaria } from '@/domain/t
 
 export interface DatosOferta {
   id: string;
+  viviendaId: string;
   banco: string;
   nombre: string;
   fecha: string;
@@ -25,6 +26,7 @@ export function ofertaDesdeSimulacion(
 
   return {
     id: datos.id,
+    viviendaId: datos.viviendaId,
     banco: datos.banco.trim(),
     nombre: datos.nombre.trim(),
     fecha: datos.fecha,

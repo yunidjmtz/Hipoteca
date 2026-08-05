@@ -53,7 +53,7 @@ function Marca({ compacta = false }: { readonly compacta?: boolean }) {
     <div className={compacta ? 'flex items-center gap-3' : 'block'}>
       <div
         className={[
-          'flex shrink-0 items-center justify-center rounded-medio bg-acento text-sobre-acento font-display font-semibold',
+          'flex shrink-0 items-center justify-center rounded-medio bg-acento text-sobre-acento font-display font-semibold shadow-papel',
           compacta ? 'h-8 w-8 text-sm' : 'h-10 w-10 text-base',
         ].join(' ')}
         aria-hidden="true"
@@ -62,7 +62,7 @@ function Marca({ compacta = false }: { readonly compacta?: boolean }) {
       </div>
       <div className={compacta ? '' : 'mt-3'}>
         <p
-          className={`font-display leading-tight text-tinta ${compacta ? 'text-base' : 'text-xl'}`}
+          className={`font-display font-semibold tracking-tight leading-tight text-tinta ${compacta ? 'text-base' : 'text-xl'}`}
         >
           Mi Hipoteca
         </p>
@@ -232,7 +232,7 @@ export function Disposicion() {
       {/* Cabecera compacta: tableta vertical y móvil */}
       <header
         inert={necesitaElegirCcaa}
-        className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/95 px-4 backdrop-blur-sm lg:hidden"
+        className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/80 px-4 backdrop-blur-xl lg:hidden"
       >
         <div className="flex items-center gap-3">
           <div className="flex-1">
@@ -282,7 +282,7 @@ export function Disposicion() {
       <nav
         inert={necesitaElegirCcaa}
         aria-label="Secciones"
-        className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
+        className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
       >
         <ul className="grid grid-cols-5">
           {SECCIONES.map((seccion) => (
@@ -293,9 +293,7 @@ export function Disposicion() {
                 className={({ isActive }) =>
                   [
                     'flex min-h-toque flex-col items-center justify-center gap-1 px-0.5 py-2 text-center transition-colors',
-                    isActive
-                      ? 'text-acento shadow-[inset_0_2px_0_0_var(--c-acento)]'
-                      : 'text-tinta-suave hover:text-tinta',
+                    isActive ? 'font-semibold text-acento' : 'text-tinta-suave hover:text-tinta',
                   ].join(' ')
                 }
               >
@@ -454,7 +452,7 @@ export function Disposicion() {
               type="button"
               disabled={ccaaInicial === ''}
               onClick={() => actualizarPreferencias({ ccaa: ccaaInicial })}
-              className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-white hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {ccaaInicial !== '' && ccaaInicial !== 'Aragón'
                 ? 'Continuar con estimación genérica'
