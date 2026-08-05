@@ -34,11 +34,13 @@ export default defineConfig({
     tailwindcss(),
     cspDesarrollo(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       injectRegister: 'script-defer',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
       workbox: {
         cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         navigateFallback: 'index.html',
         globPatterns: ['**/*.{html,js,css,ico,png}'],
       },
