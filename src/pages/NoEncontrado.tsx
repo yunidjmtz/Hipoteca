@@ -17,7 +17,7 @@ export function NoEncontrado() {
             to="/"
             className="inline-flex min-h-toque items-center rounded-medio bg-acento px-4 text-sm font-medium text-sobre-acento"
           >
-            Volver al resumen
+            ← Volver al resumen
           </Link>
         </p>
       </Panel>

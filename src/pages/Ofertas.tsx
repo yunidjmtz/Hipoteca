@@ -1,8 +1,10 @@
 import { Fragment, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useEstado } from '@/app/EstadoProvider';
 import { useNavigate, useSearchParams } from 'react-router';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputNumeroEntero } from '@/components/InputNumeroEntero';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { Panel } from '@/components/Panel';
 import {
   EncabezadoConUnidad,
@@ -135,14 +137,6 @@ function Recomendacion({
                   <span className="ml-1 font-texto text-xs font-medium">valoración</span>
                 </span>
               )}
-              <button
-                type="button"
-                onClick={onConfigurar}
-                aria-label="Cómo se calcula la valoración"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-acento/25 bg-acento-tenue text-xs font-bold text-acento transition-colors hover:border-acento/45 hover:bg-acento/15"
-              >
-                i
-              </button>
             </div>
           </div>
           <button
@@ -150,16 +144,24 @@ function Recomendacion({
             onClick={() => onVerHipoteca(mejor.oferta.id)}
             className="shrink-0 rounded-medio border border-linea px-3 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
           >
-            Ir a la hipoteca
+            Ir a la hipoteca →
           </button>
         </div>
 
         {comparacion.length === 1 && (
-          <p className="mt-3 text-xs text-ajustado">
+          <p className="mt-3 pr-9 text-xs text-ajustado">
             Añade otra oferta para confirmar la recomendación.
           </p>
         )}
       </div>
+      <button
+        type="button"
+        onClick={onConfigurar}
+        aria-label="Cómo se calcula la valoración"
+        className="absolute right-4 bottom-4 flex h-6 w-6 items-center justify-center rounded-full border border-acento/25 bg-acento-tenue text-xs font-bold text-acento transition-colors hover:border-acento/45 hover:bg-acento/15"
+      >
+        i
+      </button>
     </section>
   );
 }
@@ -473,16 +475,20 @@ function DetallesAvanzadosHipoteca({ escenario }: { readonly escenario: Escenari
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-medio border border-linea p-4">
-        <p className="rotulo mb-1">Comparador</p>
-        <h3 className="font-display text-lg text-tinta">Plazos alternativos</h3>
-        <TablaResponsive minWidth="520px" className="mt-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="rotulo mb-1">Comparador</p>
+            <h3 className="font-display text-lg text-tinta">Plazos alternativos</h3>
+          </div>
+          <InfoTooltip texto="Compara la misma financiación desde el inicio. En hipotecas variables o mixtas, se asume que el Euríbor actual se mantiene." />
+        </div>
+        <TablaResponsive minWidth="420px" className="mt-4">
           <thead>
             <tr className="border-b border-linea text-left text-xs text-tinta-suave">
               <th className="py-2 pr-3 font-medium">Plazo</th>
-              <th className="py-2 pr-3 font-medium">Cuota</th>
-              <th className="py-2 pr-3 font-medium">Diferencia /mes</th>
-              <th className="py-2 pr-3 font-medium">Intereses</th>
-              <th className="py-2 font-medium">Diferencia</th>
+              <th className="py-2 pr-3 font-medium">Cuota /mes</th>
+              <th className="py-2 pr-3 font-medium">Cambio /mes</th>
+              <th className="py-2 font-medium">Intereses totales</th>
             </tr>
           </thead>
           <tbody>
@@ -494,7 +500,6 @@ function DetallesAvanzadosHipoteca({ escenario }: { readonly escenario: Escenari
               const cuota = flujoPlazo[1]?.cuota ?? ZERO;
               const intereses = sumCents(flujoPlazo.slice(1).map((linea) => linea.intereses));
               const diferenciaCuota = subtractCents(cuota, cuotaBase);
-              const diferenciaIntereses = subtractCents(intereses, interesesBase);
 
               return (
                 <tr
@@ -519,29 +524,24 @@ function DetallesAvanzadosHipoteca({ escenario }: { readonly escenario: Escenari
                     {diferenciaCuota >= 0 ? '+' : ''}
                     <ValorEurosTabla valor={diferenciaCuota} />
                   </td>
-                  <td className="py-2 pr-3 font-cifra text-tinta">
+                  <td className="py-2 font-cifra text-tinta">
                     <ValorEurosTabla valor={intereses} />
-                  </td>
-                  <td
-                    className={`py-2 font-cifra ${diferenciaIntereses > 0 ? 'text-no-viable' : 'text-comodo'}`}
-                  >
-                    {diferenciaIntereses >= 0 ? '+' : ''}
-                    <ValorEurosTabla valor={diferenciaIntereses} />
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </TablaResponsive>
-        <p className="mt-3 text-xs leading-relaxed text-tinta-suave">
-          Compara la misma financiación desde el inicio. En hipotecas variables o mixtas, se asume
-          que el Euríbor actual se mantiene.
-        </p>
       </section>
 
       <section className="rounded-medio border border-linea p-4">
-        <p className="rotulo mb-1">Comparador</p>
-        <h3 className="font-display text-lg text-tinta">Entrada adicional</h3>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="rotulo mb-1">Comparador</p>
+            <h3 className="font-display text-lg text-tinta">Entrada adicional</h3>
+          </div>
+          <InfoTooltip texto="Una entrada adicional reduce el capital financiado y los intereses totales." />
+        </div>
         <TablaResponsive minWidth="440px" className="mt-4">
           <thead>
             <tr className="border-b border-linea text-left text-xs text-tinta-suave">
@@ -587,9 +587,6 @@ function DetallesAvanzadosHipoteca({ escenario }: { readonly escenario: Escenari
             })}
           </tbody>
         </TablaResponsive>
-        <p className="mt-3 text-xs text-tinta-suave">
-          Una entrada adicional reduce el capital financiado y los intereses totales.
-        </p>
       </section>
     </div>
   );
@@ -603,6 +600,7 @@ interface PropsTarjetaHipoteca {
 
 function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipoteca) {
   const [detallesAvanzadosAbiertos, setDetallesAvanzadosAbiertos] = useState(false);
+  const [vinculacionesAbiertas, setVinculacionesAbiertas] = useState(false);
   const { oferta, metricas } = resultado;
   const { escenario } = oferta;
   const flujoInput = flujoInputDesdeEscenario({ ...escenario, sueloTin: 0 });
@@ -627,13 +625,6 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
             <h2 className="font-display text-lg leading-snug text-tinta">{oferta.banco}</h2>
           </div>
           <div className="flex shrink-0 gap-1.5">
-            <button
-              type="button"
-              className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
-              onClick={() => setDetallesAvanzadosAbiertos(true)}
-            >
-              Detalles
-            </button>
             <button
               type="button"
               className="rounded-medio border border-linea px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-acento-tenue"
@@ -731,37 +722,231 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
         <p className="mt-2 text-sm leading-relaxed text-tinta-media">{oferta.notas}</p>
       )}
 
-      {detallesAvanzadosAbiertos && (
-        <div className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 sm:items-center sm:justify-center">
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-linea pt-3">
+        <button
+          type="button"
+          onClick={() => setDetallesAvanzadosAbiertos(true)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-medio px-3 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue active:scale-[0.98]"
+        >
+          Ver detalles
+          <svg
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            className="h-4 w-4 fill-none stroke-current stroke-2"
+          >
+            <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => setVinculacionesAbiertas(true)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-medio px-3 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue active:scale-[0.98]"
+        >
+          Ver vinculaciones
+          <svg
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            className="h-4 w-4 fill-none stroke-current stroke-2"
+          >
+            <path d="m8 5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      {detallesAvanzadosAbiertos &&
+        createPortal(
+        <div className="fixed inset-0 z-50 bg-superficie">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={`titulo-detalles-avanzados-${oferta.id}`}
-            className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado"
+            className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
           >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="rotulo mb-1">Hipoteca</p>
-                <h2
-                  id={`titulo-detalles-avanzados-${oferta.id}`}
-                  className="font-display text-xl text-tinta"
+            <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
+              <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h2
+                    id={`titulo-detalles-avanzados-${oferta.id}`}
+                    className="font-display text-xl leading-tight text-tinta"
+                  >
+                    Detalles avanzados
+                  </h2>
+                  <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetallesAvanzadosAbiertos(false)}
+                  aria-label="Cerrar detalles avanzados"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
                 >
-                  Detalles avanzados
-                </h2>
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setDetallesAvanzadosAbiertos(false)}
-                aria-label="Cerrar detalles avanzados"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-medio border border-linea text-lg text-tinta-media hover:bg-superficie-2"
-              >
-                ×
-              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
+              <div className="mx-auto w-full max-w-3xl">
+                <DetallesAvanzadosHipoteca escenario={escenario} />
+              </div>
             </div>
-            <DetallesAvanzadosHipoteca escenario={escenario} />
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
+
+      {vinculacionesAbiertas &&
+        createPortal(
+        <div className="fixed inset-0 z-50 bg-superficie">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`titulo-vinculaciones-${oferta.id}`}
+            className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
+          >
+            <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
+              <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h2
+                    id={`titulo-vinculaciones-${oferta.id}`}
+                    className="font-display text-xl leading-tight text-tinta"
+                  >
+                    Productos vinculados
+                  </h2>
+                  <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVinculacionesAbiertas(false)}
+                  aria-label="Cerrar productos vinculados"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
+                >
+                  ×
+                </button>
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
+              <div className="mx-auto w-full max-w-2xl">
+                <p className="mb-4 text-sm leading-relaxed text-tinta-media">
+                  Consulta los productos, costes y condiciones asociados a esta hipoteca.
+                </p>
+
+                {escenario.vinculaciones.length === 0 ? (
+                  <div className="rounded-2xl bg-superficie-2 px-4 py-6 text-center">
+                    <p className="text-sm font-semibold text-tinta">Sin vinculaciones</p>
+                    <p className="mt-1 text-sm text-tinta-media">
+                      Esta oferta no tiene productos vinculados registrados.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {escenario.vinculaciones.map((vinculacion) => (
+                  <section
+                    key={vinculacion.id}
+                    className="rounded-2xl border border-linea bg-superficie p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-tinta">{vinculacion.nombre}</h3>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          <span
+                            className={[
+                              'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
+                              vinculacion.activo
+                                ? 'bg-comodo-tenue text-comodo'
+                                : 'bg-superficie-2 text-tinta-media',
+                            ].join(' ')}
+                          >
+                            {vinculacion.activo ? 'Activa' : 'No activa'}
+                          </span>
+                          <span
+                            className={[
+                              'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
+                              vinculacion.obligatorio
+                                ? 'bg-ajustado-tenue text-ajustado'
+                                : 'bg-superficie-2 text-tinta-media',
+                            ].join(' ')}
+                          >
+                            {vinculacion.obligatorio ? 'Obligatoria' : 'Opcional'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[0.6875rem] font-medium text-tinta-media">
+                          Bonificación TIN
+                        </p>
+                        <p className="font-cifra font-bold tabular-nums text-acento">
+                          −{(vinculacion.bonificacionTin * 100).toFixed(2)} %
+                        </p>
+                      </div>
+                    </div>
+
+                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                      <div>
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          Coste inicial
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                          {formatEuros(vinculacion.costeInicial)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          Coste anual
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                          {formatEuros(vinculacion.costeAnual)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          Incremento anual
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                          {(vinculacion.incrementoAnual * 100).toFixed(2)} %
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          Tiempo exigido
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                          {vinculacion.aniosExigidos === null
+                            ? 'Sin límite'
+                            : `${vinculacion.aniosExigidos} años`}
+                        </dd>
+                      </div>
+                      {vinculacion.bonificacionMaxima !== undefined && (
+                        <div className="col-span-2">
+                          <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                            Bonificación máxima
+                          </dt>
+                          <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                            {(vinculacion.bonificacionMaxima * 100).toFixed(2)} %
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+
+                    {vinculacion.observaciones.trim() !== '' && (
+                      <div className="mt-4 border-t border-linea pt-3">
+                        <p className="text-[0.6875rem] font-medium text-tinta-media">
+                          Observaciones
+                        </p>
+                        <p className="mt-1 text-sm leading-relaxed text-tinta">
+                          {vinculacion.observaciones}
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+          document.body,
+        )}
     </article>
   );
 }
@@ -774,6 +959,7 @@ function Hipotecas() {
   const [puntuacionActiva, setPuntuacionActiva] = useState(true);
   const [pesos, setPesos] = useState<PesosComparacion>(PESOS_POR_DEFECTO);
   const [mostrarConfigPesos, setMostrarConfigPesos] = useState(false);
+  const [selectorViviendaAbierto, setSelectorViviendaAbierto] = useState(false);
   const primeraViviendaId = estado.viviendas[0]?.id ?? '';
   const viviendaSolicitadaId = parametros.get('vivienda') ?? '';
   const viviendaSeleccionada =
@@ -874,37 +1060,126 @@ function Hipotecas() {
   return (
     <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem+2.75rem+1.25rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
       <div className="flex shrink-0 items-center justify-end gap-2">
-        <label className="min-w-0 flex-1 sm:max-w-xs">
-          <span className="sr-only">Vivienda para comparar hipotecas</span>
-          <select
-            value={viviendaSeleccionadaId}
-            onChange={(evento) => {
-              setIndiceActivo(0);
-              setParametros({ tab: 'hipotecas', vivienda: evento.target.value });
-            }}
-            disabled={estado.viviendas.length === 0}
-            className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:border-acento focus:outline-none focus:ring-2 focus:ring-acento/40 disabled:opacity-50"
-          >
-            {estado.viviendas.length === 0 ? (
-              <option value="">Añade una vivienda</option>
-            ) : (
-              estado.viviendas.map((vivienda) => (
-                <option key={vivienda.id} value={vivienda.id}>
-                  {vivienda.nombre}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+        <button
+          type="button"
+          onClick={() => setSelectorViviendaAbierto(true)}
+          disabled={estado.viviendas.length === 0}
+          aria-haspopup="dialog"
+          aria-expanded={selectorViviendaAbierto}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-linea bg-superficie px-3 py-2 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:max-w-xs"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-acento/10 text-acento">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4.5 w-4.5 fill-none stroke-current stroke-2">
+              <path d="m3 11 9-7 9 7" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.5 9.5V20h13V9.5M9.5 20v-6h5v6" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-semibold uppercase tracking-wide text-tinta-suave">
+              Vivienda
+            </span>
+            <span className="block truncate text-sm font-medium text-tinta">
+              {viviendaSeleccionada?.nombre ?? 'Añade una vivienda'}
+            </span>
+          </span>
+          <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 fill-none stroke-tinta-suave stroke-2">
+            <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
         <button
           type="button"
           onClick={abrirNueva}
           disabled={viviendaSeleccionada === null}
           className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {ofertasVivienda.length === 0 ? '+ Añadir primera oferta' : '+ Añadir oferta'}
+          {ofertasVivienda.length === 0 ? '+ Añadir primera oferta →' : '+ Añadir oferta →'}
         </button>
       </div>
+
+      {selectorViviendaAbierto && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+          onKeyDown={(evento) => {
+            if (evento.key === 'Escape') setSelectorViviendaAbierto(false);
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Cerrar selector de vivienda"
+            onClick={() => setSelectorViviendaAbierto(false)}
+            className="absolute inset-0 bg-tinta/40 backdrop-blur-[2px]"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-selector-vivienda"
+            className="relative w-full rounded-t-3xl bg-superficie px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-elevado sm:max-w-sm sm:rounded-3xl sm:p-5"
+          >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-linea sm:hidden" />
+            <div className="mb-3 flex items-center justify-between">
+              <h2 id="titulo-selector-vivienda" className="font-display text-xl text-tinta">
+                Elige una vivienda
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectorViviendaAbierto(false)}
+                aria-label="Cerrar"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta-media"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {estado.viviendas.map((vivienda) => {
+                const seleccionada = vivienda.id === viviendaSeleccionadaId;
+                return (
+                  <button
+                    key={vivienda.id}
+                    type="button"
+                    onClick={() => {
+                      setIndiceActivo(0);
+                      setParametros({ tab: 'hipotecas', vivienda: vivienda.id });
+                      setSelectorViviendaAbierto(false);
+                    }}
+                    className={[
+                      'flex min-h-14 items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.98]',
+                      seleccionada
+                        ? 'border-acento bg-acento/8'
+                        : 'border-linea bg-superficie hover:bg-superficie-2',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                        seleccionada ? 'bg-acento text-sobre-acento' : 'bg-superficie-2 text-tinta-media',
+                      ].join(' ')}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4.5 w-4.5 fill-none stroke-current stroke-2">
+                        <path d="m3 11 9-7 9 7" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5.5 9.5V20h13V9.5" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-tinta">
+                      {vivienda.nombre}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={[
+                        'flex h-5 w-5 items-center justify-center rounded-full border text-xs',
+                        seleccionada
+                          ? 'border-acento bg-acento text-sobre-acento'
+                          : 'border-linea text-transparent',
+                      ].join(' ')}
+                    >
+                      ✓
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {viviendaSeleccionada === null ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 text-center">
@@ -917,7 +1192,7 @@ function Hipotecas() {
             onClick={() => void navegar('/ofertas/vivienda')}
             className="mt-4 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
           >
-            Añadir vivienda
+            Añadir vivienda →
           </button>
         </div>
       ) : (
@@ -1623,7 +1898,7 @@ function Viviendas() {
         onClick={() => void navegar('/ofertas/vivienda')}
         className="shrink-0 self-end rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
       >
-        + Añadir vivienda
+        + Añadir vivienda →
       </button>
 
       {estado.viviendas.length > 0 && (
@@ -1831,7 +2106,7 @@ export function EditorVivienda() {
           onClick={() => void navegar('/ofertas')}
           className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
         >
-          Volver a viviendas
+          ← Volver a viviendas
         </button>
       </div>
       <FormularioVivienda

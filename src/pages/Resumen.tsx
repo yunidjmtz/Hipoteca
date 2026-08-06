@@ -165,7 +165,7 @@ function TarjetaResumen({
   return (
     <div
       className={[
-        'rounded-medio border px-4 py-3',
+        'relative rounded-medio border px-4 py-3',
         destacado
           ? 'border-acento/40 bg-acento-tenue'
           : alerta
@@ -173,11 +173,15 @@ function TarjetaResumen({
             : 'border-linea bg-superficie-2',
       ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="whitespace-nowrap text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
+      <div className="pr-4">
+        <p className="text-[0.6rem] font-semibold uppercase leading-4 tracking-[0.04em] text-tinta-media">
           {rotulo}
         </p>
-        {detalle && <InfoTooltip texto={detalle} alineado="derecha" />}
+        {detalle && (
+          <div className="absolute top-2 right-2">
+            <InfoTooltip texto={detalle} alineado="derecha" />
+          </div>
+        )}
       </div>
       <p
         className={[
@@ -354,7 +358,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
               to="/"
               className="rounded-medio bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento"
             >
-              Completar Tus datos
+              Completar Tus datos →
             </Link>
             <span className="text-xs text-tinta-media">Redirigiendo automáticamente…</span>
           </div>
@@ -606,7 +610,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
               to="/escala"
               className="inline-flex shrink-0 items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
             >
-              Ver escala completa →
+              Ver escala →
             </Link>
           </section>
 
@@ -711,7 +715,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
               to="/ofertas/simulador"
               className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento"
             >
-              Añadir oferta
+              Añadir oferta →
             </Link>
           </div>
         </section>

@@ -404,7 +404,7 @@ export function Simulador() {
             }
             className="shrink-0 rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
           >
-            Volver a ofertas
+            ← Volver a ofertas
           </button>
         </div>
       </header>
