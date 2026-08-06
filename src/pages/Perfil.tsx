@@ -556,12 +556,7 @@ export function Perfil() {
   return (
     <div className="flex flex-col gap-5 aparece-1">
       <header>
-        <p className="rotulo mb-1">Paso 1</p>
         <h1 className="font-display text-2xl text-tinta">Cuéntanos tu situación</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-tinta-media">
-          Empieza por la vivienda, tus ingresos, ahorros y deudas. Los cálculos se actualizan y se
-          guardan automáticamente en este dispositivo.
-        </p>
       </header>
 
       {/* ── Panel con tabs ────────────────────────────────────────────── */}
