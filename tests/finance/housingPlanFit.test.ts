@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest';
+import { toCents, ZERO } from '@/core/money';
+import { evaluarEncajePlanVivienda } from '@/finance/housingPlanFit';
+import type { EstadoPersistido, ViviendaGuardada } from '@/domain/types';
+import { ESTADO_INICIAL } from '@/storage/defaults';
+
+function vivienda(precioEuros: number): ViviendaGuardada {
+  return {
+    id: 'vivienda-prueba',
+    nombre: 'Vivienda de prueba',
+    fecha: '2026-08-08',
+    direccion: 'Calle Mayor, 1',
+    anuncioUrl: '',
+    precioVenta: toCents(precioEuros),
+    presupuestoReforma: ZERO,
+    reforma: '',
+    superficieM2: 80,
+    habitaciones: 2,
+    esExterior: false,
+    tieneTrastero: false,
+    tieneGaraje: false,
+    reformas: [],
+    notas: '',
+  };
+}
+
+function estadoConPlan({
+  precioObjetivo = 100_000,
+  ingreso = 5_000,
+  ahorro = 70_000,
+}: {
+  precioObjetivo?: number;
+  ingreso?: number;
+  ahorro?: number;
+} = {}): EstadoPersistido {
+  return {
+    ...ESTADO_INICIAL,
+    preferencias: { ...ESTADO_INICIAL.preferencias, precioObjetivo: toCents(precioObjetivo) },
+    perfil: {
+      ...ESTADO_INICIAL.perfil,
+      titulares: [
+        { ...ESTADO_INICIAL.perfil.titulares[0], netoPorPaga: toCents(ingreso) },
+      ] as [EstadoPersistido['perfil']['titulares'][number]],
+      ahorrosActuales: toCents(ahorro),
+    },
+  };
+}
+
+describe('evaluarEncajePlanVivienda', () => {
+  it('marca como dentro del plan una vivienda igual o inferior al presupuesto', () => {
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(100_000),
+      estadoConPlan({ ingreso: 0, ahorro: 0 }),
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('en_plan');
+    expect(resultado.diferenciaPresupuesto).toBe(ZERO);
+  });
+
+  it('indica que una vivienda por encima del plan es alcanzable si cuota y ahorro lo permiten', () => {
+    const resultado = evaluarEncajePlanVivienda(vivienda(150_000), estadoConPlan(), '2026-08-08');
+
+    expect(resultado.estado).toBe('alcanzable');
+    expect(resultado.diferenciaPresupuesto).toBe(toCents(50_000));
+  });
+
+  it('marca como no viable una vivienda que supera el plan y cuya cuota no es asumible', () => {
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(500_000),
+      estadoConPlan({ ingreso: 1_000, ahorro: 300_000 }),
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('no_viable');
+    expect(resultado.limitante).toBe('ingresos');
+    expect(resultado.prestamoMaximoPorIngresos).toBeLessThan(
+      resultado.evaluacion?.importeFinanciado ?? ZERO,
+    );
+  });
+
+  it('no clasifica viviendas hasta que el plan tenga un presupuesto', () => {
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(150_000),
+      estadoConPlan({ precioObjetivo: 0 }),
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('sin_presupuesto');
+  });
+});

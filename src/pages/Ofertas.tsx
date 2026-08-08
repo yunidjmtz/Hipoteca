@@ -41,6 +41,10 @@ import {
   type ResultadoComparacionVivienda,
 } from '@/finance/housingComparison';
 import { calcularCosteVivienda } from '@/finance/housingCosts';
+import {
+  evaluarEncajePlanVivienda,
+  type EstadoEncajePlanVivienda,
+} from '@/finance/housingPlanFit';
 import type {
   Cents,
   EscenarioHipoteca,
@@ -1698,6 +1702,47 @@ function precioPorM2Formateado(valor: number): string {
   return `${formatEntero(Math.round(valor))} €/m²`;
 }
 
+const CONFIG_ENCAJE_PLAN: Record<
+  EstadoEncajePlanVivienda,
+  { texto: string; clases: string }
+> = {
+  en_plan: {
+    texto: 'Encaja en tu plan',
+    clases: 'border-comodo/35 bg-comodo-tenue text-comodo',
+  },
+  alcanzable: {
+    texto: 'Alcanzable',
+    clases: 'border-revisar/35 bg-revisar-tenue text-revisar',
+  },
+  no_viable: {
+    texto: 'No viable',
+    clases: 'border-no-viable/35 bg-no-viable-tenue text-no-viable',
+  },
+  sin_presupuesto: {
+    texto: 'Sin presupuesto',
+    clases: 'border-linea bg-superficie-2 text-tinta-media',
+  },
+};
+
+function BadgeEncajePlan({
+  estado,
+  limitante,
+}: {
+  readonly estado: EstadoEncajePlanVivienda;
+  readonly limitante: 'ingresos' | 'ahorro' | null;
+}) {
+  const config = CONFIG_ENCAJE_PLAN[estado];
+  return (
+    <span
+      className={`inline-flex rounded-chico border px-1.5 py-0.5 text-[0.6875rem] font-semibold ${config.clases}`}
+    >
+      {estado === 'no_viable' && limitante === 'ingresos'
+        ? 'No viable por ingresos'
+        : config.texto}
+    </span>
+  );
+}
+
 function RecomendacionVivienda({
   viviendas,
   comparacion,
@@ -1731,9 +1776,9 @@ function RecomendacionVivienda({
 
   return (
     <>
-      <section className="relative overflow-hidden rounded-grande border border-acento/35 bg-superficie shadow-papel">
+      <section className="relative shrink-0 overflow-hidden rounded-grande border border-acento/35 bg-superficie shadow-papel">
         <div className="absolute inset-y-0 left-0 w-1 bg-acento" aria-hidden="true" />
-        <div className="p-4 pl-5 sm:p-5 sm:pl-6">
+        <div className="p-5 pb-7 pl-6 sm:p-6 sm:pb-8 sm:pl-7">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="rotulo mb-1 text-acento">
@@ -1956,19 +2001,28 @@ function Viviendas() {
             {estado.viviendas.map((vivienda, indice) => {
               if (indice !== indiceVisible) return null;
               const { costeAntesImpuestos, costeTotal } = calcularCosteVivienda(vivienda, estado);
+              const encajePlan = evaluarEncajePlanVivienda(vivienda, estado);
               return (
                 <article
                   id={`vivienda-${vivienda.id}`}
                   key={vivienda.id}
                   tabIndex={-1}
-                  className="bg-superficie p-4 sm:p-5"
+                  className={`bg-superficie p-4 sm:p-5 ${
+                    encajePlan.estado === 'no_viable' ? 'border-l-4 border-no-viable' : ''
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="rotulo mb-1">Vivienda</p>
-                      <h3 className="font-display text-lg leading-snug text-tinta">
-                        {vivienda.nombre}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-display text-lg leading-snug text-tinta">
+                          {vivienda.nombre}
+                        </h3>
+                        <BadgeEncajePlan
+                          estado={encajePlan.estado}
+                          limitante={encajePlan.limitante}
+                        />
+                      </div>
                       <p className="mt-1 text-sm text-tinta-media">{vivienda.direccion}</p>
                     </div>
                     <div className="flex shrink-0 gap-1.5">
@@ -2037,6 +2091,38 @@ function Viviendas() {
                       </dd>
                     </div>
                   </dl>
+                  <div
+                    className={`mt-3 rounded-medio px-3 py-2.5 text-sm ${
+                      encajePlan.estado === 'no_viable'
+                        ? 'bg-no-viable-tenue text-no-viable'
+                        : encajePlan.estado === 'sin_presupuesto'
+                          ? 'bg-superficie-2 text-tinta-media'
+                          : 'bg-superficie-2 text-tinta'
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {encajePlan.estado === 'en_plan'
+                        ? `Precio dentro de tu presupuesto: ${formatEuros(encajePlan.presupuestoPlanificado)}.`
+                        : encajePlan.estado === 'alcanzable'
+                          ? `Supera tu presupuesto en ${formatEuros(encajePlan.diferenciaPresupuesto)}, pero es alcanzable.`
+                          : encajePlan.estado === 'no_viable'
+                            ? encajePlan.limitante === 'ingresos'
+                              ? 'No viable por ingresos: el banco no cubriría la financiación necesaria.'
+                              : 'No viable con tu plan actual.'
+                            : 'Añade un precio objetivo para comprobar si encaja en tu plan.'}
+                    </p>
+                    {encajePlan.limitante === 'ingresos' &&
+                    encajePlan.evaluacion !== null &&
+                    encajePlan.prestamoMaximoPorIngresos !== null ? (
+                      <p className="mt-0.5 text-xs opacity-90">
+                        Financiación necesaria: {formatEuros(encajePlan.evaluacion.importeFinanciado)} ·
+                        Máximo estimado por ingresos:{' '}
+                        {formatEuros(encajePlan.prestamoMaximoPorIngresos)}.
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-xs opacity-90">{encajePlan.motivo}</p>
+                    )}
+                  </div>
                   {vivienda.reformas.length > 0 && (
                     <div className="mt-3">
                       <p className="text-xs font-medium text-tinta">Reformas</p>
