@@ -10,7 +10,6 @@ function vivienda(precioEuros: number): ViviendaGuardada {
     nombre: 'Vivienda de prueba',
     fecha: '2026-08-08',
     direccion: 'Calle Mayor, 1',
-    anuncioUrl: '',
     precioVenta: toCents(precioEuros),
     presupuestoReforma: ZERO,
     reforma: '',
@@ -21,7 +20,7 @@ function vivienda(precioEuros: number): ViviendaGuardada {
     tieneGaraje: false,
     reformas: [],
     notas: '',
-  };
+  } as unknown as ViviendaGuardada;
 }
 
 function estadoConPlan({
