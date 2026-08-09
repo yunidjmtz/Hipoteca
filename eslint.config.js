@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules'] },
+  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules', 'public'] },
 
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
@@ -82,14 +82,20 @@ export default tseslint.config(
   },
 
   {
-    files: ['vite.config.ts', 'playwright.config.ts', 'eslint.config.js', 'e2e/**/*.ts'],
+    files: [
+      'vite.config.ts',
+      'playwright.config.ts',
+      'eslint.config.js',
+      'e2e/**/*.ts',
+      'netlify/functions/**/*.mjs',
+    ],
     languageOptions: { globals: globals.node },
   },
 
   // La propia configuración de ESLint no forma parte de ningún tsconfig, así
   // que las reglas que necesitan tipos no pueden razonar sobre ella.
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'netlify/functions/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 

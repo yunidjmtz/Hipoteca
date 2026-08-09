@@ -10,6 +10,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.local
+.env
+.env.*
+!.env.example
 .claude/
 .playwright-mcp/
 *.log

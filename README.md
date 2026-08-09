@@ -1,9 +1,9 @@
 ﻿# Asistente de compra de vivienda
 
-Aplicación web **privada y estática** que responde a «¿puedo comprar una vivienda, cuánto y
-cuándo?» con cifras trazables. Todo el cálculo ocurre en el navegador: no hay backend ni base de
-datos remota. La única petición externa permitida consulta una vez al día el TIN medio oficial de
-las hipotecas sobre viviendas en la API del INE; no se envían datos personales.
+Aplicación web **privada** que responde a «¿puedo comprar una vivienda, cuánto y cuándo?» con
+cifras trazables. Todo el cálculo y los datos financieros permanecen en el navegador; no hay base
+de datos remota. La aplicación consulta el TIN medio oficial en la API del INE y puede importar,
+bajo petición del usuario, los datos públicos de un anuncio mediante una función del servidor.
 
 Incluye perfil financiero, capacidad de compra, planificación del ahorro, comparación de viviendas
 y ofertas, simulación de hipotecas fijas, variables y mixtas, y amortización anticipada.
@@ -27,6 +27,17 @@ tomar una decisión.
 npm install
 npm run dev
 ```
+
+Para probar localmente la importación de anuncios define una clave de Firecrawl y usa el arranque
+normal:
+
+```bash
+npm run dev
+```
+
+Copia `.env.example` a `.env` y define `FIRECRAWL_API_KEY`. La clave se usa únicamente en la
+función del servidor y nunca debe llevar el prefijo `VITE_`. `npm run dev:netlify` permite
+comprobar además el entorno completo de Netlify antes de desplegar.
 
 ## Comandos
 
@@ -52,8 +63,9 @@ npx playwright install webkit chromium
 ## Despliegue
 
 El destino previsto es una **tableta**, así que la aplicación se compila con `base: './'` y usa un
-**router por hash**: se puede servir desde cualquier carpeta de cualquier hosting estático, sin
-reglas de reescritura y sin configurar nada en el servidor.
+**router por hash**. La parte de cálculo se puede servir desde cualquier hosting estático. La
+importación de anuncios requiere desplegar también `netlify/functions` o proporcionar un endpoint
+equivalente.
 
 ```bash
 npm run build      # deja todo en dist/
@@ -87,9 +99,10 @@ e2e/            # Playwright, pocos y significativos
 Están todas en el plan, pero estas tres se hacen cumplir por herramientas y conviene conocerlas
 antes de tocar código:
 
-1. **Red limitada al INE.** `index.html` lleva una CSP restrictiva que solo permite consultar
-   `servicios.ine.es`, y un test de Playwright falla si el `dist` pide cualquier otro recurso
-   externo. Nada de fuentes de CDN: se usa el _font stack_ del sistema y los iconos son SVG inline.
+1. **Credenciales fuera del navegador.** `index.html` permite conectar con el mismo origen y con
+   `servicios.ine.es`. Los proveedores externos de importación se llaman desde una función del
+   servidor; el navegador no recibe sus claves. Nada de fuentes de CDN: se usa el _font stack_ del
+   sistema y los iconos son SVG inline.
 2. **El motor financiero es puro.** ESLint prohíbe que `src/core`, `src/domain`, `src/config` y
    `src/finance` importen React, react-router, Recharts o cualquier cosa de la interfaz o del
    almacenamiento. La dependencia va siempre en el otro sentido.

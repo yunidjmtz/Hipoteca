@@ -3,9 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Asistente privado de compra de vivienda. Cálculo íntegro en el navegador, sin backend ni peticiones de red.",
+  "description": "Asistente privado de compra de vivienda con cálculo local e importación opcional de anuncios.",
   "scripts": {
     "dev": "vite",
+    "dev:netlify": "npx --yes netlify-cli dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -27,6 +28,7 @@
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
     "recharts": "^3.10.1",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

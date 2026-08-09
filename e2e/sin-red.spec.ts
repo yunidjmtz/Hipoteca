@@ -20,10 +20,13 @@ function navegacionVisible(pagina: Page) {
 const SECCIONES = ['Resumen', 'Ofertas', 'Amortización'];
 
 /**
- * El dist solo puede consultar el endpoint estadístico oficial del INE.
- * Cualquier otra petición externa seguiría siendo una fuga accidental.
+ * El navegador solo consulta el mismo origen y el endpoint estadístico del INE.
+ * Los proveedores de importación se consumen desde una función del servidor para
+ * que sus credenciales nunca lleguen al cliente.
  */
-test('el artefacto compilado solo consulta el endpoint autorizado del INE', async ({ page }) => {
+test('el navegador solo consulta el mismo origen y el endpoint autorizado del INE', async ({
+  page,
+}) => {
   const externas: string[] = [];
   page.on('request', (peticion) => {
     const url = peticion.url();

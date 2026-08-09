@@ -23,7 +23,7 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
 
 const CLAVE = 'hipotecas-v1';
 const CLAVE_RECUPERACION = 'hipotecas-recuperacion-v1';
-const SCHEMA_ACTUAL = 10;
+const SCHEMA_ACTUAL = 12;
 
 // Referencia al timer de debounce; vive a nivel de módulo para persistir entre llamadas.
 let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -144,6 +144,30 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
       ...data,
       schemaVersion: 10,
       viviendas: data.viviendas.map((vivienda) => ({ ...vivienda, fecha: vivienda.fecha })),
+    };
+  }
+  if (versionInicial < 11) {
+    data = {
+      ...data,
+      schemaVersion: 11,
+      viviendas: data.viviendas.map((vivienda) => ({
+        ...vivienda,
+        anuncioUrl: vivienda.anuncioUrl,
+        habitaciones: vivienda.habitaciones,
+      })),
+    };
+  }
+  if (versionInicial < 12) {
+    data = {
+      ...data,
+      schemaVersion: 12,
+      viviendas: data.viviendas.map((vivienda) => ({
+        ...vivienda,
+        sourceUrl: vivienda.anuncioUrl,
+        sourceListingId: '',
+        rawListingText: '',
+        priceHistory: [],
+      })),
     };
   }
   return data;

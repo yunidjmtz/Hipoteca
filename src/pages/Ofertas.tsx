@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEstado } from '@/app/EstadoProvider';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -45,6 +45,10 @@ import {
   evaluarEncajePlanVivienda,
   type EstadoEncajePlanVivienda,
 } from '@/finance/housingPlanFit';
+import { mapImportedDataToExistingForm } from '@/services/propertyImportMapper';
+import { textoDeCapturaInmobiliaria } from '@/services/propertyImageOcr';
+import { parsePropertyListing } from '@/services/propertyListingParser';
+import { detectarFuenteAnuncio, type FuenteAnuncio } from '@/services/propertySourceDetector';
 import type {
   Cents,
   EscenarioHipoteca,
@@ -759,196 +763,196 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
 
       {detallesAvanzadosAbiertos &&
         createPortal(
-        <div className="fixed inset-0 z-50 bg-superficie">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`titulo-detalles-avanzados-${oferta.id}`}
-            className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
-          >
-            <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
-              <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <h2
-                    id={`titulo-detalles-avanzados-${oferta.id}`}
-                    className="font-display text-xl leading-tight text-tinta"
+          <div className="fixed inset-0 z-50 bg-superficie">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`titulo-detalles-avanzados-${oferta.id}`}
+              className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
+            >
+              <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
+                <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2
+                      id={`titulo-detalles-avanzados-${oferta.id}`}
+                      className="font-display text-xl leading-tight text-tinta"
+                    >
+                      Detalles avanzados
+                    </h2>
+                    <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetallesAvanzadosAbiertos(false)}
+                    aria-label="Cerrar detalles avanzados"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
                   >
-                    Detalles avanzados
-                  </h2>
-                  <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                    ×
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDetallesAvanzadosAbiertos(false)}
-                  aria-label="Cerrar detalles avanzados"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
-                >
-                  ×
-                </button>
-              </div>
-            </header>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
-              <div className="mx-auto w-full max-w-3xl">
-                <DetallesAvanzadosHipoteca escenario={escenario} />
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
+                <div className="mx-auto w-full max-w-3xl">
+                  <DetallesAvanzadosHipoteca escenario={escenario} />
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
+          </div>,
           document.body,
         )}
 
       {vinculacionesAbiertas &&
         createPortal(
-        <div className="fixed inset-0 z-50 bg-superficie">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`titulo-vinculaciones-${oferta.id}`}
-            className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
-          >
-            <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
-              <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <h2
-                    id={`titulo-vinculaciones-${oferta.id}`}
-                    className="font-display text-xl leading-tight text-tinta"
+          <div className="fixed inset-0 z-50 bg-superficie">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`titulo-vinculaciones-${oferta.id}`}
+              className="flex h-[100dvh] w-full flex-col overflow-hidden bg-superficie"
+            >
+              <header className="z-10 shrink-0 border-b border-linea bg-superficie px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm sm:px-6">
+                <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2
+                      id={`titulo-vinculaciones-${oferta.id}`}
+                      className="font-display text-xl leading-tight text-tinta"
+                    >
+                      Productos vinculados
+                    </h2>
+                    <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setVinculacionesAbiertas(false)}
+                    aria-label="Cerrar productos vinculados"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
                   >
-                    Productos vinculados
-                  </h2>
-                  <p className="mt-0.5 truncate text-sm text-tinta-media">{oferta.banco}</p>
+                    ×
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setVinculacionesAbiertas(false)}
-                  aria-label="Cerrar productos vinculados"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie-2 text-xl text-tinta transition-colors hover:bg-linea"
-                >
-                  ×
-                </button>
-              </div>
-            </header>
+              </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
-              <div className="mx-auto w-full max-w-2xl">
-                <p className="mb-4 text-sm leading-relaxed text-tinta-media">
-                  Consulta los productos, costes y condiciones asociados a esta hipoteca.
-                </p>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6">
+                <div className="mx-auto w-full max-w-2xl">
+                  <p className="mb-4 text-sm leading-relaxed text-tinta-media">
+                    Consulta los productos, costes y condiciones asociados a esta hipoteca.
+                  </p>
 
-                {escenario.vinculaciones.length === 0 ? (
-                  <div className="rounded-2xl bg-superficie-2 px-4 py-6 text-center">
-                    <p className="text-sm font-semibold text-tinta">Sin vinculaciones</p>
-                    <p className="mt-1 text-sm text-tinta-media">
-                      Esta oferta no tiene productos vinculados registrados.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {escenario.vinculaciones.map((vinculacion) => (
-                  <section
-                    key={vinculacion.id}
-                    className="rounded-2xl border border-linea bg-superficie p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-tinta">{vinculacion.nombre}</h3>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          <span
-                            className={[
-                              'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
-                              vinculacion.activo
-                                ? 'bg-comodo-tenue text-comodo'
-                                : 'bg-superficie-2 text-tinta-media',
-                            ].join(' ')}
-                          >
-                            {vinculacion.activo ? 'Activa' : 'No activa'}
-                          </span>
-                          <span
-                            className={[
-                              'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
-                              vinculacion.obligatorio
-                                ? 'bg-ajustado-tenue text-ajustado'
-                                : 'bg-superficie-2 text-tinta-media',
-                            ].join(' ')}
-                          >
-                            {vinculacion.obligatorio ? 'Obligatoria' : 'Opcional'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-[0.6875rem] font-medium text-tinta-media">
-                          Bonificación TIN
-                        </p>
-                        <p className="font-cifra font-bold tabular-nums text-acento">
-                          −{(vinculacion.bonificacionTin * 100).toFixed(2)} %
-                        </p>
-                      </div>
+                  {escenario.vinculaciones.length === 0 ? (
+                    <div className="rounded-2xl bg-superficie-2 px-4 py-6 text-center">
+                      <p className="text-sm font-semibold text-tinta">Sin vinculaciones</p>
+                      <p className="mt-1 text-sm text-tinta-media">
+                        Esta oferta no tiene productos vinculados registrados.
+                      </p>
                     </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {escenario.vinculaciones.map((vinculacion) => (
+                        <section
+                          key={vinculacion.id}
+                          className="rounded-2xl border border-linea bg-superficie p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="font-semibold text-tinta">{vinculacion.nombre}</h3>
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                <span
+                                  className={[
+                                    'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
+                                    vinculacion.activo
+                                      ? 'bg-comodo-tenue text-comodo'
+                                      : 'bg-superficie-2 text-tinta-media',
+                                  ].join(' ')}
+                                >
+                                  {vinculacion.activo ? 'Activa' : 'No activa'}
+                                </span>
+                                <span
+                                  className={[
+                                    'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold',
+                                    vinculacion.obligatorio
+                                      ? 'bg-ajustado-tenue text-ajustado'
+                                      : 'bg-superficie-2 text-tinta-media',
+                                  ].join(' ')}
+                                >
+                                  {vinculacion.obligatorio ? 'Obligatoria' : 'Opcional'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-[0.6875rem] font-medium text-tinta-media">
+                                Bonificación TIN
+                              </p>
+                              <p className="font-cifra font-bold tabular-nums text-acento">
+                                −{(vinculacion.bonificacionTin * 100).toFixed(2)} %
+                              </p>
+                            </div>
+                          </div>
 
-                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                      <div>
-                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                          Coste inicial
-                        </dt>
-                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                          {formatEuros(vinculacion.costeInicial)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                          Coste anual
-                        </dt>
-                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                          {formatEuros(vinculacion.costeAnual)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                          Incremento anual
-                        </dt>
-                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                          {(vinculacion.incrementoAnual * 100).toFixed(2)} %
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                          Tiempo exigido
-                        </dt>
-                        <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                          {vinculacion.aniosExigidos === null
-                            ? 'Sin límite'
-                            : `${vinculacion.aniosExigidos} años`}
-                        </dd>
-                      </div>
-                      {vinculacion.bonificacionMaxima !== undefined && (
-                        <div className="col-span-2">
-                          <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                            Bonificación máxima
-                          </dt>
-                          <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                            {(vinculacion.bonificacionMaxima * 100).toFixed(2)} %
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
+                          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                            <div>
+                              <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                                Coste inicial
+                              </dt>
+                              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                                {formatEuros(vinculacion.costeInicial)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                                Coste anual
+                              </dt>
+                              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                                {formatEuros(vinculacion.costeAnual)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                                Incremento anual
+                              </dt>
+                              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                                {(vinculacion.incrementoAnual * 100).toFixed(2)} %
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                                Tiempo exigido
+                              </dt>
+                              <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                                {vinculacion.aniosExigidos === null
+                                  ? 'Sin límite'
+                                  : `${vinculacion.aniosExigidos} años`}
+                              </dd>
+                            </div>
+                            {vinculacion.bonificacionMaxima !== undefined && (
+                              <div className="col-span-2">
+                                <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                                  Bonificación máxima
+                                </dt>
+                                <dd className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                                  {(vinculacion.bonificacionMaxima * 100).toFixed(2)} %
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
 
-                    {vinculacion.observaciones.trim() !== '' && (
-                      <div className="mt-4 border-t border-linea pt-3">
-                        <p className="text-[0.6875rem] font-medium text-tinta-media">
-                          Observaciones
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-tinta">
-                          {vinculacion.observaciones}
-                        </p>
-                      </div>
-                    )}
-                  </section>
-                    ))}
-                  </div>
-                )}
+                          {vinculacion.observaciones.trim() !== '' && (
+                            <div className="mt-4 border-t border-linea pt-3">
+                              <p className="text-[0.6875rem] font-medium text-tinta-media">
+                                Observaciones
+                              </p>
+                              <p className="mt-1 text-sm leading-relaxed text-tinta">
+                                {vinculacion.observaciones}
+                              </p>
+                            </div>
+                          )}
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
+          </div>,
           document.body,
         )}
     </article>
@@ -1073,7 +1077,11 @@ function Hipotecas() {
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-linea bg-superficie px-3 py-2 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-50 sm:max-w-xs"
         >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-acento/10 text-acento">
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4.5 w-4.5 fill-none stroke-current stroke-2">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-4.5 w-4.5 fill-none stroke-current stroke-2"
+            >
               <path d="m3 11 9-7 9 7" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M5.5 9.5V20h13V9.5M9.5 20v-6h5v6" strokeLinejoin="round" />
             </svg>
@@ -1086,7 +1094,11 @@ function Hipotecas() {
               {viviendaSeleccionada?.nombre ?? 'Añade una vivienda'}
             </span>
           </span>
-          <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 fill-none stroke-tinta-suave stroke-2">
+          <svg
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 fill-none stroke-tinta-suave stroke-2"
+          >
             <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
@@ -1155,10 +1167,16 @@ function Hipotecas() {
                     <span
                       className={[
                         'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-                        seleccionada ? 'bg-acento text-sobre-acento' : 'bg-superficie-2 text-tinta-media',
+                        seleccionada
+                          ? 'bg-acento text-sobre-acento'
+                          : 'bg-superficie-2 text-tinta-media',
                       ].join(' ')}
                     >
-                      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4.5 w-4.5 fill-none stroke-current stroke-2">
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-4.5 w-4.5 fill-none stroke-current stroke-2"
+                      >
                         <path d="m3 11 9-7 9 7" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M5.5 9.5V20h13V9.5" strokeLinejoin="round" />
                       </svg>
@@ -1369,8 +1387,15 @@ interface BorradorVivienda {
   readonly nombre: string;
   readonly fecha: string;
   readonly direccion: string;
+  readonly anuncioUrl: string;
+  readonly sourcePortal?: 'idealista' | 'fotocasa';
+  readonly sourceUrl: string;
+  readonly sourceListingId: string;
+  readonly rawListingText: string;
+  readonly priceHistory: Array<{ price: Cents; date: string }>;
   readonly precioVenta: Cents;
   readonly superficieM2: number;
+  readonly habitaciones: number;
   readonly esExterior: boolean;
   readonly tieneTrastero: boolean;
   readonly tieneGaraje: boolean;
@@ -1382,8 +1407,14 @@ const VIVIENDA_VACIA: BorradorVivienda = {
   nombre: '',
   fecha: fechaLocalISO(),
   direccion: '',
+  anuncioUrl: '',
+  sourceUrl: '',
+  sourceListingId: '',
+  rawListingText: '',
+  priceHistory: [],
   precioVenta: ZERO,
   superficieM2: 0,
+  habitaciones: 0,
   esExterior: false,
   tieneTrastero: false,
   tieneGaraje: false,
@@ -1400,8 +1431,15 @@ function borradorDesdeVivienda(vivienda: ViviendaGuardada): BorradorVivienda {
     nombre: vivienda.nombre,
     fecha: vivienda.fecha === '' ? fechaLocalISO() : vivienda.fecha,
     direccion: vivienda.direccion,
+    anuncioUrl: vivienda.anuncioUrl,
+    ...(vivienda.sourcePortal === undefined ? {} : { sourcePortal: vivienda.sourcePortal }),
+    sourceUrl: vivienda.sourceUrl ?? '',
+    sourceListingId: vivienda.sourceListingId ?? '',
+    rawListingText: vivienda.rawListingText ?? '',
+    priceHistory: vivienda.priceHistory ?? [],
     precioVenta: vivienda.precioVenta,
     superficieM2: vivienda.superficieM2,
+    habitaciones: vivienda.habitaciones,
     esExterior: vivienda.esExterior,
     tieneTrastero: vivienda.tieneTrastero,
     tieneGaraje: vivienda.tieneGaraje,
@@ -1477,6 +1515,13 @@ function FormularioVivienda({
     vivienda === null ? VIVIENDA_VACIA : borradorDesdeVivienda(vivienda),
   );
   const [error, setError] = useState('');
+  const [resultadoImportacion, setResultadoImportacion] = useState('');
+  const [errorImportacion, setErrorImportacion] = useState('');
+  const [procesandoCaptura, setProcesandoCaptura] = useState(false);
+  const [ejemplosAbiertos, setEjemplosAbiertos] = useState(false);
+  const [confirmarReemplazo, setConfirmarReemplazo] = useState<Partial<BorradorVivienda> | null>(null);
+  const [camposTocados, setCamposTocados] = useState<Set<keyof BorradorVivienda>>(() => new Set());
+  const inputCaptura = useRef<HTMLInputElement>(null);
   const [modalReformasAbierto, setModalReformasAbierto] = useState(false);
   const [reformasEnEdicion, setReformasEnEdicion] = useState<PartidaReforma[]>(borrador.reformas);
 
@@ -1495,12 +1540,79 @@ function FormularioVivienda({
     setModalReformasAbierto(true);
   }
 
+  function esCampoVacio(campo: keyof BorradorVivienda, valor: BorradorVivienda[keyof BorradorVivienda]): boolean {
+    return valor === undefined || valor === '' || valor === 0 || (valor === false && !camposTocados.has(campo)) || (Array.isArray(valor) && valor.length === 0);
+  }
+
+  function camposConConflicto(patch: Partial<BorradorVivienda>): string[] {
+    return (Object.keys(patch) as Array<keyof BorradorVivienda>).filter((campo) => {
+      const actual = borrador[campo];
+      const importado = patch[campo];
+      const vacio = esCampoVacio(campo, actual);
+      return !vacio && importado !== undefined && actual !== importado;
+    });
+  }
+
+  function aplicarImportacion(patch: Partial<BorradorVivienda>, reemplazar: boolean) {
+    setBorrador((actual) => {
+      const resultado = { ...actual };
+      for (const [campo, valor] of Object.entries(patch) as Array<[keyof BorradorVivienda, BorradorVivienda[keyof BorradorVivienda]]>) {
+        const anterior = actual[campo];
+        const vacio = esCampoVacio(campo, anterior);
+        if (reemplazar || vacio) Object.assign(resultado, { [campo]: valor });
+      }
+      return resultado;
+    });
+    setResultadoImportacion('Datos importados. Revísalos antes de guardar la vivienda.');
+  }
+
+  function procesarImportacion(texto: string, fuente: FuenteAnuncio | null) {
+    const datos = parsePropertyListing(texto, fuente?.portal);
+    const patch = mapImportedDataToExistingForm(datos, texto, fuente) as Partial<BorradorVivienda>;
+    if (camposConConflicto(patch).length > 0) setConfirmarReemplazo(patch);
+    else aplicarImportacion(patch, false);
+  }
+
+  async function importarCaptura(archivo: File | undefined) {
+    if (archivo === undefined) return;
+    setProcesandoCaptura(true);
+    setErrorImportacion('');
+    try {
+      const texto = await textoDeCapturaInmobiliaria(archivo);
+      if (texto === null) setErrorImportacion('No se ha podido leer texto en la captura. Prueba con una imagen más nítida.');
+      else procesarImportacion(texto, null);
+    } catch {
+      setErrorImportacion('No se ha podido ejecutar el OCR local. Prueba con una captura PNG o JPG más nítida.');
+    } finally {
+      setProcesandoCaptura(false);
+    }
+  }
+
   return (
     <Panel
       rotulo={vivienda === null ? 'Nueva vivienda' : 'Editar vivienda'}
       titulo="Datos del inmueble"
     >
       <div className="flex flex-col gap-4">
+        <section className="rounded-medio border border-acento/25 bg-acento-tenue p-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="rotulo pt-1">Importar datos</p>
+            <button
+              type="button"
+              onClick={() => setEjemplosAbiertos(true)}
+              className="rounded-chico border border-acento/35 bg-superficie px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-superficie-2"
+            >
+              Ver ejemplos
+            </button>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-tinta-media">Importa capturas de anuncios de Fotocasa o Idealista.</p>
+          <button type="button" disabled={procesandoCaptura} onClick={() => { setErrorImportacion(''); setResultadoImportacion(''); inputCaptura.current?.click(); }} className="mt-3 w-full rounded-medio border border-acento/35 bg-superficie px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60">{procesandoCaptura ? 'Leyendo captura…' : '📸 Importar captura'}</button>
+          <input ref={inputCaptura} type="file" accept="image/*" className="sr-only" onChange={(e) => void importarCaptura(e.target.files?.[0])} />
+          <div aria-live="polite">
+            {resultadoImportacion !== '' && <p className="mt-2 text-xs font-medium text-comodo">{resultadoImportacion}</p>}
+            {errorImportacion !== '' && <p className="mt-2 text-xs font-medium text-no-viable">{errorImportacion}</p>}
+          </div>
+        </section>
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Nombre del inmueble
           <input
@@ -1530,7 +1642,27 @@ function FormularioVivienda({
             className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
           />
         </label>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+          Enlace del anuncio
+          <input
+            type="url"
+            inputMode="url"
+            value={borrador.anuncioUrl}
+            onChange={(e) => {
+              const enlace = e.target.value;
+              const fuente = detectarFuenteAnuncio(enlace);
+              setBorrador((actual) => ({
+                ...actual,
+                anuncioUrl: enlace,
+                sourceUrl: enlace,
+                ...(fuente === null ? {} : { sourcePortal: fuente.portal, sourceListingId: fuente.listingId ?? '' }),
+              }));
+            }}
+            placeholder="https://www.idealista.com/inmueble/..."
+            className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+          />
+        </label>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <InputMoneda
             id="vivienda-precio-venta"
             etiqueta="Precio de venta"
@@ -1548,6 +1680,17 @@ function FormularioVivienda({
               className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+            Habitaciones
+            <InputNumeroEntero
+              id="vivienda-habitaciones"
+              valor={borrador.habitaciones}
+              minimo={0}
+              maximo={100}
+              onChange={(habitaciones) => setBorrador((actual) => ({ ...actual, habitaciones }))}
+              className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+            />
+          </label>
         </div>
         <fieldset className="grid grid-cols-1 gap-3 rounded-medio border border-linea p-3 sm:grid-cols-3">
           <legend className="px-1 text-sm font-medium text-tinta">Características</legend>
@@ -1562,9 +1705,10 @@ function FormularioVivienda({
               <input
                 type="checkbox"
                 checked={borrador[campo]}
-                onChange={(e) =>
-                  setBorrador((actual) => ({ ...actual, [campo]: e.target.checked }))
-                }
+                onChange={(e) => {
+                  setCamposTocados((actual) => new Set(actual).add(campo));
+                  setBorrador((actual) => ({ ...actual, [campo]: e.target.checked }));
+                }}
                 className="h-4 w-4 rounded border-linea text-acento focus:ring-acento"
               />
               {etiqueta}
@@ -1602,6 +1746,76 @@ function FormularioVivienda({
             </div>
           )}
         </div>
+        {confirmarReemplazo !== null && (
+          <div className="fixed inset-0 z-[60] flex items-end bg-tinta/30 p-3 sm:items-center sm:justify-center">
+            <div role="dialog" aria-modal="true" aria-labelledby="titulo-reemplazo" className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado">
+              <h2 id="titulo-reemplazo" className="font-display text-xl text-tinta">Hay datos ya escritos</h2>
+              <p className="mt-2 text-sm text-tinta-media">Se han encontrado datos que reemplazarían información existente.</p>
+              <div className="mt-5 flex flex-col gap-2">
+                <button type="button" onClick={() => { aplicarImportacion(confirmarReemplazo, false); setConfirmarReemplazo(null); }} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento">Completar solo campos vacíos</button>
+                <button type="button" onClick={() => { aplicarImportacion(confirmarReemplazo, true); setConfirmarReemplazo(null); }} className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta">Reemplazar con datos importados</button>
+                <button type="button" onClick={() => setConfirmarReemplazo(null)} className="px-4 py-2 text-sm text-tinta-media">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {ejemplosAbiertos && (
+          <div className="fixed inset-0 z-[60] bg-superficie">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="titulo-ejemplos-importacion"
+              className="h-[100dvh] w-full overflow-y-auto bg-superficie p-5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="rotulo mb-1">Capturas de ejemplo</p>
+                  <h2 id="titulo-ejemplos-importacion" className="font-display text-xl text-tinta">
+                    Fotocasa e Idealista
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Cerrar ejemplos"
+                  onClick={() => setEjemplosAbiertos(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-medio border border-linea text-lg text-tinta-media hover:bg-superficie-2"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-tinta-media">
+                Puedes importar una captura similar desde la galería o haciendo una captura de pantalla.
+              </p>
+              <div className="mt-4 grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2">
+                <figure className="w-full max-w-[18rem] overflow-hidden rounded-medio border border-linea bg-superficie-2">
+                  <img
+                    src="./ejemplos-importacion/idealista-borroso.png"
+                    alt="Ejemplo de captura de Idealista con datos borrosos"
+                    className="h-auto w-full scale-[1.015] blur-[3px]"
+                  />
+                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">Idealista</figcaption>
+                </figure>
+                <figure className="w-full max-w-[18rem] overflow-hidden rounded-medio border border-linea bg-superficie-2">
+                  <img
+                    src="./ejemplos-importacion/fotocasa-borroso.png"
+                    alt="Ejemplo de captura de Fotocasa con datos borrosos"
+                    className="h-auto w-full scale-[1.015] blur-[3px]"
+                  />
+                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">Fotocasa</figcaption>
+                </figure>
+              </div>
+              <div className="mt-5 flex justify-end border-t border-linea pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEjemplosAbiertos(false)}
+                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {modalReformasAbierto && (
           <div className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 sm:items-center sm:justify-center">
             <div
@@ -2052,6 +2266,12 @@ function Viviendas() {
                         ? `${vivienda.superficieM2} m²`
                         : 'Superficie pendiente'}
                     </span>
+                    {vivienda.habitaciones > 0 && (
+                      <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                        {vivienda.habitaciones}{' '}
+                        {vivienda.habitaciones === 1 ? 'habitación' : 'habitaciones'}
+                      </span>
+                    )}
                     {vivienda.superficieM2 > 0 && (
                       <span className="inline-flex rounded-chico border border-acento/25 bg-acento-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-acento">
                         {precioPorM2Formateado(costeAntesImpuestos / 100 / vivienda.superficieM2)}
@@ -2145,6 +2365,16 @@ function Viviendas() {
                       {vivienda.notas}
                     </p>
                   )}
+                  {vivienda.anuncioUrl !== '' && (
+                    <a
+                      href={vivienda.anuncioUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex text-sm font-semibold text-acento hover:underline"
+                    >
+                      Ver anuncio original ↗
+                    </a>
+                  )}
                 </article>
               );
             })}
@@ -2159,19 +2389,38 @@ export function EditorVivienda() {
   const { estado, actualizarViviendas } = useEstado();
   const navegar = useNavigate();
   const [parametros] = useSearchParams();
+  const [pendienteDuplicado, setPendienteDuplicado] = useState<BorradorVivienda | null>(null);
   const idVivienda = parametros.get('vivienda');
   const vivienda =
     idVivienda === null
       ? null
       : (estado.viviendas.find((candidata) => candidata.id === idVivienda) ?? null);
 
-  function guardar(borrador: BorradorVivienda) {
+  function datosParaGuardar(borrador: BorradorVivienda, anterior?: ViviendaGuardada) {
     const presupuestoReforma = totalReformas(borrador.reformas);
     const reforma = borrador.reformas
       .map((partida) => partida.concepto.trim())
       .filter((concepto) => concepto !== '')
       .join(', ');
-    const datosVivienda = { ...borrador, presupuestoReforma, reforma };
+    const priceHistory =
+      anterior !== undefined && anterior.precioVenta !== borrador.precioVenta
+        ? [...(anterior.priceHistory ?? []), { price: anterior.precioVenta, date: anterior.fecha }, { price: borrador.precioVenta, date: fechaLocalISO() }]
+        : borrador.priceHistory;
+    return { ...borrador, priceHistory, presupuestoReforma, reforma };
+  }
+
+  function guardar(borrador: BorradorVivienda) {
+    const duplicada = estado.viviendas.find((candidata) => {
+      if (candidata.id === vivienda?.id) return false;
+      return borrador.sourcePortal !== undefined && borrador.sourceListingId !== ''
+        ? candidata.sourcePortal === borrador.sourcePortal && candidata.sourceListingId === borrador.sourceListingId
+        : borrador.sourceUrl !== '' && candidata.sourceUrl === borrador.sourceUrl;
+    });
+    if (duplicada !== undefined) {
+      setPendienteDuplicado(borrador);
+      return;
+    }
+    const datosVivienda = datosParaGuardar(borrador, vivienda ?? undefined);
     if (vivienda === null) {
       actualizarViviendas([...estado.viviendas, { ...datosVivienda, id: crypto.randomUUID() }]);
     } else {
@@ -2181,6 +2430,19 @@ export function EditorVivienda() {
         ),
       );
     }
+    void navegar('/ofertas');
+  }
+
+  function actualizarDuplicada() {
+    if (pendienteDuplicado === null) return;
+    const duplicada = estado.viviendas.find((candidata) =>
+      pendienteDuplicado.sourcePortal !== undefined && pendienteDuplicado.sourceListingId !== ''
+        ? candidata.sourcePortal === pendienteDuplicado.sourcePortal && candidata.sourceListingId === pendienteDuplicado.sourceListingId
+        : candidata.sourceUrl === pendienteDuplicado.sourceUrl,
+    );
+    if (duplicada === undefined) return;
+    const datos = datosParaGuardar(pendienteDuplicado, duplicada);
+    actualizarViviendas(estado.viviendas.map((actual) => actual.id === duplicada.id ? { ...datos, id: actual.id } : actual));
     void navegar('/ofertas');
   }
 
@@ -2201,6 +2463,19 @@ export function EditorVivienda() {
         onGuardar={guardar}
         onCancelar={() => void navegar('/ofertas')}
       />
+      {pendienteDuplicado !== null && (
+        <div className="fixed inset-0 z-[70] flex items-end bg-tinta/30 p-3 sm:items-center sm:justify-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-duplicado" className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado">
+            <h2 id="titulo-duplicado" className="font-display text-xl text-tinta">Esta vivienda ya está guardada</h2>
+            <p className="mt-2 text-sm text-tinta-media">Puedes revisar la existente, actualizarla con estos datos o cancelar.</p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" onClick={actualizarDuplicada} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento">Actualizar</button>
+              <button type="button" onClick={() => void navegar(`/ofertas/vivienda?vivienda=${encodeURIComponent(estado.viviendas.find((candidata) => candidata.sourceUrl === pendienteDuplicado.sourceUrl)?.id ?? '')}`)} className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta">Ver vivienda</button>
+              <button type="button" onClick={() => setPendienteDuplicado(null)} className="px-4 py-2 text-sm text-tinta-media">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -382,11 +382,19 @@ export interface ViviendaGuardada {
   nombre: string;
   fecha: string;
   direccion: string;
+  anuncioUrl: string;
+  /** Procedencia opcional para importar y detectar anuncios repetidos. */
+  sourcePortal?: 'idealista' | 'fotocasa' | undefined;
+  sourceUrl?: string;
+  sourceListingId?: string;
+  rawListingText?: string;
+  priceHistory?: Array<{ price: Cents; date: string }>;
   precioVenta: Cents;
   /** Campos conservados para migrar los datos creados con la primera versión. */
   presupuestoReforma: Cents;
   reforma: string;
   superficieM2: number;
+  habitaciones: number;
   esExterior: boolean;
   tieneTrastero: boolean;
   tieneGaraje: boolean;

@@ -8,7 +8,7 @@ import {
 import { FISCAL_POR_DEFECTO } from '@/config/fiscal';
 
 export const ESTADO_INICIAL: EstadoPersistido = {
-  schemaVersion: 10,
+  schemaVersion: 12,
 
   perfil: {
     titulares: [

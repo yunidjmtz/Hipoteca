@@ -61,7 +61,7 @@ describe('limpieza de datos', () => {
   });
 
   it('parte sin importes personales ni ejemplos precargados', () => {
-    expect(ESTADO_INICIAL.schemaVersion).toBe(10);
+    expect(ESTADO_INICIAL.schemaVersion).toBe(12);
     expect(ESTADO_INICIAL.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(ESTADO_INICIAL.perfil.ahorrosActuales).toBe(ZERO);
     expect(ESTADO_INICIAL.preferencias.precioObjetivo).toBe(ZERO);
@@ -96,7 +96,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(10);
+    expect(cargado.schemaVersion).toBe(12);
     expect(cargado.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(cargado.preferencias.precioObjetivo).toBe(ZERO);
     expect(cargado.escenarioSimulador.importeSolicitado).toBe(ZERO);
@@ -119,7 +119,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(10);
+    expect(cargado.schemaVersion).toBe(12);
     expect(cargado.ajustes.tinFuente).toBe('ine');
     expect(cargado.ajustes.tinPorDefecto).toBe(0.0298);
     expect(cargado.ajustes.tinReferenciaPeriodo).toBe('2026-05');
@@ -135,12 +135,45 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(10);
+    expect(cargado.schemaVersion).toBe(12);
     expect(cargado.viviendas).toEqual([]);
   });
 
+  it('añade enlace y habitaciones a las viviendas guardadas antes del importador', () => {
+    localStorage.setItem(
+      'hipotecas-v1',
+      JSON.stringify({
+        ...ESTADO_INICIAL,
+        schemaVersion: 10,
+        viviendas: [
+          {
+            id: 'anterior',
+            nombre: 'Piso anterior',
+            fecha: '2026-08-01',
+            direccion: 'Zaragoza',
+            precioVenta: toCents(180_000),
+            presupuestoReforma: ZERO,
+            reforma: '',
+            superficieM2: 80,
+            esExterior: true,
+            tieneTrastero: false,
+            tieneGaraje: false,
+            reformas: [],
+            notas: '',
+          },
+        ],
+      }),
+    );
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(12);
+    expect(cargado.viviendas[0]?.anuncioUrl).toBe('');
+    expect(cargado.viviendas[0]?.habitaciones).toBe(0);
+  });
+
   it('conserva para recuperación un estado que no puede validar', () => {
-    const raw = '{"schemaVersion":10,"perfil":"dañado"}';
+    const raw = '{"schemaVersion":11,"perfil":"dañado"}';
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     localStorage.setItem('hipotecas-v1', raw);
 
