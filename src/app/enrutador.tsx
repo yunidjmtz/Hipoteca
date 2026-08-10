@@ -50,6 +50,13 @@ export const enrutador = createHashRouter([
         },
       },
       {
+        path: 'inmobiliaria',
+        lazy: async () => {
+          const { PanelInmobiliaria } = await import('@/pages/PanelInmobiliaria');
+          return { Component: PanelInmobiliaria };
+        },
+      },
+      {
         path: 'ofertas/vivienda',
         lazy: async () => {
           const { EditorVivienda } = await import('@/pages/Ofertas');

@@ -14,7 +14,7 @@ function corsHeaders(): HeadersInit {
   return {
     'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
     'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
-    'Access-Control-Allow-Methods': 'DELETE, GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'DELETE, GET, PATCH, POST, OPTIONS',
     Vary: 'Origin',
   };
 }
@@ -46,6 +46,111 @@ function stringField(body: JsonObject | null, field: string): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
+function optionalStringField(body: JsonObject | null, field: string): string | null {
+  const value = body?.[field];
+  if (value === undefined || value === null) return null;
+  return typeof value === 'string' ? value.trim() : null;
+}
+
+function positiveIntegerField(body: JsonObject | null, field: string, minimum = 1): number | null {
+  const value = body?.[field];
+  return typeof value === 'number' && Number.isInteger(value) && value >= minimum ? value : null;
+}
+
+function optionalCoordinateField(
+  body: JsonObject | null,
+  field: string,
+): number | null | undefined {
+  const value = body?.[field];
+  if (value === undefined || value === null || value === '') return null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function validHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+type PropertyStatus = 'draft' | 'published' | 'withdrawn';
+
+type AgentPropertyPayload = {
+  title: string;
+  price_cents: number;
+  zone: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  area_m2: number;
+  bedrooms: number;
+  bathrooms: number;
+  description: string;
+  main_image_url: string;
+  gallery_urls: string[];
+  listing_url: string;
+  status: PropertyStatus;
+};
+
+function propertyPayload(body: JsonObject | null): AgentPropertyPayload | null {
+  const title = stringField(body, 'title');
+  const priceCents = positiveIntegerField(body, 'priceCents');
+  const zone = stringField(body, 'zone');
+  const address = optionalStringField(body, 'address');
+  const latitude = optionalCoordinateField(body, 'latitude');
+  const longitude = optionalCoordinateField(body, 'longitude');
+  const areaM2 = positiveIntegerField(body, 'areaM2');
+  const bedrooms = positiveIntegerField(body, 'bedrooms', 0);
+  const bathrooms = positiveIntegerField(body, 'bathrooms', 0);
+  const description = stringField(body, 'description');
+  const mainImageUrl = stringField(body, 'mainImageUrl');
+  const listingUrl = stringField(body, 'listingUrl');
+  const status = body?.status;
+  const galleryUrls = body?.galleryUrls;
+  if (
+    title === null ||
+    priceCents === null ||
+    zone === null ||
+    latitude === undefined ||
+    longitude === undefined ||
+    areaM2 === null ||
+    bedrooms === null ||
+    bathrooms === null ||
+    description === null ||
+    mainImageUrl === null ||
+    listingUrl === null ||
+    !validHttpUrl(mainImageUrl) ||
+    !validHttpUrl(listingUrl) ||
+    (latitude === null) !== (longitude === null) ||
+    (latitude !== null && (latitude < -90 || latitude > 90)) ||
+    (longitude !== null && (longitude < -180 || longitude > 180)) ||
+    !Array.isArray(galleryUrls) ||
+    galleryUrls.length > 12 ||
+    !galleryUrls.every((url) => typeof url === 'string' && validHttpUrl(url)) ||
+    (status !== 'draft' && status !== 'published' && status !== 'withdrawn')
+  ) {
+    return null;
+  }
+  return {
+    title,
+    price_cents: priceCents,
+    zone,
+    address: address === '' ? null : address,
+    latitude,
+    longitude,
+    area_m2: areaM2,
+    bedrooms,
+    bathrooms,
+    description,
+    main_image_url: mainImageUrl,
+    gallery_urls: galleryUrls.map((url) => url.trim()),
+    listing_url: listingUrl,
+    status,
+  };
+}
+
 function apiClient(accessToken?: string) {
   return createClient(supabaseUrl, supabaseAnonKey, {
     global:
@@ -63,6 +168,33 @@ function adminClient() {
   });
 }
 
+async function agencyFromInvitationCode(code: string) {
+  const admin = adminClient();
+  if (admin === null) return { agency: null, unavailable: true };
+  const { data: invitation, error: invitationError } = await admin
+    .from('agency_invitation_codes')
+    .select(
+      'status, expires_at, max_uses, uses_count, agency:real_estate_agencies(id, name, brand, active)',
+    )
+    .eq('code', code.toUpperCase())
+    .maybeSingle();
+  const agency = invitation?.agency as
+    { id: string; name: string; brand: string; active: boolean } | null | undefined;
+  if (
+    invitationError !== null ||
+    invitation === null ||
+    invitation.status !== 'active' ||
+    invitation.uses_count >= invitation.max_uses ||
+    (invitation.expires_at !== null && new Date(invitation.expires_at) <= new Date()) ||
+    agency === null ||
+    agency === undefined ||
+    !agency.active
+  ) {
+    return { agency: null, unavailable: false };
+  }
+  return { agency: { id: agency.id, name: agency.name, brand: agency.brand }, unavailable: false };
+}
+
 async function authenticatedClient(request: Request) {
   const authorization = request.headers.get('Authorization');
   if (authorization === null || !authorization.startsWith('Bearer ')) return null;
@@ -75,6 +207,27 @@ async function authenticatedClient(request: Request) {
   return { client, user: data.user };
 }
 
+async function agentContext(client: ReturnType<typeof apiClient>, userId: string) {
+  const { data, error: membershipError } = await client
+    .from('agency_users')
+    .select('agency_id, role, agency:real_estate_agencies(id, name, brand, active)')
+    .eq('user_id', userId)
+    .in('role', ['agent', 'admin'])
+    .maybeSingle();
+  const agency = data?.agency as
+    { id: string; name: string; brand: string; active: boolean } | null | undefined;
+  if (
+    membershipError !== null ||
+    data === null ||
+    agency === null ||
+    agency === undefined ||
+    !agency.active
+  ) {
+    return null;
+  }
+  return { agencyId: data.agency_id as string, role: data.role as 'agent' | 'admin', agency };
+}
+
 function sessionResponse(user: { id: string; email?: string | null }, session: unknown) {
   return json({ user: { id: user.id, email: user.email ?? null }, session });
 }
@@ -85,7 +238,8 @@ Deno.serve(async (request) => {
 
   // El runtime puede entregar la URL pública completa o una ruta ya prefijada
   // con el nombre de la función, según el entorno de ejecución.
-  const path = new URL(request.url).pathname.replace(/^\/(?:functions\/v1\/)?hipotecas-api/, '');
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/^\/(?:functions\/v1\/)?hipotecas-api/, '');
 
   if (request.method === 'POST' && path === '/v1/auth/sign-up') {
     const body = await readBody(request);
@@ -116,37 +270,39 @@ Deno.serve(async (request) => {
     return sessionResponse(data.user, data.session);
   }
 
-  const authenticated = await authenticatedClient(request);
-  if (authenticated === null) return error('Debes iniciar sesión para realizar esta acción.', 401);
-
   if (request.method === 'POST' && path === '/v1/agency-links/preview') {
     const code = stringField(await readBody(request), 'code');
-    const admin = adminClient();
     if (code === null) return error('Indica el código de invitación.');
-    if (admin === null) return error('No se puede comprobar el código en este momento.', 503);
-    const { data: invitation, error: invitationError } = await admin
-      .from('agency_invitation_codes')
-      .select(
-        'status, expires_at, max_uses, uses_count, agency:real_estate_agencies(id, name, brand, active)',
-      )
-      .eq('code', code.toUpperCase())
-      .maybeSingle();
-    const agency = invitation?.agency as
-      { id: string; name: string; brand: string; active: boolean } | null | undefined;
-    if (
-      invitationError !== null ||
-      invitation === null ||
-      invitation.status !== 'active' ||
-      invitation.uses_count >= invitation.max_uses ||
-      (invitation.expires_at !== null && new Date(invitation.expires_at) <= new Date()) ||
-      agency === null ||
-      agency === undefined ||
-      !agency.active
-    ) {
-      return error('El código no es válido o ya no está activo.', 422);
-    }
-    return json({ agency: { id: agency.id, name: agency.name, brand: agency.brand } });
+    const result = await agencyFromInvitationCode(code);
+    if (result.unavailable) return error('No se puede comprobar el código en este momento.', 503);
+    if (result.agency === null) return error('El código no es válido o ya no está activo.', 422);
+    return json({ agency: result.agency });
   }
+
+  if (request.method === 'GET' && path === '/v1/catalog/properties') {
+    const code = url.searchParams.get('code');
+    if (code !== null) {
+      const result = await agencyFromInvitationCode(code);
+      const admin = adminClient();
+      if (result.unavailable || admin === null) {
+        return error('No se puede cargar el catálogo en este momento.', 503);
+      }
+      if (result.agency === null) return error('El código no es válido o ya no está activo.', 422);
+      const { data: properties, error: propertiesError } = await admin
+        .from('agency_properties')
+        .select(
+          'id, title, price_cents, zone, area_m2, bedrooms, bathrooms, description, main_image_url, listing_url, status',
+        )
+        .eq('agency_id', result.agency.id)
+        .eq('status', 'published')
+        .order('published_at', { ascending: false });
+      if (propertiesError !== null) return error('No se pudo cargar el catálogo.', 500);
+      return json({ agency: result.agency, properties: properties ?? [] });
+    }
+  }
+
+  const authenticated = await authenticatedClient(request);
+  if (authenticated === null) return error('Debes iniciar sesión para realizar esta acción.', 401);
 
   if (request.method === 'POST' && path === '/v1/agency-links/redeem') {
     const code = stringField(await readBody(request), 'code');
@@ -223,6 +379,133 @@ Deno.serve(async (request) => {
       );
     }
     return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
+  const agent = await agentContext(authenticated.client, authenticated.user.id);
+  if (path.startsWith('/v1/agent/') && agent === null) {
+    return error('Tu cuenta no tiene acceso al panel de inmobiliaria.', 403);
+  }
+
+  if (request.method === 'GET' && path === '/v1/agent/me' && agent !== null) {
+    return json({
+      agency: { id: agent.agency.id, name: agent.agency.name, brand: agent.agency.brand },
+      role: agent.role,
+    });
+  }
+
+  if (request.method === 'GET' && path === '/v1/agent/properties' && agent !== null) {
+    const { data, error: propertiesError } = await authenticated.client
+      .from('agency_properties')
+      .select(
+        'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
+      )
+      .eq('agency_id', agent.agencyId)
+      .order('updated_at', { ascending: false });
+    if (propertiesError !== null) return error('No se pudieron cargar las viviendas.', 500);
+    return json({ properties: data ?? [] });
+  }
+
+  if (request.method === 'POST' && path === '/v1/agent/properties' && agent !== null) {
+    const payload = propertyPayload(await readBody(request));
+    if (payload === null) {
+      return error('Revisa los datos de la vivienda, las coordenadas y las URLs.', 422);
+    }
+    const { data, error: createError } = await authenticated.client
+      .from('agency_properties')
+      .insert({
+        ...payload,
+        agency_id: agent.agencyId,
+        published_at: payload.status === 'published' ? new Date().toISOString() : null,
+      })
+      .select(
+        'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
+      )
+      .single();
+    if (createError !== null) return error(createError.message, 422);
+    return json({ property: data }, 201);
+  }
+
+  const propertyMatch = path.match(/^\/v1\/agent\/properties\/([0-9a-f-]{36})$/i);
+  if (request.method === 'PATCH' && propertyMatch !== null && agent !== null) {
+    const payload = propertyPayload(await readBody(request));
+    if (payload === null) {
+      return error('Revisa los datos de la vivienda, las coordenadas y las URLs.', 422);
+    }
+    const { data: current, error: currentError } = await authenticated.client
+      .from('agency_properties')
+      .select('id, status')
+      .eq('id', propertyMatch[1])
+      .eq('agency_id', agent.agencyId)
+      .maybeSingle();
+    if (currentError !== null || current === null)
+      return error('No se encontró esa vivienda.', 404);
+    const { data, error: updateError } = await authenticated.client
+      .from('agency_properties')
+      .update({
+        ...payload,
+        published_at:
+          payload.status === 'published'
+            ? current.status === 'published'
+              ? undefined
+              : new Date().toISOString()
+            : null,
+      })
+      .eq('id', propertyMatch[1])
+      .eq('agency_id', agent.agencyId)
+      .select(
+        'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
+      )
+      .single();
+    if (updateError !== null) return error(updateError.message, 422);
+    return json({ property: data });
+  }
+
+  if (request.method === 'GET' && path === '/v1/agent/invitation-codes' && agent !== null) {
+    const { data, error: codesError } = await authenticated.client
+      .from('agency_invitation_codes')
+      .select('id, code, expires_at, max_uses, uses_count, status, created_at, revoked_at')
+      .eq('agency_id', agent.agencyId)
+      .order('created_at', { ascending: false });
+    if (codesError !== null) return error('No se pudieron cargar los códigos.', 500);
+    return json({ codes: data ?? [] });
+  }
+
+  if (request.method === 'POST' && path === '/v1/agent/invitation-codes' && agent !== null) {
+    const body = await readBody(request);
+    const maxUses = positiveIntegerField(body, 'maxUses') ?? 1;
+    if (maxUses > 10000) return error('El límite de usos no puede superar 10.000.', 422);
+    const expiresAtText = optionalStringField(body, 'expiresAt');
+    const expiresAt =
+      expiresAtText === null || expiresAtText === '' ? null : new Date(expiresAtText);
+    if (
+      expiresAt instanceof Date &&
+      (Number.isNaN(expiresAt.valueOf()) || expiresAt <= new Date())
+    ) {
+      return error('La fecha de caducidad debe ser futura.', 422);
+    }
+    const { data, error: generateError } = await authenticated.client.rpc(
+      'generate_agency_invitation_code',
+      {
+        p_expires_at: expiresAt === null ? null : expiresAt.toISOString(),
+        p_max_uses: maxUses,
+      },
+    );
+    if (generateError !== null || data === null) {
+      return error(generateError?.message ?? 'No se pudo generar el código.', 422);
+    }
+    return json({ code: data }, 201);
+  }
+
+  const codeMatch = path.match(/^\/v1\/agent\/invitation-codes\/([0-9a-f-]{36})\/revoke$/i);
+  if (request.method === 'POST' && codeMatch !== null && agent !== null) {
+    const { data, error: revokeError } = await authenticated.client.rpc(
+      'revoke_agency_invitation_code',
+      { p_code_id: codeMatch[1] },
+    );
+    if (revokeError !== null || data === null) {
+      return error(revokeError?.message ?? 'No se pudo revocar el código.', 422);
+    }
+    return json({ code: data });
   }
 
   return error('Ruta no encontrada.', 404);

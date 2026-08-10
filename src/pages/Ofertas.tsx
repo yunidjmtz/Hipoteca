@@ -62,16 +62,11 @@ import {
   type ViviendaCatalogoDemo,
 } from '@/data/inmobiliariaDemo';
 import {
-  anadirFavoritoCatalogoApi,
   apiHipotecasConfigurada,
-  canjearCodigoInmobiliariaApi,
-  catalogoApi,
-  cerrarSesionApi,
-  crearCuentaApi,
-  desvincularInmobiliariaApi,
-  iniciarSesionApi,
+  catalogoPorCodigoApi,
+  codigoInmobiliariaApi,
+  guardarCodigoInmobiliariaApi,
   previsualizarCodigoInmobiliariaApi,
-  tokenSesionApi,
   type InmobiliariaApi,
   type ViviendaCatalogoApi,
 } from '@/services/hipotecasApi';
@@ -2527,16 +2522,9 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
   const { estado, actualizarInmobiliariaActivaDemo, actualizarViviendas } = useEstado();
   const usandoApi = apiHipotecasConfigurada();
   const [mostrarCodigo, setMostrarCodigo] = useState(false);
-  const [mostrarAcceso, setMostrarAcceso] = useState(false);
   const [codigo, setCodigo] = useState('');
   const [inmobiliariaPendiente, setInmobiliariaPendiente] = useState<InmobiliariaDemo | null>(null);
   const [errorCodigo, setErrorCodigo] = useState('');
-  const [sesionActiva, setSesionActiva] = useState(() => tokenSesionApi() !== null);
-  const [modoRegistro, setModoRegistro] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorAcceso, setErrorAcceso] = useState('');
-  const [enviandoAcceso, setEnviandoAcceso] = useState(false);
   const [comprobandoCodigo, setComprobandoCodigo] = useState(false);
   const [catalogoRemoto, setCatalogoRemoto] = useState<readonly ViviendaCatalogoDemo[]>([]);
   const [inmobiliariaRemota, setInmobiliariaRemota] = useState<InmobiliariaDemo | null>(null);
@@ -2547,10 +2535,12 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
   const catalogo = usandoApi ? catalogoRemoto : VIVIENDAS_CATALOGO_DEMO;
 
   useEffect(() => {
-    if (!usandoApi || !sesionActiva) return;
+    if (!usandoApi) return;
+    const codigoGuardado = codigoInmobiliariaApi();
+    if (codigoGuardado === null) return;
 
     let cancelado = false;
-    void catalogoApi()
+    void catalogoPorCodigoApi(codigoGuardado)
       .then(({ agency, properties }) => {
         if (cancelado) return;
         const siguienteInmobiliaria = agency === null ? null : inmobiliariaDesdeApi(agency, '');
@@ -2574,14 +2564,9 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     return () => {
       cancelado = true;
     };
-  }, [actualizarInmobiliariaActivaDemo, sesionActiva, usandoApi]);
+  }, [actualizarInmobiliariaActivaDemo, usandoApi]);
 
   function abrirCodigo() {
-    if (usandoApi && !sesionActiva) {
-      setErrorAcceso('');
-      setMostrarAcceso(true);
-      return;
-    }
     setCodigo('');
     setErrorCodigo('');
     setInmobiliariaPendiente(null);
@@ -2619,15 +2604,16 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     if (usandoApi) {
       setComprobandoCodigo(true);
       try {
-        const { agency } = await canjearCodigoInmobiliariaApi(codigo);
-        const vinculada = inmobiliariaDesdeApi(agency, codigo);
+        const codigoNormalizado = codigo.trim().toUpperCase();
+        guardarCodigoInmobiliariaApi(codigoNormalizado);
+        const catalogoActualizado = await catalogoPorCodigoApi(codigoNormalizado);
+        const vinculada = inmobiliariaDesdeApi(catalogoActualizado.agency, codigoNormalizado);
         setInmobiliariaRemota(vinculada);
         actualizarInmobiliariaActivaDemo({
           id: vinculada.id,
           nombre: vinculada.nombre,
           marca: vinculada.marca,
         });
-        const catalogoActualizado = await catalogoApi();
         setCatalogoRemoto(catalogoActualizado.properties.map(viviendaCatalogoDesdeApi));
         setMostrarCodigo(false);
       } catch (error) {
@@ -2647,21 +2633,10 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     setMostrarCodigo(false);
   }
 
-  async function anadirAFavoritos(idCatalogo: string) {
+  function anadirAFavoritos(idCatalogo: string) {
     const vivienda = catalogo.find((candidata) => candidata.id === idCatalogo);
     if (vivienda === undefined || inmobiliaria === undefined) return;
     if (estado.viviendas.some((guardada) => guardada.catalogoViviendaId === vivienda.id)) return;
-
-    if (usandoApi) {
-      try {
-        await anadirFavoritoCatalogoApi(idCatalogo);
-      } catch (error) {
-        setErrorCatalogo(
-          error instanceof Error ? error.message : 'No se pudo guardar la vivienda en favoritos.',
-        );
-        return;
-      }
-    }
 
     actualizarViviendas([
       ...estado.viviendas,
@@ -2691,33 +2666,9 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     ]);
   }
 
-  async function enviarAcceso() {
-    setEnviandoAcceso(true);
-    try {
-      if (modoRegistro) {
-        await crearCuentaApi(email, password);
-      } else {
-        await iniciarSesionApi(email, password);
-      }
-      setSesionActiva(true);
-      setMostrarAcceso(false);
-      setMostrarCodigo(true);
-      setErrorAcceso('');
-    } catch (error) {
-      setErrorAcceso(error instanceof Error ? error.message : 'No se pudo completar el acceso.');
-    } finally {
-      setEnviandoAcceso(false);
-    }
-  }
-
-  async function desvincularInmobiliaria() {
+  function desvincularInmobiliaria() {
     if (usandoApi) {
-      try {
-        await desvincularInmobiliariaApi();
-      } catch (error) {
-        setErrorCatalogo(error instanceof Error ? error.message : 'No se pudo desvincular.');
-        return;
-      }
+      guardarCodigoInmobiliariaApi(null);
       setInmobiliariaRemota(null);
       setCatalogoRemoto([]);
     }
@@ -2785,21 +2736,6 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
               >
                 Desvincular
               </button>
-              {usandoApi && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    cerrarSesionApi();
-                    setSesionActiva(false);
-                    setInmobiliariaRemota(null);
-                    setCatalogoRemoto([]);
-                    actualizarInmobiliariaActivaDemo(null);
-                  }}
-                  className="rounded-medio border border-linea px-3 py-2 text-xs font-semibold text-tinta-media hover:bg-superficie-2"
-                >
-                  Cerrar sesión
-                </button>
-              )}
             </div>
           </header>
 
@@ -2875,93 +2811,6 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
               Esta inmobiliaria todavía no tiene viviendas publicadas.
             </p>
           )}
-        </div>
-      )}
-
-      {mostrarAcceso && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/30 px-4 py-4 pb-[calc(3.75rem+1.5rem+env(safe-area-inset-bottom))] sm:p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="titulo-acceso-inmobiliaria"
-            className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
-          >
-            <p className="rotulo">Mi inmobiliaria</p>
-            <h2 id="titulo-acceso-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
-              {modoRegistro ? 'Crea tu cuenta' : 'Inicia sesión'}
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-tinta-media">
-              {modoRegistro
-                ? 'Guarda de forma segura tu vínculo con la inmobiliaria y tus favoritos.'
-                : 'Accede para canjear el código que te ha compartido tu agente.'}
-            </p>
-            <label
-              className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta"
-              htmlFor="email-inmobiliaria"
-            >
-              Correo electrónico
-              <input
-                id="email-inmobiliaria"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(evento) => setEmail(evento.target.value)}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-              />
-            </label>
-            <label
-              className="mt-3 flex flex-col gap-1 text-sm font-medium text-tinta"
-              htmlFor="password-inmobiliaria"
-            >
-              Contraseña
-              <input
-                id="password-inmobiliaria"
-                type="password"
-                minLength={8}
-                autoComplete={modoRegistro ? 'new-password' : 'current-password'}
-                value={password}
-                onChange={(evento) => setPassword(evento.target.value)}
-                onKeyDown={(evento) => {
-                  if (evento.key === 'Enter') void enviarAcceso();
-                }}
-                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-              />
-            </label>
-            {errorAcceso !== '' && (
-              <p role="alert" className="mt-3 text-xs text-no-viable">
-                {errorAcceso}
-              </p>
-            )}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setModoRegistro((actual) => !actual);
-                  setErrorAcceso('');
-                }}
-                className="text-sm font-medium text-acento hover:underline"
-              >
-                {modoRegistro ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
-              </button>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMostrarAcceso(false)}
-                  className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void enviarAcceso()}
-                  disabled={enviandoAcceso}
-                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-wait disabled:bg-acento/70"
-                >
-                  {enviandoAcceso ? 'Accediendo…' : modoRegistro ? 'Crear cuenta' : 'Entrar'}
-                </button>
-              </div>
-            </div>
-          </section>
         </div>
       )}
 

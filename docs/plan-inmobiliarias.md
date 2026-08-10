@@ -44,7 +44,7 @@ La sección **Ofertas** tendrá dos pestañas:
 2. Pulsa `+ Añadir inmobiliaria`.
 3. Introduce el código que le ha facilitado el agente.
 4. Antes de confirmar, la aplicación muestra el nombre de la inmobiliaria a la que se conectará.
-5. Al confirmar, la inmobiliaria queda vinculada y se carga su catálogo.
+5. Al confirmar, el código queda guardado solo en ese navegador y se carga su catálogo, sin crear cuenta ni iniciar sesión.
 
 Una vez vinculada, el cliente contará con las acciones `Cambiar inmobiliaria` y `Desvincular inmobiliaria`.
 
@@ -129,8 +129,8 @@ Para una vivienda de catálogo, el favorito debe guardar la referencia a la vivi
 ### Fase 2 — Autenticación y persistencia ✅ Activa en producción
 
 - El proyecto Supabase ya contiene las tablas, controles de acceso y funciones de canje.
-- La aplicación permite al cliente crear cuenta o iniciar sesión, comprobar y canjear un código,
-  cargar el catálogo real, guardar favoritos y desvincularse.
+- La aplicación permite al cliente comprobar y pegar un código, cargar el catálogo real,
+  guardar favoritos en el navegador y desvincularse, sin crear cuenta ni iniciar sesión.
 - La Edge Function `hipotecas-api` queda desplegada como capa HTTP entre la aplicación y Supabase.
 - Las variables `VITE_HIPOTECAS_API_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` están
   configuradas en Netlify para producción, vistas previas y desarrollo.
@@ -139,7 +139,7 @@ Para una vivienda de catálogo, el favorito debe guardar la referencia a la vivi
 
 **Resultado:** cada cliente ve únicamente el catálogo de la inmobiliaria que le ha invitado.
 
-### Fase 3 — Panel inmobiliaria ⏭️ Siguiente bloque
+### Fase 3 — Panel inmobiliaria ✅ Implementada, pendiente de despliegue
 
 - **3.1 Acceso del agente.** Añadir una entrada y rutas privadas para agentes;
   resolver la inmobiliaria del usuario autenticado desde `agency_users` y
@@ -160,10 +160,12 @@ Para una vivienda de catálogo, el favorito debe guardar la referencia a la vivi
 
 ### Punto de continuación para la próxima sesión
 
-Empezar por **3.1**, sin rehacer Fase 2. Leer `AGENTS.md` y este documento;
-después inspeccionar el rol del usuario en `agency_users` y las funciones SQL
-ya existentes con `supabase db query --linked`. No ejecutar `supabase db push`
-ni reparar el historial de migraciones remoto.
+Desplegar `hipotecas-api` y el frontend tras ejecutar lint, TypeScript y tests;
+después verificar con una cuenta de agente y una cuenta de cliente el flujo
+completo de publicación, código, canje y retirada. La función SQL adicional
+`revoke_agency_invitation_code` está documentada en
+`supabase/sql/agency-operations.sql` y ya se aplicó al proyecto remoto. No
+ejecutar `supabase db push` ni reparar el historial de migraciones remoto.
 
 ### Fase 4 — Calidad operativa
 

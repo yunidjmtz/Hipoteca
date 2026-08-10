@@ -4,6 +4,7 @@
  */
 
 const CLAVE_SESION = 'hipotecas-api-access-token';
+const CLAVE_CODIGO_INMOBILIARIA = 'hipotecas-api-agency-code';
 const BASE_URL = import.meta.env.VITE_HIPOTECAS_API_URL?.replace(/\/$/, '');
 const PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
@@ -33,6 +34,46 @@ export interface ViviendaCatalogoApi {
   readonly status: 'draft' | 'published' | 'withdrawn';
 }
 
+export type EstadoViviendaAgenciaApi = ViviendaCatalogoApi['status'];
+
+export interface ViviendaAgenciaApi extends ViviendaCatalogoApi {
+  readonly address: string | null;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly gallery_urls: readonly string[];
+  readonly published_at: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface BorradorViviendaAgenciaApi {
+  readonly title: string;
+  readonly priceCents: number;
+  readonly zone: string;
+  readonly address: string | null;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly areaM2: number;
+  readonly bedrooms: number;
+  readonly bathrooms: number;
+  readonly description: string;
+  readonly mainImageUrl: string;
+  readonly galleryUrls: readonly string[];
+  readonly listingUrl: string;
+  readonly status: EstadoViviendaAgenciaApi;
+}
+
+export interface CodigoInvitacionApi {
+  readonly id: string;
+  readonly code: string;
+  readonly expires_at: string | null;
+  readonly max_uses: number;
+  readonly uses_count: number;
+  readonly status: 'active' | 'used' | 'expired' | 'revoked';
+  readonly created_at: string;
+  readonly revoked_at: string | null;
+}
+
 interface RespuestaSesion {
   readonly user: { readonly id: string; readonly email: string | null };
   readonly session: { readonly access_token: string; readonly refresh_token: string } | null;
@@ -48,6 +89,15 @@ export function tokenSesionApi(): string | null {
 
 export function cerrarSesionApi(): void {
   localStorage.removeItem(CLAVE_SESION);
+}
+
+export function codigoInmobiliariaApi(): string | null {
+  return localStorage.getItem(CLAVE_CODIGO_INMOBILIARIA);
+}
+
+export function guardarCodigoInmobiliariaApi(code: string | null): void {
+  if (code === null) localStorage.removeItem(CLAVE_CODIGO_INMOBILIARIA);
+  else localStorage.setItem(CLAVE_CODIGO_INMOBILIARIA, code.trim().toUpperCase());
 }
 
 async function solicitar<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
@@ -137,9 +187,72 @@ export async function catalogoApi(): Promise<{
   return solicitar('/v1/catalog/properties');
 }
 
+export async function catalogoPorCodigoApi(code: string): Promise<{
+  readonly agency: InmobiliariaApi;
+  readonly properties: ViviendaCatalogoApi[];
+}> {
+  return solicitar(`/v1/catalog/properties?code=${encodeURIComponent(code)}`);
+}
+
 export async function anadirFavoritoCatalogoApi(agencyPropertyId: string): Promise<void> {
   await solicitar('/v1/favorites', {
     method: 'POST',
     body: JSON.stringify({ agencyPropertyId }),
+  });
+}
+
+export async function panelAgenteApi(): Promise<{
+  readonly agency: InmobiliariaApi;
+  readonly role: 'agent' | 'admin';
+}> {
+  return solicitar('/v1/agent/me');
+}
+
+export async function viviendasAgenteApi(): Promise<{
+  readonly properties: ViviendaAgenciaApi[];
+}> {
+  return solicitar('/v1/agent/properties');
+}
+
+export async function crearViviendaAgenteApi(
+  vivienda: BorradorViviendaAgenciaApi,
+): Promise<{ readonly property: ViviendaAgenciaApi }> {
+  return solicitar('/v1/agent/properties', {
+    method: 'POST',
+    body: JSON.stringify(vivienda),
+  });
+}
+
+export async function actualizarViviendaAgenteApi(
+  id: string,
+  vivienda: BorradorViviendaAgenciaApi,
+): Promise<{ readonly property: ViviendaAgenciaApi }> {
+  return solicitar(`/v1/agent/properties/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(vivienda),
+  });
+}
+
+export async function codigosInvitacionAgenteApi(): Promise<{
+  readonly codes: CodigoInvitacionApi[];
+}> {
+  return solicitar('/v1/agent/invitation-codes');
+}
+
+export async function generarCodigoInvitacionAgenteApi(input: {
+  readonly expiresAt: string | null;
+  readonly maxUses: number;
+}): Promise<{ readonly code: CodigoInvitacionApi }> {
+  return solicitar('/v1/agent/invitation-codes', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function revocarCodigoInvitacionAgenteApi(
+  id: string,
+): Promise<{ readonly code: CodigoInvitacionApi }> {
+  return solicitar(`/v1/agent/invitation-codes/${encodeURIComponent(id)}/revoke`, {
+    method: 'POST',
   });
 }
