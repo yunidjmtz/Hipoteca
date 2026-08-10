@@ -284,7 +284,7 @@ export function Disposicion() {
         aria-label="Secciones"
         className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-6">
           {SECCIONES.map((seccion) => (
             <li key={seccion.id}>
               <NavLink

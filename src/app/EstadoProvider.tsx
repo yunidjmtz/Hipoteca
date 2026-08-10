@@ -11,6 +11,7 @@ import type {
   PerfilFinanciero,
   PreferenciasCompra,
   ViviendaGuardada,
+  InmobiliariaActivaDemo,
 } from '@/domain/types';
 import {
   cargarEstado,
@@ -42,6 +43,7 @@ interface AccionesEstado {
   actualizarEscenarioSimulador: (cambios: Partial<EscenarioHipoteca>) => void;
   actualizarOfertas: (ofertas: OfertaBancaria[]) => void;
   actualizarViviendas: (viviendas: ViviendaGuardada[]) => void;
+  actualizarInmobiliariaActivaDemo: (inmobiliaria: InmobiliariaActivaDemo | null) => void;
   exportarDatos: () => string;
   confirmarCopiaDescargada: () => void;
   importarDatos: (json: string) => boolean;
@@ -230,6 +232,19 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     [registrarCambioSinCopia],
   );
 
+  const actualizarInmobiliariaActivaDemo = useCallback(
+    (inmobiliaria: InmobiliariaActivaDemo | null) => {
+      setEstado((prev) => {
+        if (inmobiliaria !== null) return { ...prev, inmobiliariaActivaDemo: inmobiliaria };
+        const sinInmobiliaria: EstadoPersistido = { ...prev };
+        delete sinInmobiliaria.inmobiliariaActivaDemo;
+        return sinInmobiliaria;
+      });
+      registrarCambioSinCopia();
+    },
+    [registrarCambioSinCopia],
+  );
+
   const exportarDatos = useCallback(() => {
     return exportarJSON(estado);
   }, [estado]);
@@ -274,6 +289,7 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
     actualizarEscenarioSimulador,
     actualizarOfertas,
     actualizarViviendas,
+    actualizarInmobiliariaActivaDemo,
     exportarDatos,
     confirmarCopiaDescargada,
     importarDatos,

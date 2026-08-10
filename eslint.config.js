@@ -6,7 +6,18 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules', 'public'] },
+  {
+    ignores: [
+      'dist',
+      'coverage',
+      'playwright-report',
+      'test-results',
+      'node_modules',
+      'public',
+      // Las Edge Functions se comprueban con el runtime Deno de Supabase.
+      'supabase/functions',
+    ],
+  },
 
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,

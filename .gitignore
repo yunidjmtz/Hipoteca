@@ -17,3 +17,7 @@ Thumbs.db
 .playwright-mcp/
 *.log
 mobile-*.png
+
+# Local Netlify folder
+.netlify
+supabase/.temp/

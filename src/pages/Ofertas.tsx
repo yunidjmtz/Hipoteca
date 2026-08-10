@@ -1,7 +1,7 @@
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEstado } from '@/app/EstadoProvider';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputNumeroEntero } from '@/components/InputNumeroEntero';
 import { InfoTooltip } from '@/components/InfoTooltip';
@@ -41,10 +41,7 @@ import {
   type ResultadoComparacionVivienda,
 } from '@/finance/housingComparison';
 import { calcularCosteVivienda } from '@/finance/housingCosts';
-import {
-  evaluarEncajePlanVivienda,
-  type EstadoEncajePlanVivienda,
-} from '@/finance/housingPlanFit';
+import { evaluarEncajePlanVivienda, type EstadoEncajePlanVivienda } from '@/finance/housingPlanFit';
 import { mapImportedDataToExistingForm } from '@/services/propertyImportMapper';
 import { textoDeCapturaInmobiliaria } from '@/services/propertyImageOcr';
 import { parsePropertyListing } from '@/services/propertyListingParser';
@@ -58,6 +55,26 @@ import type {
   ViviendaGuardada,
 } from '@/domain/types';
 import { ESTADO_INICIAL } from '@/storage/defaults';
+import {
+  INMOBILIARIA_DEMO,
+  VIVIENDAS_CATALOGO_DEMO,
+  type InmobiliariaDemo,
+  type ViviendaCatalogoDemo,
+} from '@/data/inmobiliariaDemo';
+import {
+  anadirFavoritoCatalogoApi,
+  apiHipotecasConfigurada,
+  canjearCodigoInmobiliariaApi,
+  catalogoApi,
+  cerrarSesionApi,
+  crearCuentaApi,
+  desvincularInmobiliariaApi,
+  iniciarSesionApi,
+  previsualizarCodigoInmobiliariaApi,
+  tokenSesionApi,
+  type InmobiliariaApi,
+  type ViviendaCatalogoApi,
+} from '@/services/hipotecasApi';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -959,7 +976,7 @@ function TarjetaHipoteca({ resultado, onEditar, onEliminar }: PropsTarjetaHipote
   );
 }
 
-function Hipotecas() {
+export function Hipoteca() {
   const { estado, actualizarOfertas, actualizarEscenarioSimulador } = useEstado();
   const navegar = useNavigate();
   const [parametros, setParametros] = useSearchParams();
@@ -1010,7 +1027,7 @@ function Hipotecas() {
       euriborPorPeriodos: [],
     });
     void navegar(
-      `/ofertas/simulador?guardar=1&vivienda=${encodeURIComponent(viviendaSeleccionada.id)}`,
+      `/hipoteca/simulador?guardar=1&vivienda=${encodeURIComponent(viviendaSeleccionada.id)}`,
     );
   }
 
@@ -1042,7 +1059,7 @@ function Hipotecas() {
   function abrirEditar(oferta: OfertaBancaria) {
     actualizarEscenarioSimulador(simulacionDesdeOferta(oferta));
     void navegar(
-      `/ofertas/simulador?oferta=${encodeURIComponent(oferta.id)}&vivienda=${encodeURIComponent(
+      `/hipoteca/simulador?oferta=${encodeURIComponent(oferta.id)}&vivienda=${encodeURIComponent(
         viviendaSeleccionadaId,
       )}`,
     );
@@ -1066,7 +1083,7 @@ function Hipotecas() {
   }
 
   return (
-    <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem+2.75rem+1.25rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
+    <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
       <div className="flex shrink-0 items-center justify-end gap-2">
         <button
           type="button"
@@ -1108,7 +1125,7 @@ function Hipotecas() {
           disabled={viviendaSeleccionada === null}
           className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {ofertasVivienda.length === 0 ? '+ Añadir primera oferta →' : '+ Añadir oferta →'}
+          + Añadir Oferta
         </button>
       </div>
 
@@ -1154,7 +1171,7 @@ function Hipotecas() {
                     type="button"
                     onClick={() => {
                       setIndiceActivo(0);
-                      setParametros({ tab: 'hipotecas', vivienda: vivienda.id });
+                      setParametros({ vivienda: vivienda.id });
                       setSelectorViviendaAbierto(false);
                     }}
                     className={[
@@ -1519,7 +1536,9 @@ function FormularioVivienda({
   const [errorImportacion, setErrorImportacion] = useState('');
   const [procesandoCaptura, setProcesandoCaptura] = useState(false);
   const [ejemplosAbiertos, setEjemplosAbiertos] = useState(false);
-  const [confirmarReemplazo, setConfirmarReemplazo] = useState<Partial<BorradorVivienda> | null>(null);
+  const [confirmarReemplazo, setConfirmarReemplazo] = useState<Partial<BorradorVivienda> | null>(
+    null,
+  );
   const [camposTocados, setCamposTocados] = useState<Set<keyof BorradorVivienda>>(() => new Set());
   const inputCaptura = useRef<HTMLInputElement>(null);
   const [modalReformasAbierto, setModalReformasAbierto] = useState(false);
@@ -1540,8 +1559,17 @@ function FormularioVivienda({
     setModalReformasAbierto(true);
   }
 
-  function esCampoVacio(campo: keyof BorradorVivienda, valor: BorradorVivienda[keyof BorradorVivienda]): boolean {
-    return valor === undefined || valor === '' || valor === 0 || (valor === false && !camposTocados.has(campo)) || (Array.isArray(valor) && valor.length === 0);
+  function esCampoVacio(
+    campo: keyof BorradorVivienda,
+    valor: BorradorVivienda[keyof BorradorVivienda],
+  ): boolean {
+    return (
+      valor === undefined ||
+      valor === '' ||
+      valor === 0 ||
+      (valor === false && !camposTocados.has(campo)) ||
+      (Array.isArray(valor) && valor.length === 0)
+    );
   }
 
   function camposConConflicto(patch: Partial<BorradorVivienda>): string[] {
@@ -1556,7 +1584,9 @@ function FormularioVivienda({
   function aplicarImportacion(patch: Partial<BorradorVivienda>, reemplazar: boolean) {
     setBorrador((actual) => {
       const resultado = { ...actual };
-      for (const [campo, valor] of Object.entries(patch) as Array<[keyof BorradorVivienda, BorradorVivienda[keyof BorradorVivienda]]>) {
+      for (const [campo, valor] of Object.entries(patch) as Array<
+        [keyof BorradorVivienda, BorradorVivienda[keyof BorradorVivienda]]
+      >) {
         const anterior = actual[campo];
         const vacio = esCampoVacio(campo, anterior);
         if (reemplazar || vacio) Object.assign(resultado, { [campo]: valor });
@@ -1579,10 +1609,15 @@ function FormularioVivienda({
     setErrorImportacion('');
     try {
       const texto = await textoDeCapturaInmobiliaria(archivo);
-      if (texto === null) setErrorImportacion('No se ha podido leer texto en la captura. Prueba con una imagen más nítida.');
+      if (texto === null)
+        setErrorImportacion(
+          'No se ha podido leer texto en la captura. Prueba con una imagen más nítida.',
+        );
       else procesarImportacion(texto, null);
     } catch {
-      setErrorImportacion('No se ha podido ejecutar el OCR local. Prueba con una captura PNG o JPG más nítida.');
+      setErrorImportacion(
+        'No se ha podido ejecutar el OCR local. Prueba con una captura PNG o JPG más nítida.',
+      );
     } finally {
       setProcesandoCaptura(false);
     }
@@ -1605,12 +1640,35 @@ function FormularioVivienda({
               Ver ejemplos
             </button>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-tinta-media">Importa capturas de anuncios de Fotocasa o Idealista.</p>
-          <button type="button" disabled={procesandoCaptura} onClick={() => { setErrorImportacion(''); setResultadoImportacion(''); inputCaptura.current?.click(); }} className="mt-3 w-full rounded-medio border border-acento/35 bg-superficie px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60">{procesandoCaptura ? 'Leyendo captura…' : '📸 Importar captura'}</button>
-          <input ref={inputCaptura} type="file" accept="image/*" className="sr-only" onChange={(e) => void importarCaptura(e.target.files?.[0])} />
+          <p className="mt-1 text-xs leading-relaxed text-tinta-media">
+            Importa capturas de anuncios de Fotocasa o Idealista.
+          </p>
+          <button
+            type="button"
+            disabled={procesandoCaptura}
+            onClick={() => {
+              setErrorImportacion('');
+              setResultadoImportacion('');
+              inputCaptura.current?.click();
+            }}
+            className="mt-3 w-full rounded-medio border border-acento/35 bg-superficie px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60"
+          >
+            {procesandoCaptura ? 'Leyendo captura…' : '📸 Importar captura'}
+          </button>
+          <input
+            ref={inputCaptura}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => void importarCaptura(e.target.files?.[0])}
+          />
           <div aria-live="polite">
-            {resultadoImportacion !== '' && <p className="mt-2 text-xs font-medium text-comodo">{resultadoImportacion}</p>}
-            {errorImportacion !== '' && <p className="mt-2 text-xs font-medium text-no-viable">{errorImportacion}</p>}
+            {resultadoImportacion !== '' && (
+              <p className="mt-2 text-xs font-medium text-comodo">{resultadoImportacion}</p>
+            )}
+            {errorImportacion !== '' && (
+              <p className="mt-2 text-xs font-medium text-no-viable">{errorImportacion}</p>
+            )}
           </div>
         </section>
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
@@ -1655,7 +1713,9 @@ function FormularioVivienda({
                 ...actual,
                 anuncioUrl: enlace,
                 sourceUrl: enlace,
-                ...(fuente === null ? {} : { sourcePortal: fuente.portal, sourceListingId: fuente.listingId ?? '' }),
+                ...(fuente === null
+                  ? {}
+                  : { sourcePortal: fuente.portal, sourceListingId: fuente.listingId ?? '' }),
               }));
             }}
             placeholder="https://www.idealista.com/inmueble/..."
@@ -1748,13 +1808,46 @@ function FormularioVivienda({
         </div>
         {confirmarReemplazo !== null && (
           <div className="fixed inset-0 z-[60] flex items-end bg-tinta/30 p-3 sm:items-center sm:justify-center">
-            <div role="dialog" aria-modal="true" aria-labelledby="titulo-reemplazo" className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado">
-              <h2 id="titulo-reemplazo" className="font-display text-xl text-tinta">Hay datos ya escritos</h2>
-              <p className="mt-2 text-sm text-tinta-media">Se han encontrado datos que reemplazarían información existente.</p>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="titulo-reemplazo"
+              className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+            >
+              <h2 id="titulo-reemplazo" className="font-display text-xl text-tinta">
+                Hay datos ya escritos
+              </h2>
+              <p className="mt-2 text-sm text-tinta-media">
+                Se han encontrado datos que reemplazarían información existente.
+              </p>
               <div className="mt-5 flex flex-col gap-2">
-                <button type="button" onClick={() => { aplicarImportacion(confirmarReemplazo, false); setConfirmarReemplazo(null); }} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento">Completar solo campos vacíos</button>
-                <button type="button" onClick={() => { aplicarImportacion(confirmarReemplazo, true); setConfirmarReemplazo(null); }} className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta">Reemplazar con datos importados</button>
-                <button type="button" onClick={() => setConfirmarReemplazo(null)} className="px-4 py-2 text-sm text-tinta-media">Cancelar</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    aplicarImportacion(confirmarReemplazo, false);
+                    setConfirmarReemplazo(null);
+                  }}
+                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento"
+                >
+                  Completar solo campos vacíos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    aplicarImportacion(confirmarReemplazo, true);
+                    setConfirmarReemplazo(null);
+                  }}
+                  className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta"
+                >
+                  Reemplazar con datos importados
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmarReemplazo(null)}
+                  className="px-4 py-2 text-sm text-tinta-media"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           </div>
@@ -1784,7 +1877,8 @@ function FormularioVivienda({
                 </button>
               </div>
               <p className="mt-2 text-sm text-tinta-media">
-                Puedes importar una captura similar desde la galería o haciendo una captura de pantalla.
+                Puedes importar una captura similar desde la galería o haciendo una captura de
+                pantalla.
               </p>
               <div className="mt-4 grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2">
                 <figure className="w-full max-w-[18rem] overflow-hidden rounded-medio border border-linea bg-superficie-2">
@@ -1793,7 +1887,9 @@ function FormularioVivienda({
                     alt="Ejemplo de captura de Idealista con datos borrosos"
                     className="h-auto w-full scale-[1.015] blur-[3px]"
                   />
-                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">Idealista</figcaption>
+                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">
+                    Idealista
+                  </figcaption>
                 </figure>
                 <figure className="w-full max-w-[18rem] overflow-hidden rounded-medio border border-linea bg-superficie-2">
                   <img
@@ -1801,7 +1897,9 @@ function FormularioVivienda({
                     alt="Ejemplo de captura de Fotocasa con datos borrosos"
                     className="h-auto w-full scale-[1.015] blur-[3px]"
                   />
-                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">Fotocasa</figcaption>
+                  <figcaption className="px-3 py-2 text-sm font-medium text-tinta">
+                    Fotocasa
+                  </figcaption>
                 </figure>
               </div>
               <div className="mt-5 flex justify-end border-t border-linea pt-4">
@@ -1916,10 +2014,7 @@ function precioPorM2Formateado(valor: number): string {
   return `${formatEntero(Math.round(valor))} €/m²`;
 }
 
-const CONFIG_ENCAJE_PLAN: Record<
-  EstadoEncajePlanVivienda,
-  { texto: string; clases: string }
-> = {
+const CONFIG_ENCAJE_PLAN: Record<EstadoEncajePlanVivienda, { texto: string; clases: string }> = {
   en_plan: {
     texto: 'Encaja en tu plan',
     clases: 'border-comodo/35 bg-comodo-tenue text-comodo',
@@ -1950,9 +2045,7 @@ function BadgeEncajePlan({
     <span
       className={`inline-flex rounded-chico border px-1.5 py-0.5 text-[0.6875rem] font-semibold ${config.clases}`}
     >
-      {estado === 'no_viable' && limitante === 'ingresos'
-        ? 'No viable por ingresos'
-        : config.texto}
+      {estado === 'no_viable' && limitante === 'ingresos' ? 'No viable por ingresos' : config.texto}
     </span>
   );
 }
@@ -2122,7 +2215,7 @@ function RecomendacionVivienda({
   );
 }
 
-function Viviendas() {
+function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) {
   const { estado, actualizarViviendas } = useEstado();
   const navegar = useNavigate();
   const [indiceActivo, setIndiceActivo] = useState(0);
@@ -2151,7 +2244,14 @@ function Viviendas() {
   }
 
   return (
-    <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem+2.75rem+1.25rem)] bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:top-24 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]">
+    <div
+      className={[
+        'fixed inset-x-4 bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-4 lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]',
+        conPestanas
+          ? 'top-[calc(3.75rem+1.5rem+3.25rem)] lg:top-36'
+          : 'top-[calc(3.75rem+1.5rem)] lg:top-24',
+      ].join(' ')}
+    >
       <button
         type="button"
         onClick={() => void navegar('/ofertas/vivienda')}
@@ -2261,6 +2361,16 @@ function Viviendas() {
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {vivienda.origenInmobiliaria !== undefined && (
+                      <span className="inline-flex rounded-chico border border-acento/25 bg-acento-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-acento">
+                        Ofrecida por {vivienda.origenInmobiliaria}
+                      </span>
+                    )}
+                    {vivienda.yaNoDisponible === true && (
+                      <span className="inline-flex rounded-chico border border-revisar/35 bg-revisar-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-revisar">
+                        Ya no disponible
+                      </span>
+                    )}
                     <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
                       {vivienda.superficieM2 > 0
                         ? `${vivienda.superficieM2} m²`
@@ -2335,9 +2445,9 @@ function Viviendas() {
                     encajePlan.evaluacion !== null &&
                     encajePlan.prestamoMaximoPorIngresos !== null ? (
                       <p className="mt-0.5 text-xs opacity-90">
-                        Financiación necesaria: {formatEuros(encajePlan.evaluacion.importeFinanciado)} ·
-                        Máximo estimado por ingresos:{' '}
-                        {formatEuros(encajePlan.prestamoMaximoPorIngresos)}.
+                        Financiación necesaria:{' '}
+                        {formatEuros(encajePlan.evaluacion.importeFinanciado)} · Máximo estimado por
+                        ingresos: {formatEuros(encajePlan.prestamoMaximoPorIngresos)}.
                       </p>
                     ) : (
                       <p className="mt-0.5 text-xs opacity-90">{encajePlan.motivo}</p>
@@ -2385,6 +2495,571 @@ function Viviendas() {
   );
 }
 
+type PestanaOfertas = 'inmobiliaria' | 'favoritos';
+
+function inmobiliariaDesdeApi(inmobiliaria: InmobiliariaApi, codigo: string): InmobiliariaDemo {
+  return {
+    id: inmobiliaria.id,
+    nombre: inmobiliaria.name,
+    marca: inmobiliaria.brand,
+    codigo,
+  };
+}
+
+function viviendaCatalogoDesdeApi(vivienda: ViviendaCatalogoApi): ViviendaCatalogoDemo {
+  return {
+    id: vivienda.id,
+    nombre: vivienda.title,
+    precioVenta: vivienda.price_cents as Cents,
+    zona: vivienda.zone,
+    superficieM2: vivienda.area_m2,
+    habitaciones: vivienda.bedrooms,
+    banos: vivienda.bathrooms,
+    imagenUrl: vivienda.main_image_url,
+    anuncioUrl: vivienda.listing_url,
+    descripcion: vivienda.description,
+    tieneGaraje: false,
+    tieneTrastero: false,
+  };
+}
+
+function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
+  const { estado, actualizarInmobiliariaActivaDemo, actualizarViviendas } = useEstado();
+  const usandoApi = apiHipotecasConfigurada();
+  const [mostrarCodigo, setMostrarCodigo] = useState(false);
+  const [mostrarAcceso, setMostrarAcceso] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [inmobiliariaPendiente, setInmobiliariaPendiente] = useState<InmobiliariaDemo | null>(null);
+  const [errorCodigo, setErrorCodigo] = useState('');
+  const [sesionActiva, setSesionActiva] = useState(() => tokenSesionApi() !== null);
+  const [modoRegistro, setModoRegistro] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorAcceso, setErrorAcceso] = useState('');
+  const [enviandoAcceso, setEnviandoAcceso] = useState(false);
+  const [comprobandoCodigo, setComprobandoCodigo] = useState(false);
+  const [catalogoRemoto, setCatalogoRemoto] = useState<readonly ViviendaCatalogoDemo[]>([]);
+  const [inmobiliariaRemota, setInmobiliariaRemota] = useState<InmobiliariaDemo | null>(null);
+  const [errorCatalogo, setErrorCatalogo] = useState('');
+  const inmobiliaria = usandoApi
+    ? (inmobiliariaRemota ?? undefined)
+    : estado.inmobiliariaActivaDemo;
+  const catalogo = usandoApi ? catalogoRemoto : VIVIENDAS_CATALOGO_DEMO;
+
+  useEffect(() => {
+    if (!usandoApi || !sesionActiva) return;
+
+    let cancelado = false;
+    void catalogoApi()
+      .then(({ agency, properties }) => {
+        if (cancelado) return;
+        const siguienteInmobiliaria = agency === null ? null : inmobiliariaDesdeApi(agency, '');
+        setInmobiliariaRemota(siguienteInmobiliaria);
+        setCatalogoRemoto(properties.map(viviendaCatalogoDesdeApi));
+        setErrorCatalogo('');
+        actualizarInmobiliariaActivaDemo(
+          siguienteInmobiliaria === null
+            ? null
+            : {
+                id: siguienteInmobiliaria.id,
+                nombre: siguienteInmobiliaria.nombre,
+                marca: siguienteInmobiliaria.marca,
+              },
+        );
+      })
+      .catch((error: unknown) => {
+        if (cancelado) return;
+        setErrorCatalogo(error instanceof Error ? error.message : 'No se pudo cargar el catálogo.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [actualizarInmobiliariaActivaDemo, sesionActiva, usandoApi]);
+
+  function abrirCodigo() {
+    if (usandoApi && !sesionActiva) {
+      setErrorAcceso('');
+      setMostrarAcceso(true);
+      return;
+    }
+    setCodigo('');
+    setErrorCodigo('');
+    setInmobiliariaPendiente(null);
+    setMostrarCodigo(true);
+  }
+
+  async function comprobarCodigo() {
+    if (usandoApi) {
+      setComprobandoCodigo(true);
+      try {
+        const { agency } = await previsualizarCodigoInmobiliariaApi(codigo);
+        setErrorCodigo('');
+        setInmobiliariaPendiente(inmobiliariaDesdeApi(agency, codigo));
+      } catch (error) {
+        setInmobiliariaPendiente(null);
+        setErrorCodigo(error instanceof Error ? error.message : 'No se pudo comprobar el código.');
+      } finally {
+        setComprobandoCodigo(false);
+      }
+      return;
+    }
+    if (codigo.trim().toUpperCase() === INMOBILIARIA_DEMO.codigo) {
+      setErrorCodigo('');
+      setInmobiliariaPendiente(INMOBILIARIA_DEMO);
+      return;
+    }
+    setInmobiliariaPendiente(null);
+    setErrorCodigo(
+      'No encontramos ese código. Prueba con CASA-7K3P para recorrer la demostración.',
+    );
+  }
+
+  async function vincularInmobiliaria() {
+    if (inmobiliariaPendiente === null) return;
+    if (usandoApi) {
+      setComprobandoCodigo(true);
+      try {
+        const { agency } = await canjearCodigoInmobiliariaApi(codigo);
+        const vinculada = inmobiliariaDesdeApi(agency, codigo);
+        setInmobiliariaRemota(vinculada);
+        actualizarInmobiliariaActivaDemo({
+          id: vinculada.id,
+          nombre: vinculada.nombre,
+          marca: vinculada.marca,
+        });
+        const catalogoActualizado = await catalogoApi();
+        setCatalogoRemoto(catalogoActualizado.properties.map(viviendaCatalogoDesdeApi));
+        setMostrarCodigo(false);
+      } catch (error) {
+        setErrorCodigo(
+          error instanceof Error ? error.message : 'No se pudo vincular la inmobiliaria.',
+        );
+      } finally {
+        setComprobandoCodigo(false);
+      }
+      return;
+    }
+    actualizarInmobiliariaActivaDemo({
+      id: inmobiliariaPendiente.id,
+      nombre: inmobiliariaPendiente.nombre,
+      marca: inmobiliariaPendiente.marca,
+    });
+    setMostrarCodigo(false);
+  }
+
+  async function anadirAFavoritos(idCatalogo: string) {
+    const vivienda = catalogo.find((candidata) => candidata.id === idCatalogo);
+    if (vivienda === undefined || inmobiliaria === undefined) return;
+    if (estado.viviendas.some((guardada) => guardada.catalogoViviendaId === vivienda.id)) return;
+
+    if (usandoApi) {
+      try {
+        await anadirFavoritoCatalogoApi(idCatalogo);
+      } catch (error) {
+        setErrorCatalogo(
+          error instanceof Error ? error.message : 'No se pudo guardar la vivienda en favoritos.',
+        );
+        return;
+      }
+    }
+
+    actualizarViviendas([
+      ...estado.viviendas,
+      {
+        id: `catalogo-${vivienda.id}`,
+        nombre: vivienda.nombre,
+        fecha: fechaLocalISO(),
+        direccion: vivienda.zona,
+        anuncioUrl: vivienda.anuncioUrl,
+        sourceUrl: vivienda.anuncioUrl,
+        sourceListingId: vivienda.id,
+        rawListingText: '',
+        priceHistory: [{ price: vivienda.precioVenta, date: fechaLocalISO() }],
+        precioVenta: vivienda.precioVenta,
+        presupuestoReforma: ZERO,
+        reforma: '',
+        superficieM2: vivienda.superficieM2,
+        habitaciones: vivienda.habitaciones,
+        esExterior: true,
+        tieneTrastero: vivienda.tieneTrastero,
+        tieneGaraje: vivienda.tieneGaraje,
+        reformas: [],
+        notas: vivienda.descripcion,
+        origenInmobiliaria: inmobiliaria.nombre,
+        catalogoViviendaId: vivienda.id,
+      },
+    ]);
+  }
+
+  async function enviarAcceso() {
+    setEnviandoAcceso(true);
+    try {
+      if (modoRegistro) {
+        await crearCuentaApi(email, password);
+      } else {
+        await iniciarSesionApi(email, password);
+      }
+      setSesionActiva(true);
+      setMostrarAcceso(false);
+      setMostrarCodigo(true);
+      setErrorAcceso('');
+    } catch (error) {
+      setErrorAcceso(error instanceof Error ? error.message : 'No se pudo completar el acceso.');
+    } finally {
+      setEnviandoAcceso(false);
+    }
+  }
+
+  async function desvincularInmobiliaria() {
+    if (usandoApi) {
+      try {
+        await desvincularInmobiliariaApi();
+      } catch (error) {
+        setErrorCatalogo(error instanceof Error ? error.message : 'No se pudo desvincular.');
+        return;
+      }
+      setInmobiliariaRemota(null);
+      setCatalogoRemoto([]);
+    }
+    actualizarInmobiliariaActivaDemo(null);
+  }
+
+  return (
+    <div
+      className={[
+        'fixed inset-x-4 bottom-[calc(3.75rem+1rem+env(safe-area-inset-bottom))] overflow-y-auto lg:right-10 lg:bottom-8 lg:left-[calc(17rem+2.5rem)]',
+        mostrarCodigo ? 'z-30' : 'z-10',
+        conPestanas
+          ? 'top-[calc(3.75rem+1.5rem+3.25rem)] lg:top-36'
+          : 'top-[calc(3.75rem+1.5rem)] lg:top-24',
+      ].join(' ')}
+    >
+      {inmobiliaria === undefined ? (
+        <section className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center px-4 py-8 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-grande bg-acento-tenue font-display text-lg font-bold text-acento">
+            SOL
+          </span>
+          <p className="rotulo mt-5">Catálogo de confianza</p>
+          <h2 className="mt-1 font-display text-2xl text-tinta">
+            Aún no tienes una inmobiliaria vinculada
+          </h2>
+          <p className="mt-3 max-w-lg text-sm leading-relaxed text-tinta-media">
+            Introduce el código que te haya facilitado tu agente para ver las viviendas publicadas y
+            guardarlas en tus favoritos.
+          </p>
+          <button
+            type="button"
+            onClick={abrirCodigo}
+            className="mt-6 rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+          >
+            + Añadir inmobiliaria
+          </button>
+          {!usandoApi && (
+            <p className="mt-3 text-xs text-tinta-suave">Demostración: usa el código CASA-7K3P.</p>
+          )}
+        </section>
+      ) : (
+        <div className="mx-auto max-w-5xl pb-6">
+          <header className="flex flex-col justify-between gap-4 rounded-grande border border-linea bg-superficie p-4 shadow-papel sm:flex-row sm:items-center sm:p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-medio bg-acento font-display text-sm font-bold text-sobre-acento">
+                {inmobiliaria.marca}
+              </span>
+              <div>
+                <p className="rotulo">Mi inmobiliaria</p>
+                <h2 className="font-display text-xl text-tinta">{inmobiliaria.nombre}</h2>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={abrirCodigo}
+                className="rounded-medio border border-linea px-3 py-2 text-xs font-semibold text-acento hover:bg-acento-tenue"
+              >
+                Cambiar inmobiliaria
+              </button>
+              <button
+                type="button"
+                onClick={() => void desvincularInmobiliaria()}
+                className="rounded-medio border border-linea px-3 py-2 text-xs font-semibold text-tinta-media hover:bg-superficie-2"
+              >
+                Desvincular
+              </button>
+              {usandoApi && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    cerrarSesionApi();
+                    setSesionActiva(false);
+                    setInmobiliariaRemota(null);
+                    setCatalogoRemoto([]);
+                    actualizarInmobiliariaActivaDemo(null);
+                  }}
+                  className="rounded-medio border border-linea px-3 py-2 text-xs font-semibold text-tinta-media hover:bg-superficie-2"
+                >
+                  Cerrar sesión
+                </button>
+              )}
+            </div>
+          </header>
+
+          {errorCatalogo !== '' && (
+            <p
+              role="alert"
+              className="mt-4 rounded-medio bg-no-viable-tenue p-3 text-sm text-no-viable"
+            >
+              {errorCatalogo}
+            </p>
+          )}
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            {catalogo.map((vivienda) => {
+              const enFavoritos = estado.viviendas.some(
+                (guardada) => guardada.catalogoViviendaId === vivienda.id,
+              );
+              return (
+                <article
+                  key={vivienda.id}
+                  className="overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel"
+                >
+                  <img src={vivienda.imagenUrl} alt="" className="h-44 w-full object-cover" />
+                  <div className="p-4">
+                    <p className="text-xs font-medium text-tinta-media">{vivienda.zona}</p>
+                    <h3 className="mt-1 font-display text-lg leading-snug text-tinta">
+                      {vivienda.nombre}
+                    </h3>
+                    <p className="mt-2 font-cifra text-xl font-bold tabular-nums text-acento">
+                      {formatEuros(vivienda.precioVenta)}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+                      {vivienda.descripcion}
+                    </p>
+                    <dl className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-tinta-media">
+                      <div>
+                        <dt className="sr-only">Superficie</dt>
+                        <dd>{vivienda.superficieM2} m²</dd>
+                      </div>
+                      <div>
+                        <dt className="sr-only">Habitaciones</dt>
+                        <dd>{vivienda.habitaciones} hab.</dd>
+                      </div>
+                      <div>
+                        <dt className="sr-only">Baños</dt>
+                        <dd>{vivienda.banos} baños</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <a
+                        href={vivienda.anuncioUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-medio border border-linea px-3 py-2 text-xs font-semibold text-acento hover:bg-acento-tenue"
+                      >
+                        Ver ficha completa ↗
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => void anadirAFavoritos(vivienda.id)}
+                        disabled={enFavoritos}
+                        className="rounded-medio bg-acento px-3 py-2 text-xs font-semibold text-sobre-acento hover:bg-acento/90 disabled:cursor-default disabled:bg-comodo disabled:text-sobre-acento"
+                      >
+                        {enFavoritos ? '✓ En favoritos' : '+ Añadir a favoritos'}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          {catalogo.length === 0 && !errorCatalogo && (
+            <p className="rounded-medio border border-dashed border-linea p-5 text-center text-sm text-tinta-media">
+              Esta inmobiliaria todavía no tiene viviendas publicadas.
+            </p>
+          )}
+        </div>
+      )}
+
+      {mostrarAcceso && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/30 px-4 py-4 pb-[calc(3.75rem+1.5rem+env(safe-area-inset-bottom))] sm:p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-acceso-inmobiliaria"
+            className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+          >
+            <p className="rotulo">Mi inmobiliaria</p>
+            <h2 id="titulo-acceso-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
+              {modoRegistro ? 'Crea tu cuenta' : 'Inicia sesión'}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+              {modoRegistro
+                ? 'Guarda de forma segura tu vínculo con la inmobiliaria y tus favoritos.'
+                : 'Accede para canjear el código que te ha compartido tu agente.'}
+            </p>
+            <label
+              className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta"
+              htmlFor="email-inmobiliaria"
+            >
+              Correo electrónico
+              <input
+                id="email-inmobiliaria"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(evento) => setEmail(evento.target.value)}
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              />
+            </label>
+            <label
+              className="mt-3 flex flex-col gap-1 text-sm font-medium text-tinta"
+              htmlFor="password-inmobiliaria"
+            >
+              Contraseña
+              <input
+                id="password-inmobiliaria"
+                type="password"
+                minLength={8}
+                autoComplete={modoRegistro ? 'new-password' : 'current-password'}
+                value={password}
+                onChange={(evento) => setPassword(evento.target.value)}
+                onKeyDown={(evento) => {
+                  if (evento.key === 'Enter') void enviarAcceso();
+                }}
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              />
+            </label>
+            {errorAcceso !== '' && (
+              <p role="alert" className="mt-3 text-xs text-no-viable">
+                {errorAcceso}
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setModoRegistro((actual) => !actual);
+                  setErrorAcceso('');
+                }}
+                className="text-sm font-medium text-acento hover:underline"
+              >
+                {modoRegistro ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMostrarAcceso(false)}
+                  className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void enviarAcceso()}
+                  disabled={enviandoAcceso}
+                  className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90 disabled:cursor-wait disabled:bg-acento/70"
+                >
+                  {enviandoAcceso ? 'Accediendo…' : modoRegistro ? 'Crear cuenta' : 'Entrar'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {mostrarCodigo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/30 px-4 py-4 pb-[calc(3.75rem+1.5rem+env(safe-area-inset-bottom))] sm:p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-vincular-inmobiliaria"
+            className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+          >
+            <p className="rotulo">Mi inmobiliaria</p>
+            <h2 id="titulo-vincular-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
+              Añadir inmobiliaria
+            </h2>
+            {inmobiliariaPendiente === null ? (
+              <>
+                <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+                  Introduce el código que te ha compartido tu agente.
+                </p>
+                <label
+                  htmlFor="codigo-inmobiliaria"
+                  className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta"
+                >
+                  Código de invitación
+                  <input
+                    id="codigo-inmobiliaria"
+                    value={codigo}
+                    onChange={(evento) => setCodigo(evento.target.value.toUpperCase())}
+                    onKeyDown={(evento) => {
+                      if (evento.key === 'Enter') void comprobarCodigo();
+                    }}
+                    placeholder="CASA-7K3P"
+                    className="rounded-medio border border-linea bg-superficie px-3 py-2 font-cifra tracking-wide text-tinta uppercase focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  />
+                </label>
+                {errorCodigo !== '' && (
+                  <p role="alert" className="mt-2 text-xs text-no-viable">
+                    {errorCodigo}
+                  </p>
+                )}
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarCodigo(false)}
+                    className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void comprobarCodigo()}
+                    disabled={comprobandoCodigo}
+                    className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+                  >
+                    {comprobandoCodigo ? 'Comprobando…' : 'Continuar'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm text-tinta-media">Vas a vincularte con:</p>
+                <div className="mt-3 flex items-center gap-3 rounded-medio bg-acento-tenue p-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-chico bg-acento font-display text-xs font-bold text-sobre-acento">
+                    {inmobiliariaPendiente.marca}
+                  </span>
+                  <p className="font-display text-lg text-tinta">{inmobiliariaPendiente.nombre}</p>
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-tinta-suave">
+                  Tus favoritos personales se conservarán si más adelante cambias o desvinculas esta
+                  inmobiliaria.
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInmobiliariaPendiente(null)}
+                    className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void vincularInmobiliaria()}
+                    disabled={comprobandoCodigo}
+                    className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+                  >
+                    {comprobandoCodigo ? 'Vinculando…' : 'Confirmar vínculo'}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EditorVivienda() {
   const { estado, actualizarViviendas } = useEstado();
   const navegar = useNavigate();
@@ -2404,7 +3079,11 @@ export function EditorVivienda() {
       .join(', ');
     const priceHistory =
       anterior !== undefined && anterior.precioVenta !== borrador.precioVenta
-        ? [...(anterior.priceHistory ?? []), { price: anterior.precioVenta, date: anterior.fecha }, { price: borrador.precioVenta, date: fechaLocalISO() }]
+        ? [
+            ...(anterior.priceHistory ?? []),
+            { price: anterior.precioVenta, date: anterior.fecha },
+            { price: borrador.precioVenta, date: fechaLocalISO() },
+          ]
         : borrador.priceHistory;
     return { ...borrador, priceHistory, presupuestoReforma, reforma };
   }
@@ -2413,7 +3092,8 @@ export function EditorVivienda() {
     const duplicada = estado.viviendas.find((candidata) => {
       if (candidata.id === vivienda?.id) return false;
       return borrador.sourcePortal !== undefined && borrador.sourceListingId !== ''
-        ? candidata.sourcePortal === borrador.sourcePortal && candidata.sourceListingId === borrador.sourceListingId
+        ? candidata.sourcePortal === borrador.sourcePortal &&
+            candidata.sourceListingId === borrador.sourceListingId
         : borrador.sourceUrl !== '' && candidata.sourceUrl === borrador.sourceUrl;
     });
     if (duplicada !== undefined) {
@@ -2437,12 +3117,17 @@ export function EditorVivienda() {
     if (pendienteDuplicado === null) return;
     const duplicada = estado.viviendas.find((candidata) =>
       pendienteDuplicado.sourcePortal !== undefined && pendienteDuplicado.sourceListingId !== ''
-        ? candidata.sourcePortal === pendienteDuplicado.sourcePortal && candidata.sourceListingId === pendienteDuplicado.sourceListingId
+        ? candidata.sourcePortal === pendienteDuplicado.sourcePortal &&
+          candidata.sourceListingId === pendienteDuplicado.sourceListingId
         : candidata.sourceUrl === pendienteDuplicado.sourceUrl,
     );
     if (duplicada === undefined) return;
     const datos = datosParaGuardar(pendienteDuplicado, duplicada);
-    actualizarViviendas(estado.viviendas.map((actual) => actual.id === duplicada.id ? { ...datos, id: actual.id } : actual));
+    actualizarViviendas(
+      estado.viviendas.map((actual) =>
+        actual.id === duplicada.id ? { ...datos, id: actual.id } : actual,
+      ),
+    );
     void navegar('/ofertas');
   }
 
@@ -2465,13 +3150,44 @@ export function EditorVivienda() {
       />
       {pendienteDuplicado !== null && (
         <div className="fixed inset-0 z-[70] flex items-end bg-tinta/30 p-3 sm:items-center sm:justify-center">
-          <div role="dialog" aria-modal="true" aria-labelledby="titulo-duplicado" className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado">
-            <h2 id="titulo-duplicado" className="font-display text-xl text-tinta">Esta vivienda ya está guardada</h2>
-            <p className="mt-2 text-sm text-tinta-media">Puedes revisar la existente, actualizarla con estos datos o cancelar.</p>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-duplicado"
+            className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+          >
+            <h2 id="titulo-duplicado" className="font-display text-xl text-tinta">
+              Esta vivienda ya está guardada
+            </h2>
+            <p className="mt-2 text-sm text-tinta-media">
+              Puedes revisar la existente, actualizarla con estos datos o cancelar.
+            </p>
             <div className="mt-5 flex flex-col gap-2">
-              <button type="button" onClick={actualizarDuplicada} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento">Actualizar</button>
-              <button type="button" onClick={() => void navegar(`/ofertas/vivienda?vivienda=${encodeURIComponent(estado.viviendas.find((candidata) => candidata.sourceUrl === pendienteDuplicado.sourceUrl)?.id ?? '')}`)} className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta">Ver vivienda</button>
-              <button type="button" onClick={() => setPendienteDuplicado(null)} className="px-4 py-2 text-sm text-tinta-media">Cancelar</button>
+              <button
+                type="button"
+                onClick={actualizarDuplicada}
+                className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento"
+              >
+                Actualizar
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void navegar(
+                    `/ofertas/vivienda?vivienda=${encodeURIComponent(estado.viviendas.find((candidata) => candidata.sourceUrl === pendienteDuplicado.sourceUrl)?.id ?? '')}`,
+                  )
+                }
+                className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta"
+              >
+                Ver vivienda
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendienteDuplicado(null)}
+                className="px-4 py-2 text-sm text-tinta-media"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -2480,39 +3196,56 @@ export function EditorVivienda() {
   );
 }
 
-type TabOfertas = 'viviendas' | 'hipotecas';
-
 export function Ofertas() {
-  const [parametros, setParametros] = useSearchParams();
-  const tabActiva: TabOfertas = parametros.get('tab') === 'hipotecas' ? 'hipotecas' : 'viviendas';
+  const [parametros] = useSearchParams();
+  const [pestanaActiva, setPestanaActiva] = useState<PestanaOfertas>('inmobiliaria');
 
-  function cambiarTab(tab: TabOfertas) {
-    setParametros(tab === 'viviendas' ? {} : { tab });
+  if (parametros.get('tab') === 'hipotecas') {
+    const destino = new URLSearchParams(parametros);
+    destino.delete('tab');
+    const busqueda = destino.toString();
+    return <Navigate to={`/hipoteca${busqueda === '' ? '' : `?${busqueda}`}`} replace />;
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div role="tablist" aria-label="Ofertas" className="grid w-full grid-cols-2">
-        {(['viviendas', 'hipotecas'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={tabActiva === tab}
-            onClick={() => cambiarTab(tab)}
-            className={[
-              'w-full border-b-2 px-4 py-2 text-sm font-medium transition-colors',
-              tabActiva === tab
-                ? 'border-acento text-acento'
-                : 'border-transparent text-tinta-media hover:text-tinta',
-            ].join(' ')}
-          >
-            {tab === 'viviendas' ? 'Viviendas' : 'Hipotecas'}
-          </button>
-        ))}
+    <>
+      <div className="fixed inset-x-4 top-[calc(3.75rem+1.5rem)] z-20 lg:top-24 lg:right-10 lg:left-[calc(17rem+2.5rem)]">
+        <div
+          role="tablist"
+          aria-label="Ofertas"
+          className="grid max-w-md grid-cols-2 rounded-medio border border-linea bg-superficie p-1 shadow-papel"
+        >
+          {(
+            [
+              ['inmobiliaria', 'Mi inmobiliaria'],
+              ['favoritos', 'Mis favoritos'],
+            ] as const
+          ).map(([pestana, etiqueta]) => (
+            <button
+              key={pestana}
+              type="button"
+              role="tab"
+              aria-selected={pestanaActiva === pestana}
+              onClick={() => setPestanaActiva(pestana)}
+              className={[
+                'rounded-chico px-3 py-2 text-sm font-medium transition-colors',
+                pestanaActiva === pestana
+                  ? 'bg-acento text-sobre-acento'
+                  : 'text-tinta-media hover:bg-superficie-2 hover:text-tinta',
+              ].join(' ')}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
       </div>
-
-      <section role="tabpanel">{tabActiva === 'viviendas' ? <Viviendas /> : <Hipotecas />}</section>
-    </div>
+      <section role="tabpanel">
+        {pestanaActiva === 'inmobiliaria' ? (
+          <MiInmobiliaria conPestanas />
+        ) : (
+          <Viviendas conPestanas />
+        )}
+      </section>
+    </>
   );
 }

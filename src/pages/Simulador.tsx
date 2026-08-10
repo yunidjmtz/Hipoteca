@@ -306,7 +306,7 @@ export function Simulador() {
     actualizarEscenarioSimulador({ titulo: bancoLimpio });
     actualizarOfertas(ofertas);
     setErrorOferta('');
-    void navegar(`/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`);
+    void navegar(`/hipoteca?vivienda=${encodeURIComponent(viviendaId)}`);
   }
 
   function act<K extends keyof EscenarioHipoteca>(campo: K, valor: EscenarioHipoteca[K]) {
@@ -398,13 +398,13 @@ export function Simulador() {
             onClick={() =>
               void navegar(
                 viviendaId === ''
-                  ? '/ofertas?tab=hipotecas'
-                  : `/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`,
+                  ? '/hipoteca'
+                  : `/hipoteca?vivienda=${encodeURIComponent(viviendaId)}`,
               )
             }
             className="shrink-0 rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
           >
-            ← Volver a ofertas
+            ← Volver a hipoteca
           </button>
         </div>
       </header>
@@ -792,8 +792,8 @@ export function Simulador() {
                 onClick={() =>
                   void navegar(
                     viviendaId === ''
-                      ? '/ofertas?tab=hipotecas'
-                      : `/ofertas?tab=hipotecas&vivienda=${encodeURIComponent(viviendaId)}`,
+                      ? '/hipoteca'
+                      : `/hipoteca?vivienda=${encodeURIComponent(viviendaId)}`,
                   )
                 }
                 className="rounded-medio border border-linea px-5 py-2.5 text-sm font-medium text-tinta hover:bg-superficie-2"

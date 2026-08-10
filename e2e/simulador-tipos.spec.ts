@@ -1,14 +1,17 @@
 import { expect, test } from './fixtures';
 
 test('añadir una oferta abre su simulador', async ({ page }) => {
-  await page.goto('/#/ofertas?tab=hipotecas');
+  await page.goto('/#/ofertas/vivienda');
+  await page.getByLabel('Nombre del inmueble').fill('Piso para financiar');
+  await page.getByLabel('Dirección o referencia').fill('Calle Ejemplo, 1');
+  await page.getByLabel('Precio de venta').fill('250000');
+  await page.getByRole('button', { name: 'Guardar vivienda' }).click();
+  await page.goto('/#/hipoteca');
 
-  await page.getByRole('button', { name: /añadir primera oferta/i }).click();
+  await page.getByRole('button', { name: '+ Añadir Oferta' }).click();
 
-  await expect(page).toHaveURL(/#\/ofertas\/simulador\?guardar=1$/);
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Simula las condiciones de la oferta' }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/#\/hipoteca\/simulador\?guardar=1&vivienda=/);
+  await expect(page.getByText('Nueva oferta bancaria')).toBeVisible();
 });
 
 test('una vivienda compara el precio de venta con su reforma', async ({ page }) => {
@@ -39,16 +42,11 @@ test('una vivienda compara el precio de venta con su reforma', async ({ page }) 
 });
 
 test('seleccionar Mixto inicializa y calcula el tramo fijo mostrado', async ({ page }) => {
-  await page.goto('/#/ofertas/simulador');
+  await page.goto('/#/hipoteca/simulador');
 
   const precio = page.getByLabel('Precio de compra');
   await precio.click();
   await precio.fill('250000');
-  await page.keyboard.press('Tab');
-
-  const aportacion = page.getByLabel('Cuánto aportarás');
-  await aportacion.click();
-  await aportacion.fill('50000');
   await page.keyboard.press('Tab');
 
   await page.getByRole('button', { name: 'Mixto', exact: true }).click();
@@ -61,7 +59,7 @@ test('seleccionar Mixto inicializa y calcula el tramo fijo mostrado', async ({ p
 });
 
 test('una variable identifica la cuota como inicial hasta la revisión', async ({ page }) => {
-  await page.goto('/#/ofertas/simulador');
+  await page.goto('/#/hipoteca/simulador');
   await page.getByRole('button', { name: 'Variable', exact: true }).click();
 
   await expect(page.getByText('Cuota inicial hasta la próxima revisión')).toBeVisible();

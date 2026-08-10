@@ -58,11 +58,24 @@ export const SECCIONES: readonly Seccion[] = [
   {
     id: 'ofertas',
     ruta: 'ofertas',
-    etiqueta: 'Ofertas bancarias',
+    etiqueta: 'Ofertas',
     etiquetaCorta: 'Ofertas',
     icono: 'ofertas',
     fase: 'Fase 1b',
-    resumen: 'Añade, simula y compara las propuestas de cada entidad, sin quedarse en la cuota.',
+    resumen: 'Guarda y compara las viviendas que estás valorando.',
+    contenidos: [
+      'Viviendas candidatas, sus características, reformas y costes aproximados',
+      'Comparación del coste real y del encaje de cada inmueble con tu plan',
+    ],
+  },
+  {
+    id: 'hipoteca',
+    ruta: 'hipoteca',
+    etiqueta: 'Hipoteca',
+    etiquetaCorta: 'Hipoteca',
+    icono: 'simulador',
+    fase: 'Fase 1b',
+    resumen: 'Añade, simula y compara las propuestas de cada entidad, sin quedarte en la cuota.',
     contenidos: [
       'Simulador de tipo fijo, variable o mixto para introducir cada propuesta',
       'Estado de cada solicitud: pendiente, en estudio, preaprobada, FEIN recibida, firmada',

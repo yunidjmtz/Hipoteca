@@ -17,7 +17,7 @@ function navegacionVisible(pagina: Page) {
  * La etiqueta corta de la barra inferior es siempre un fragmento de la larga
  * del raíl, así que una expresión regular sirve para las dos disposiciones.
  */
-const SECCIONES = ['Resumen', 'Ofertas', 'Amortización'];
+const SECCIONES = ['Resumen', 'Ofertas', 'Hipoteca', 'Amortización'];
 
 /**
  * El navegador solo consulta el mismo origen y el endpoint estadístico del INE.
@@ -47,7 +47,7 @@ test('el navegador solo consulta el mismo origen y el endpoint autorizado del IN
   // aparecería al renderizarla, no en la carga inicial.
   for (const seccion of SECCIONES) {
     await navegacionVisible(page)
-      .getByRole('link', { name: new RegExp(seccion, 'i') })
+      .getByRole('link', { name: new RegExp(`(?:\\d+ )?${seccion}$`, 'i') })
       .click();
     await expect(page.locator('main')).toBeVisible();
   }

@@ -27,6 +27,26 @@ function cspDesarrollo(): Plugin {
   };
 }
 
+/** Incluye únicamente el origen de la API configurada en el CSP de ese build. */
+function cspApiHipotecas(apiUrl: string | undefined): Plugin {
+  if (apiUrl === undefined || apiUrl === '') return { name: 'csp-api-hipotecas' };
+  let origen: string;
+  try {
+    origen = new URL(apiUrl).origin;
+  } catch {
+    throw new Error('VITE_HIPOTECAS_API_URL debe ser una URL válida.');
+  }
+  return {
+    name: 'csp-api-hipotecas',
+    transformIndexHtml(html) {
+      return html.replace(
+        "connect-src 'self' https://servicios.ine.es",
+        `connect-src 'self' https://servicios.ine.es ${origen}`,
+      );
+    },
+  };
+}
+
 function leerCuerpo(peticion: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const partes: Uint8Array[] = [];
@@ -71,8 +91,13 @@ function importadorAnunciosDesarrollo(apiKey: string | undefined): Plugin {
             const requestInit: RequestInit = { method: metodo, headers };
             if (metodo !== 'GET' && metodo !== 'HEAD') requestInit.body = cuerpo;
 
-            const { default: importarAnuncio } =
-              await import('./netlify/functions/importar-anuncio.mjs');
+            const moduloImportador = (await import(
+              // @ts-expect-error Netlify loads this JavaScript function at runtime.
+              './netlify/functions/importar-anuncio.mjs'
+            )) as unknown as {
+              default: (request: Request, apiKeyConfigurada?: string) => Promise<Response>;
+            };
+            const { default: importarAnuncio } = moduloImportador;
             const resultado = await importarAnuncio(
               new Request(
                 `http://${peticion.headers.host ?? 'localhost'}/.netlify/functions/importar-anuncio`,
@@ -104,6 +129,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      cspApiHipotecas(env.VITE_HIPOTECAS_API_URL),
       cspDesarrollo(),
       importadorAnunciosDesarrollo(env.FIRECRAWL_API_KEY),
       VitePWA({

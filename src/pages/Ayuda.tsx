@@ -17,7 +17,7 @@ const APARTADOS: readonly ApartadoManual[] = [
     pasos: [
       'Empieza por Tus datos: completa vivienda, titulares, ahorro, deudas y gastos.',
       'Consulta Mi plan hipotecario para saber qué precio es razonable y cuánto te falta.',
-      'Cuando tengas propuestas, añádelas en Ofertas bancarias y compáralas.',
+      'Cuando tengas propuestas, añádelas en Hipoteca y compáralas.',
       'Guarda una oferta para revisar su cuadro en Amortización.',
     ],
     nota: 'Las cifras son estimaciones para comparar escenarios; la oferta vinculante del banco es la FEIN.',
@@ -64,18 +64,18 @@ const APARTADOS: readonly ApartadoManual[] = [
   },
   {
     id: 'ofertas',
-    titulo: 'Ofertas bancarias',
+    titulo: 'Ofertas e hipoteca',
     descripcion:
-      'Sirve para guardar y comparar hipotecas y viviendas sin fijarse solo en la cuota mensual.',
+      'Ofertas sirve para comparar viviendas; Hipoteca sirve para guardar y comparar las propuestas de los bancos.',
     pasos: [
-      'En la pestaña Hipotecas, pulsa Añadir hipoteca y completa banco, precio, entrada, financiación, plazo y tipo de interés.',
+      'En Ofertas puedes registrar inmuebles, sus características, reformas y costes aproximados antes de elegir.',
+      'En Hipoteca, pulsa Añadir hipoteca y completa banco, precio, entrada, financiación, plazo y tipo de interés.',
       'Para tipo fijo, informa el TIN. Para variable, revisa Euríbor y diferencial; para mixto, añade el TIN y periodo fijo.',
       'Añade comisión de apertura, TAE oficial de la FEIN si la tienes y las vinculaciones. Una bonificación puede bajar el TIN pero tener un coste anual.',
       'Guarda la simulación y compárala con otras por cuota, TAE oficial/estimada, coste total y desembolso.',
-      'En Viviendas puedes registrar inmuebles, sus características, reformas y costes aproximados para compararlos antes de elegir.',
     ],
     nota: 'La TAE de la FEIN es la referencia oficial; la TAE estimada de la aplicación sirve para homogeneizar la comparación.',
-    ruta: '/ofertas',
+    ruta: '/hipoteca',
   },
   {
     id: 'antes-firmar',
@@ -98,7 +98,7 @@ const APARTADOS: readonly ApartadoManual[] = [
     descripcion:
       'Desglosa una hipoteca guardada cuota a cuota y permite valorar aportaciones anticipadas.',
     pasos: [
-      'Selecciona una hipoteca guardada. Si no aparece ninguna, crea y guarda una en Ofertas bancarias.',
+      'Selecciona una hipoteca guardada. Si no aparece ninguna, créala y guárdala en Hipoteca.',
       'Revisa el cuadro mensual o anual: separa cada cuota en intereses, capital amortizado y saldo pendiente.',
       'Para simular una amortización anticipada, indica importe, fecha y comisión cuando corresponda.',
       'Elige entre reducir cuota o reducir plazo y compara el ahorro de intereses antes de tomar una decisión.',

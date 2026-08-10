@@ -1,0 +1,6 @@
+project_id = "hipotecas"
+
+# The function has public sign-up/sign-in routes and validates user JWTs for
+# every remaining route itself.
+[functions.hipotecas-api]
+verify_jwt = false

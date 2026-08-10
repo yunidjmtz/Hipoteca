@@ -400,6 +400,18 @@ export interface ViviendaGuardada {
   tieneGaraje: boolean;
   reformas: PartidaReforma[];
   notas: string;
+  /** Identifica el catálogo demo del que procede durante la Fase 1. */
+  origenInmobiliaria?: string;
+  catalogoViviendaId?: string;
+  /** Conserva el contexto de un favorito cuando se retira del catálogo. */
+  yaNoDisponible?: boolean;
+}
+
+/** Vínculo local temporal para validar la experiencia antes de la Fase 2. */
+export interface InmobiliariaActivaDemo {
+  id: string;
+  nombre: string;
+  marca: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +428,7 @@ export interface EstadoPersistido {
   simulaciones: SimulacionGuardada[];
   ofertas: OfertaBancaria[];
   viviendas: ViviendaGuardada[];
+  inmobiliariaActivaDemo?: InmobiliariaActivaDemo;
   metas: Meta[];
   escenarioSimulador: EscenarioHipoteca; // v2 — escenario activo en el Simulador
 }

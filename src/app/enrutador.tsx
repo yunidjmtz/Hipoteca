@@ -58,12 +58,23 @@ export const enrutador = createHashRouter([
       },
       {
         path: 'ofertas/simulador',
+        element: <RedireccionSimulador />,
+      },
+      {
+        path: 'hipoteca',
+        lazy: async () => {
+          const { Hipoteca } = await import('@/pages/Ofertas');
+          return { Component: Hipoteca };
+        },
+      },
+      {
+        path: 'hipoteca/simulador',
         lazy: async () => {
           const { Simulador } = await import('@/pages/Simulador');
           return { Component: Simulador };
         },
       },
-      // Conserva los enlaces antiguos al simulador, ahora integrado en Ofertas.
+      // Conserva los enlaces antiguos al simulador, ahora integrado en Hipoteca.
       { path: 'simulador', element: <RedireccionSimulador /> },
       {
         path: 'amortizacion',

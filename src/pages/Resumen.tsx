@@ -38,9 +38,10 @@ function ProgresoEntrada({
   readonly faltante: Cents;
 }) {
   const progreso = necesario > 0 ? Math.min(1, ahorro / necesario) : 0;
+  const porcentaje = Math.round(progreso * 100);
 
   return (
-    <div className="w-full max-w-md rounded-medio border border-linea bg-superficie-2/50 px-4 py-3.5">
+    <div className="w-full max-w-md rounded-medio border border-linea bg-superficie-2/50 px-4 py-3">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-xs text-tinta-suave">Total mínimo</p>
         <p className="font-cifra text-sm font-semibold tabular-nums text-tinta">
@@ -48,7 +49,7 @@ function ProgresoEntrada({
         </p>
       </div>
       <div
-        className="mt-2 h-3 overflow-hidden rounded-full bg-linea"
+        className="mt-2 h-4 overflow-hidden rounded-full bg-linea"
         role="progressbar"
         aria-label="Progreso hacia el desembolso inicial mínimo"
         aria-valuemin={0}
@@ -56,11 +57,15 @@ function ProgresoEntrada({
         aria-valuenow={Math.min(ahorro, necesario)}
       >
         <div
-          className="h-full rounded-full bg-acento transition-all duration-700"
+          className="flex h-full items-center justify-center overflow-hidden rounded-full bg-acento px-2 transition-all duration-700"
           style={{ width: `${progreso * 100}%` }}
-        />
+        >
+          <span className="whitespace-nowrap text-[0.65rem] font-medium leading-none text-sobre-acento">
+            {porcentaje} %
+          </span>
+        </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="mt-2.5 grid grid-cols-2 gap-3">
         <div>
           <p className="text-xs text-tinta-suave">Tienes</p>
           <p className="mt-0.5 font-cifra text-lg font-semibold tabular-nums text-acento">
@@ -70,7 +75,7 @@ function ProgresoEntrada({
         <div>
           <p className="text-xs text-tinta-suave">Te falta</p>
           <p
-            className={`mt-0.5 font-cifra text-lg font-semibold tabular-nums ${faltante > 0 ? 'text-ajustado' : 'text-comodo'}`}
+            className={`mt-0.5 font-cifra text-lg font-semibold tabular-nums ${faltante > 0 ? 'text-no-viable' : 'text-comodo'}`}
           >
             {formatEuros(faltante)}
           </p>
@@ -648,13 +653,10 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
             </section>
           ) : (
             <>
-              <section className="rounded-grande border border-linea bg-superficie px-6 py-5 shadow-papel">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <section className="rounded-grande border border-linea bg-superficie px-6 py-4 shadow-papel">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="rotulo mb-1">Desembolso inicial</p>
-                    <h3 className="font-display text-[1.1rem] leading-snug text-tinta">
-                      Todo lo que necesitas para comprar
-                    </h3>
                   </div>
                   <ProgresoEntrada
                     ahorro={evaluacion.ahorroDisponible}
@@ -662,35 +664,29 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                     faltante={evaluacion.faltante}
                   />
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
-                  {desgloseDesembolso.map(([etiqueta, valor]) => (
-                    <div key={etiqueta}>
-                      <p className="text-xs leading-snug text-tinta-media">{etiqueta}</p>
-                      <p className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
-                        {formatEuros(valor)}
-                      </p>
-                    </div>
-                  ))}
-                  <div className="border-l-2 border-acento pl-3">
-                    <p className="text-xs leading-snug text-tinta-media">Mínimo total</p>
-                    <p className="mt-1 font-cifra font-semibold tabular-nums text-acento">
-                      {formatEuros(evaluacion.dineroMinimo)}
-                    </p>
+                <div className="mt-4 border-t border-linea pt-3">
+                  <p className="rotulo">Desglose de Desembolso:</p>
+                  <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
+                    {desgloseDesembolso.map(([etiqueta, valor]) => (
+                      <div key={etiqueta}>
+                        <p className="text-xs leading-snug text-tinta-media">{etiqueta}</p>
+                        <p className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
+                          {formatEuros(valor)}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-tinta-suave">
-                  <span>
-                    Puedes cambiar estas estimaciones, incluido el porcentaje de inmobiliaria, en
-                  </span>
+                <p className="mt-3 text-sm leading-relaxed text-tinta-suave">
+                  Puedes cambiar estas estimaciones, incluido el porcentaje de inmobiliaria, en{' '}
                   <button
                     type="button"
                     onClick={abrirAjustes}
-                    className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+                    className="font-medium text-acento underline decoration-acento/50 underline-offset-4 transition-colors hover:text-acento-oscuro hover:decoration-acento"
                   >
-                    Ajustes →
-                  </button>
-                  <span>.</span>
-                </div>
+                    Ajustes
+                  </button>.
+                </p>
               </section>
 
               {evaluacion.faltante > 0 && (
@@ -712,7 +708,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
               más precisa.
             </p>
             <Link
-              to="/ofertas/simulador"
+              to="/hipoteca/simulador"
               className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento"
             >
               Añadir oferta →

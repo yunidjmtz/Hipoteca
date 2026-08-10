@@ -13,7 +13,15 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
   // en conflicto con exactOptionalPropertyTypes. El cast es seguro (misma forma).
   const escenarioSimulador: EscenarioHipoteca =
     data.escenarioSimulador ?? ESTADO_INICIAL.escenarioSimulador;
-  const viviendas = data.viviendas ?? [];
+  const viviendas = (data.viviendas ?? []).map((vivienda) => {
+    const { origenInmobiliaria, catalogoViviendaId, yaNoDisponible, ...viviendaBase } = vivienda;
+    return {
+      ...viviendaBase,
+      ...(origenInmobiliaria === undefined ? {} : { origenInmobiliaria }),
+      ...(catalogoViviendaId === undefined ? {} : { catalogoViviendaId }),
+      ...(yaNoDisponible === undefined ? {} : { yaNoDisponible }),
+    };
+  });
   return {
     ...(data as EstadoPersistido),
     escenarioSimulador,

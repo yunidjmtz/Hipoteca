@@ -351,6 +351,15 @@ export const zViviendaGuardada = z.object({
     )
     .default([]),
   notas: z.string(),
+  origenInmobiliaria: z.string().optional(),
+  catalogoViviendaId: z.string().optional(),
+  yaNoDisponible: z.boolean().optional(),
+});
+
+const zInmobiliariaActivaDemo = z.object({
+  id: z.string(),
+  nombre: z.string(),
+  marca: z.string(),
 });
 
 export const zMeta = z.object({
@@ -376,6 +385,7 @@ export const zEstadoPersistido = z.object({
   ofertas: z.array(zOfertaBancaria),
   // v7: opcional para que los datos guardados antes de las viviendas sigan cargando.
   viviendas: z.array(zViviendaGuardada).optional(),
+  inmobiliariaActivaDemo: zInmobiliariaActivaDemo.optional(),
   metas: z.array(zMeta),
   // v2: optional para compatibilidad con datos v1; se rellena en la migración
   escenarioSimulador: zEscenarioHipoteca.optional(),

@@ -26,59 +26,31 @@ function ProgresoHitos({
     puntos.find((punto) => punto.ahorroAcumulado >= importeMeta * siguientePorcentaje) ?? meta;
 
   return (
-    <div className="mt-5 rounded-grande border border-acento/25 bg-superficie/70 p-4">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-tinta">Progreso de tu ahorro</p>
-          <p className="mt-0.5 text-xs text-tinta-suave">
-            Lo que ya has reunido frente a tu meta estimada.
-          </p>
-        </div>
-        <p className="font-cifra text-lg font-semibold tabular-nums text-acento">
-          {Math.round(progreso * 100)} %
+    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="rounded-chico bg-superficie-2/80 px-3 py-2.5">
+        <p className="text-xs text-tinta-suave">Hoy</p>
+        <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
+          {formatEuros(inicio.ahorroAcumulado)}
+        </p>
+        <p className="mt-0.5 text-xs text-tinta-media">{Math.round(progreso * 100)} % completado</p>
+      </div>
+      <div className="rounded-chico bg-superficie-2/80 px-3 py-2.5">
+        <p className="text-xs text-tinta-suave">Próximo hito</p>
+        <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
+          {formatEuros(siguienteHito.ahorroAcumulado)}
+        </p>
+        <p className="mt-0.5 text-xs text-tinta-media">
+          Mes {siguienteHito.mes} · {formatFecha(siguienteHito.fecha)}
         </p>
       </div>
-      <div
-        className="mt-4 h-3 overflow-hidden rounded-full bg-linea"
-        role="progressbar"
-        aria-label="Progreso del ahorro hacia la meta estimada"
-        aria-valuemin={0}
-        aria-valuemax={importeMeta}
-        aria-valuenow={Math.min(inicio.ahorroAcumulado, importeMeta)}
-      >
-        <div
-          className="h-full rounded-full bg-acento transition-all duration-700"
-          style={{ width: `${progreso * 100}%` }}
-        />
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-chico bg-superficie-2/80 px-3 py-2.5">
-          <p className="text-xs text-tinta-suave">Hoy</p>
-          <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
-            {formatEuros(inicio.ahorroAcumulado)}
-          </p>
-          <p className="mt-0.5 text-xs text-tinta-media">
-            {Math.round(progreso * 100)} % completado
-          </p>
-        </div>
-        <div className="rounded-chico bg-superficie-2/80 px-3 py-2.5">
-          <p className="text-xs text-tinta-suave">Próximo hito</p>
-          <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
-            {formatEuros(siguienteHito.ahorroAcumulado)}
-          </p>
-          <p className="mt-0.5 text-xs text-tinta-media">
-            Mes {siguienteHito.mes} · {formatFecha(siguienteHito.fecha)}
-          </p>
-        </div>
-        <div className="rounded-chico bg-comodo-tenue px-3 py-2.5">
-          <p className="text-xs text-tinta-suave">Meta</p>
-          <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
-            {formatEuros(importeMeta)}
-          </p>
-          <p className="mt-0.5 text-xs text-tinta-media">
-            Mes {meses} · {formatFecha(meta.fecha)}
-          </p>
-        </div>
+      <div className="rounded-chico bg-comodo-tenue px-3 py-2.5">
+        <p className="text-xs text-tinta-suave">Meta</p>
+        <p className="mt-0.5 font-cifra text-sm font-semibold tabular-nums text-tinta">
+          {formatEuros(importeMeta)}
+        </p>
+        <p className="mt-0.5 text-xs text-tinta-media">
+          Mes {meses} · {formatFecha(meta.fecha)}
+        </p>
       </div>
     </div>
   );
@@ -134,11 +106,9 @@ export function Meta() {
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="overflow-hidden rounded-grande border border-acento/40 bg-acento-tenue px-5 py-4 shadow-papel">
-        <div className="flex flex-col items-start gap-2">
-          <h1 className="font-display text-[1.35rem] leading-snug text-tinta">
-            Ahorro y progreso hacia el objetivo
-          </h1>
+      <section className="overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
+        <header className="flex flex-col items-start gap-2 border-b border-linea bg-acento-tenue px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="rotulo">Ahorro y progreso hacia el objetivo</h1>
           {meses !== null && capacidadAhorroActual > 0 && (
             <button
               type="button"
@@ -148,46 +118,49 @@ export function Meta() {
               Ver ahorro mes a mes →
             </button>
           )}
+        </header>
+        <div className="p-5">
+          {evaluacion.dineroMinimo <= 0 ? (
+            <p className="text-sm text-tinta-media">
+              Configura el precio objetivo para ver la proyección.
+            </p>
+          ) : (
+            <div>
+              {tieneMinimo ? (
+                <p className="rounded-medio bg-comodo-tenue px-4 py-2.5 text-sm font-medium text-comodo">
+                  Ya tienes el dinero mínimo necesario. Puedes plantearte la compra.
+                </p>
+              ) : capacidadAhorroActual <= 0 ? (
+                <p className="rounded-medio bg-revisar-tenue px-4 py-3 text-sm text-tinta">
+                  Con los ingresos, deudas y gastos actuales no queda margen mensual para ahorrar.
+                </p>
+              ) : meses === null ? (
+                <p className="rounded-medio bg-revisar-tenue px-4 py-3 text-sm text-tinta">
+                  No se alcanza el objetivo en los próximos 10 años con tu capacidad de ahorro
+                  actual.
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <p className="rotulo mb-1 text-acento">
+                      Capacidad actual: {formatEuros(capacidadAhorroActual)} al mes
+                    </p>
+                    <p className="font-display text-3xl leading-none text-tinta tabular-nums">
+                      {meses} {meses === 1 ? 'mes' : 'meses'}
+                      {fechaEstimada !== null && (
+                        <span className="ml-2 text-xl text-tinta-media">→ {fechaEstimada}</span>
+                      )}
+                    </p>
+                    <p className="mt-2 text-sm text-tinta-media">
+                      para completar los {formatEuros(faltanteAhorro)} que faltan.
+                    </p>
+                  </div>
+                  <ProgresoHitos puntos={puntosHastaMeta} meses={meses} />
+                </>
+              )}
+            </div>
+          )}
         </div>
-        {evaluacion.dineroMinimo <= 0 ? (
-          <p className="mt-5 text-sm text-tinta-media">
-            Configura el precio objetivo para ver la proyección.
-          </p>
-        ) : (
-          <div className="mt-5">
-            {tieneMinimo ? (
-              <p className="rounded-medio bg-comodo-tenue px-4 py-2.5 text-sm font-medium text-comodo">
-                Ya tienes el dinero mínimo necesario. Puedes plantearte la compra.
-              </p>
-            ) : capacidadAhorroActual <= 0 ? (
-              <p className="rounded-medio bg-revisar-tenue px-4 py-3 text-sm text-tinta">
-                Con los ingresos, deudas y gastos actuales no queda margen mensual para ahorrar.
-              </p>
-            ) : meses === null ? (
-              <p className="rounded-medio bg-revisar-tenue px-4 py-3 text-sm text-tinta">
-                No se alcanza el objetivo en los próximos 10 años con tu capacidad de ahorro actual.
-              </p>
-            ) : (
-              <>
-                <div>
-                  <p className="rotulo mb-1 text-acento">
-                    Capacidad actual: {formatEuros(capacidadAhorroActual)} al mes
-                  </p>
-                  <p className="font-display text-3xl leading-none text-tinta tabular-nums">
-                    {meses} {meses === 1 ? 'mes' : 'meses'}
-                    {fechaEstimada !== null && (
-                      <span className="ml-2 text-xl text-tinta-media">→ {fechaEstimada}</span>
-                    )}
-                  </p>
-                  <p className="mt-2 text-sm text-tinta-media">
-                    para completar los {formatEuros(faltanteAhorro)} que faltan.
-                  </p>
-                </div>
-                <ProgresoHitos puntos={puntosHastaMeta} meses={meses} />
-              </>
-            )}
-          </div>
-        )}
       </section>
 
       {tablaAbierta && (
