@@ -126,24 +126,44 @@ Para una vivienda de catálogo, el favorito debe guardar la referencia a la vivi
 
 **Resultado:** se puede validar la experiencia de cliente de principio a fin.
 
-### Fase 2 — Autenticación y persistencia ⏳ Cliente listo para activar
+### Fase 2 — Autenticación y persistencia ✅ Activa en producción
 
 - El proyecto Supabase ya contiene las tablas, controles de acceso y funciones de canje.
 - La aplicación permite al cliente crear cuenta o iniciar sesión, comprobar y canjear un código,
   cargar el catálogo real, guardar favoritos y desvincularse.
 - La Edge Function `hipotecas-api` queda desplegada como capa HTTP entre la aplicación y Supabase.
-- **Pendiente de activación:** definir `VITE_HIPOTECAS_API_URL` y
-  `VITE_SUPABASE_PUBLISHABLE_KEY` en el entorno de Netlify y desplegar el frontend.
+- Las variables `VITE_HIPOTECAS_API_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` están
+  configuradas en Netlify para producción, vistas previas y desarrollo.
+- El frontend está publicado en https://hipotecasyuni.netlify.app y la función
+  `hipotecas-api` está desplegada en Supabase.
 
 **Resultado:** cada cliente ve únicamente el catálogo de la inmobiliaria que le ha invitado.
 
-### Fase 3 — Panel inmobiliaria
+### Fase 3 — Panel inmobiliaria ⏭️ Siguiente bloque
 
-- Construir login y navegación privada del agente.
-- Crear gestión de viviendas, fotos, URL externa y estados de publicación.
-- Implementar generación, listado y revocación de códigos.
+- **3.1 Acceso del agente.** Añadir una entrada y rutas privadas para agentes;
+  resolver la inmobiliaria del usuario autenticado desde `agency_users` y
+  mostrar un estado claro si no tiene rol de agente.
+- **3.2 API de agente.** Extender `supabase/functions/hipotecas-api/index.ts`
+  con operaciones protegidas para consultar, crear, editar, publicar y retirar
+  viviendas. Las consultas deben usar el JWT del agente y las políticas RLS
+  existentes, nunca una clave de servicio para operaciones normales.
+- **3.3 Gestión de códigos.** Usar la función SQL existente
+  `generate_agency_invitation_code` para generar códigos; añadir listado y
+  revocación conservando la auditoría en `agency_audit_log`.
+- **3.4 Interfaz.** Crear el panel de catálogo con formulario de vivienda,
+  selector de estado, vista previa de tarjeta y sección de códigos.
+- **3.5 Pruebas.** Cubrir que un agente no puede operar otra inmobiliaria y que
+  un cliente no accede al panel ni a datos de gestión.
 
 **Resultado:** la inmobiliaria gestiona autónomamente el catálogo que ven sus clientes.
+
+### Punto de continuación para la próxima sesión
+
+Empezar por **3.1**, sin rehacer Fase 2. Leer `AGENTS.md` y este documento;
+después inspeccionar el rol del usuario en `agency_users` y las funciones SQL
+ya existentes con `supabase db query --linked`. No ejecutar `supabase db push`
+ni reparar el historial de migraciones remoto.
 
 ### Fase 4 — Calidad operativa
 
