@@ -12,9 +12,11 @@ La funcionalidad actual de viviendas personales se conserva: una persona podrá 
 | --- | --- | --- |
 | Cliente | Área cliente | Vincular una inmobiliaria mediante código, ver su catálogo, abrir la ficha externa y gestionar favoritos. |
 | Agente inmobiliario | Panel privado de su inmobiliaria | Crear, editar, publicar, retirar y compartir viviendas; generar y revocar códigos. |
-| Administrador | Administración interna | Crear inmobiliarias, gestionar agentes y resolver incidencias. |
+| Superadmin único | Administración interna | Crear inmobiliarias y crear/asignar la cuenta inicial de su agente. |
 
 Una persona cliente tendrá inicialmente una única **inmobiliaria activa**. Sus favoritos personales no se borrarán si cambia o desvincula la inmobiliaria.
+
+El superadmin es un rol global y único, separado de los roles `agent` y `admin` de cada inmobiliaria. Nadie puede obtenerlo desde la aplicación: se asigna en la configuración interna. Al crear una inmobiliaria, el superadmin define el correo y la contraseña inicial de su agente; esa cuenta queda limitada por RLS a su propia inmobiliaria.
 
 ## Área cliente
 

@@ -228,6 +228,15 @@ async function agentContext(client: ReturnType<typeof apiClient>, userId: string
   return { agencyId: data.agency_id as string, role: data.role as 'agent' | 'admin', agency };
 }
 
+async function superAdminContext(client: ReturnType<typeof apiClient>, userId: string) {
+  const { data, error: superAdminError } = await client
+    .from('super_admin_users')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return superAdminError === null && data !== null;
+}
+
 function sessionResponse(user: { id: string; email?: string | null }, session: unknown) {
   return json({ user: { id: user.id, email: user.email ?? null }, session });
 }
@@ -379,6 +388,91 @@ Deno.serve(async (request) => {
       );
     }
     return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
+  const isSuperAdmin = await superAdminContext(authenticated.client, authenticated.user.id);
+  if (path.startsWith('/v1/superadmin/') && !isSuperAdmin) {
+    return error('Tu cuenta no tiene acceso a la administración de inmobiliarias.', 403);
+  }
+
+  if (request.method === 'GET' && path === '/v1/superadmin/me' && isSuperAdmin) {
+    return json({ email: authenticated.user.email ?? null });
+  }
+
+  if (request.method === 'GET' && path === '/v1/superadmin/agencies' && isSuperAdmin) {
+    const { data, error: agenciesError } = await authenticated.client
+      .from('real_estate_agencies')
+      .select('id, name, brand, active, created_at')
+      .order('created_at', { ascending: false });
+    if (agenciesError !== null) return error('No se pudieron cargar las inmobiliarias.', 500);
+    return json({ agencies: data ?? [] });
+  }
+
+  if (request.method === 'POST' && path === '/v1/superadmin/agencies' && isSuperAdmin) {
+    const body = await readBody(request);
+    const name = stringField(body, 'name');
+    const brand = stringField(body, 'brand');
+    const agentEmail = stringField(body, 'agentEmail');
+    const agentPassword = stringField(body, 'agentPassword');
+    if (
+      name === null ||
+      brand === null ||
+      agentEmail === null ||
+      !agentEmail.includes('@') ||
+      agentPassword === null ||
+      agentPassword.length < 8
+    ) {
+      return error(
+        'Indica los datos de la inmobiliaria y una contraseña de al menos 8 caracteres.',
+        422,
+      );
+    }
+    const admin = adminClient();
+    if (admin === null)
+      return error('No se puede crear la cuenta del agente en este momento.', 503);
+    const { data: userData, error: userError } = await admin.auth.admin.createUser({
+      email: agentEmail,
+      password: agentPassword,
+      email_confirm: true,
+    });
+    if (userError !== null || userData.user === null) {
+      return error(userError?.message ?? 'No se pudo crear la cuenta del agente.', 422);
+    }
+    const { data, error: agencyError } = await authenticated.client.rpc(
+      'create_agency_and_assign_agent',
+      {
+        p_name: name,
+        p_brand: brand,
+        p_agent_user_id: userData.user.id,
+      },
+    );
+    if (agencyError !== null || data === null) {
+      await admin.auth.admin.deleteUser(userData.user.id);
+      return error(agencyError?.message ?? 'No se pudo crear la inmobiliaria.', 422);
+    }
+    const result = data as {
+      agency?: { id?: string; name?: string; brand?: string };
+    };
+    if (
+      result.agency?.id === undefined ||
+      result.agency.name === undefined ||
+      result.agency.brand === undefined
+    ) {
+      await admin.auth.admin.deleteUser(userData.user.id);
+      return error('No se pudo crear la inmobiliaria.', 422);
+    }
+    return json(
+      {
+        agency: {
+          id: result.agency.id,
+          name: result.agency.name,
+          brand: result.agency.brand,
+          active: true,
+          created_at: new Date().toISOString(),
+        },
+      },
+      201,
+    );
   }
 
   const agent = await agentContext(authenticated.client, authenticated.user.id);

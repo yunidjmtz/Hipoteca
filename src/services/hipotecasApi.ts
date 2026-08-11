@@ -74,6 +74,11 @@ export interface CodigoInvitacionApi {
   readonly revoked_at: string | null;
 }
 
+export interface InmobiliariaAdministracionApi extends InmobiliariaApi {
+  readonly active: boolean;
+  readonly created_at: string;
+}
+
 interface RespuestaSesion {
   readonly user: { readonly id: string; readonly email: string | null };
   readonly session: { readonly access_token: string; readonly refresh_token: string } | null;
@@ -254,5 +259,27 @@ export async function revocarCodigoInvitacionAgenteApi(
 ): Promise<{ readonly code: CodigoInvitacionApi }> {
   return solicitar(`/v1/agent/invitation-codes/${encodeURIComponent(id)}/revoke`, {
     method: 'POST',
+  });
+}
+
+export async function superadminApi(): Promise<{ readonly email: string | null }> {
+  return solicitar('/v1/superadmin/me');
+}
+
+export async function inmobiliariasAdministracionApi(): Promise<{
+  readonly agencies: InmobiliariaAdministracionApi[];
+}> {
+  return solicitar('/v1/superadmin/agencies');
+}
+
+export async function crearInmobiliariaAdministracionApi(input: {
+  readonly name: string;
+  readonly brand: string;
+  readonly agentEmail: string;
+  readonly agentPassword: string;
+}): Promise<{ readonly agency: InmobiliariaAdministracionApi }> {
+  return solicitar('/v1/superadmin/agencies', {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
