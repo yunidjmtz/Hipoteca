@@ -75,6 +75,13 @@ function validHttpUrl(value: string): boolean {
   }
 }
 
+function validLogoDataUrl(value: string | null): boolean {
+  return (
+    value === null ||
+    (/^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= 1_500_000)
+  );
+}
+
 type PropertyStatus = 'draft' | 'published' | 'withdrawn';
 
 type AgentPropertyPayload = {
@@ -402,7 +409,7 @@ Deno.serve(async (request) => {
   if (request.method === 'GET' && path === '/v1/superadmin/agencies' && isSuperAdmin) {
     const { data, error: agenciesError } = await authenticated.client
       .from('real_estate_agencies')
-      .select('id, name, brand, active, created_at')
+      .select('id, name, brand, website, address, phone, contact_email, logo_url, active, created_at')
       .order('created_at', { ascending: false });
     if (agenciesError !== null) return error('No se pudieron cargar las inmobiliarias.', 500);
     return json({ agencies: data ?? [] });
@@ -412,67 +419,51 @@ Deno.serve(async (request) => {
     const body = await readBody(request);
     const name = stringField(body, 'name');
     const brand = stringField(body, 'brand');
-    const agentEmail = stringField(body, 'agentEmail');
-    const agentPassword = stringField(body, 'agentPassword');
+    const website = optionalStringField(body, 'website');
+    const address = optionalStringField(body, 'address');
+    const phone = optionalStringField(body, 'phone');
+    const contactEmail = optionalStringField(body, 'contactEmail');
+    const logoDataUrl = optionalStringField(body, 'logoDataUrl');
     if (
       name === null ||
       brand === null ||
-      agentEmail === null ||
-      !agentEmail.includes('@') ||
-      agentPassword === null ||
-      agentPassword.length < 8
+      website === null ||
+      address === null ||
+      phone === null ||
+      contactEmail === null ||
+      logoDataUrl === null ||
+      (website !== '' && !validHttpUrl(website)) ||
+      phone.length > 32 ||
+      (contactEmail !== '' && !contactEmail.includes('@')) ||
+      !validLogoDataUrl(logoDataUrl === '' ? null : logoDataUrl)
     ) {
-      return error(
-        'Indica los datos de la inmobiliaria y una contraseña de al menos 8 caracteres.',
-        422,
-      );
-    }
-    const admin = adminClient();
-    if (admin === null)
-      return error('No se puede crear la cuenta del agente en este momento.', 503);
-    const { data: userData, error: userError } = await admin.auth.admin.createUser({
-      email: agentEmail,
-      password: agentPassword,
-      email_confirm: true,
-    });
-    if (userError !== null || userData.user === null) {
-      return error(userError?.message ?? 'No se pudo crear la cuenta del agente.', 422);
+      return error('Indica los datos válidos de la inmobiliaria.', 422);
     }
     const { data, error: agencyError } = await authenticated.client.rpc(
-      'create_agency_and_assign_agent',
+      'create_agency',
       {
         p_name: name,
         p_brand: brand,
-        p_agent_user_id: userData.user.id,
+        p_website: website === '' ? null : website,
+        p_address: address === '' ? null : address,
+        p_logo_url: logoDataUrl === '' ? null : logoDataUrl,
+        p_phone: phone === '' ? null : phone,
+        p_contact_email: contactEmail === '' ? null : contactEmail,
       },
     );
     if (agencyError !== null || data === null) {
-      await admin.auth.admin.deleteUser(userData.user.id);
       return error(agencyError?.message ?? 'No se pudo crear la inmobiliaria.', 422);
     }
-    const result = data as {
-      agency?: { id?: string; name?: string; brand?: string };
-    };
+    const result = data as { agency?: Record<string, unknown> };
     if (
-      result.agency?.id === undefined ||
-      result.agency.name === undefined ||
-      result.agency.brand === undefined
+      result.agency === undefined ||
+      typeof result.agency.id !== 'string' ||
+      typeof result.agency.name !== 'string' ||
+      typeof result.agency.brand !== 'string'
     ) {
-      await admin.auth.admin.deleteUser(userData.user.id);
       return error('No se pudo crear la inmobiliaria.', 422);
     }
-    return json(
-      {
-        agency: {
-          id: result.agency.id,
-          name: result.agency.name,
-          brand: result.agency.brand,
-          active: true,
-          created_at: new Date().toISOString(),
-        },
-      },
-      201,
-    );
+    return json({ agency: result.agency }, 201);
   }
 
   const superadminAgencyMatch = path.match(/^\/v1\/superadmin\/agencies\/([0-9a-f-]{36})$/i);
@@ -480,15 +471,38 @@ Deno.serve(async (request) => {
     const body = await readBody(request);
     const name = stringField(body, 'name');
     const brand = stringField(body, 'brand');
+    const website = optionalStringField(body, 'website');
+    const address = optionalStringField(body, 'address');
+    const phone = optionalStringField(body, 'phone');
+    const contactEmail = optionalStringField(body, 'contactEmail');
+    const logoDataUrl = optionalStringField(body, 'logoDataUrl');
     const active = body?.active;
-    if (name === null || brand === null || typeof active !== 'boolean') {
-      return error('Indica el nombre, la marca y el estado de la inmobiliaria.', 422);
+    if (
+      name === null ||
+      brand === null ||
+      website === null ||
+      address === null ||
+      phone === null ||
+      contactEmail === null ||
+      logoDataUrl === null ||
+      typeof active !== 'boolean' ||
+      (website !== '' && !validHttpUrl(website)) ||
+      phone.length > 32 ||
+      (contactEmail !== '' && !contactEmail.includes('@')) ||
+      !validLogoDataUrl(logoDataUrl === '' ? null : logoDataUrl)
+    ) {
+      return error('Indica los datos válidos de la inmobiliaria.', 422);
     }
     const { data, error: updateError } = await authenticated.client.rpc('update_agency_details', {
       p_agency_id: superadminAgencyMatch[1],
       p_name: name,
       p_brand: brand,
       p_active: active,
+      p_website: website === '' ? null : website,
+      p_address: address === '' ? null : address,
+      p_logo_url: logoDataUrl === '' ? null : logoDataUrl,
+      p_phone: phone === '' ? null : phone,
+      p_contact_email: contactEmail === '' ? null : contactEmail,
     });
     const result = data as { agency?: Record<string, unknown> } | null;
     if (updateError !== null || result?.agency === undefined) {

@@ -231,3 +231,132 @@ $$;
 insert into public.super_admin_users (singleton, user_id)
 values (true, 'f6b013fe-f1a9-494c-a081-4fcc47df4913')
 on conflict (singleton) do update set user_id = excluded.user_id;
+
+-- Perfil comercial de la inmobiliaria. El logo se guarda como WebP recortado
+-- y optimizado por el navegador, para no depender de una URL externa.
+alter table public.real_estate_agencies
+  add column if not exists website text,
+  add column if not exists address text,
+  add column if not exists phone text,
+  add column if not exists contact_email text;
+
+drop function if exists public.create_agency(text, text, text, text, text);
+create or replace function public.create_agency(
+  p_name text,
+  p_brand text,
+  p_website text default null,
+  p_address text default null,
+  p_logo_url text default null,
+  p_phone text default null,
+  p_contact_email text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_agency public.real_estate_agencies%rowtype;
+begin
+  if not public.is_super_admin() then
+    raise exception 'No tienes permisos para crear inmobiliarias.' using errcode = '42501';
+  end if;
+  if length(trim(p_name)) = 0 or length(trim(p_brand)) = 0 then
+    raise exception 'Indica el nombre y la marca de la inmobiliaria.' using errcode = '22023';
+  end if;
+
+  insert into public.real_estate_agencies (
+    name, brand, website, address, logo_url, phone, contact_email, active
+  )
+  values (
+    trim(p_name),
+    trim(p_brand),
+    nullif(trim(coalesce(p_website, '')), ''),
+    nullif(trim(coalesce(p_address, '')), ''),
+    nullif(trim(coalesce(p_logo_url, '')), ''),
+    nullif(trim(coalesce(p_phone, '')), ''),
+    nullif(trim(coalesce(p_contact_email, '')), ''),
+    true
+  )
+  returning * into v_agency;
+
+  insert into public.agency_audit_log (agency_id, actor_id, action, subject_type, subject_id)
+  values (v_agency.id, auth.uid(), 'agency_created', 'agency', v_agency.id);
+
+  return jsonb_build_object(
+    'agency', jsonb_build_object(
+      'id', v_agency.id,
+      'name', v_agency.name,
+      'brand', v_agency.brand,
+      'website', v_agency.website,
+      'address', v_agency.address,
+      'logo_url', v_agency.logo_url,
+      'phone', v_agency.phone,
+      'contact_email', v_agency.contact_email,
+      'active', v_agency.active,
+      'created_at', v_agency.created_at
+    )
+  );
+end;
+$$;
+
+drop function if exists public.update_agency_details(uuid, text, text, boolean);
+drop function if exists public.update_agency_details(uuid, text, text, boolean, text, text, text);
+create or replace function public.update_agency_details(
+  p_agency_id uuid,
+  p_name text,
+  p_brand text,
+  p_active boolean,
+  p_website text default null,
+  p_address text default null,
+  p_logo_url text default null,
+  p_phone text default null,
+  p_contact_email text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_agency public.real_estate_agencies%rowtype;
+begin
+  if not public.is_super_admin() then
+    raise exception 'No tienes permisos para modificar inmobiliarias.' using errcode = '42501';
+  end if;
+  if length(trim(p_name)) = 0 or length(trim(p_brand)) = 0 then
+    raise exception 'Indica el nombre y la marca de la inmobiliaria.' using errcode = '22023';
+  end if;
+
+  update public.real_estate_agencies
+  set
+    name = trim(p_name),
+    brand = trim(p_brand),
+    active = p_active,
+    website = nullif(trim(coalesce(p_website, '')), ''),
+    address = nullif(trim(coalesce(p_address, '')), ''),
+    logo_url = nullif(trim(coalesce(p_logo_url, '')), ''),
+    phone = nullif(trim(coalesce(p_phone, '')), ''),
+    contact_email = nullif(trim(coalesce(p_contact_email, '')), '')
+  where id = p_agency_id
+  returning * into v_agency;
+  if not found then raise exception 'La inmobiliaria no existe.' using errcode = 'P0001'; end if;
+
+  insert into public.agency_audit_log (agency_id, actor_id, action, subject_type, subject_id)
+  values (v_agency.id, auth.uid(), 'agency_updated', 'agency', v_agency.id);
+  return jsonb_build_object(
+    'agency', jsonb_build_object(
+      'id', v_agency.id,
+      'name', v_agency.name,
+      'brand', v_agency.brand,
+      'website', v_agency.website,
+      'address', v_agency.address,
+      'logo_url', v_agency.logo_url,
+      'phone', v_agency.phone,
+      'contact_email', v_agency.contact_email,
+      'active', v_agency.active,
+      'created_at', v_agency.created_at
+    )
+  );
+end;
+$$;

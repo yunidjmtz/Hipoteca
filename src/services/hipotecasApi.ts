@@ -75,6 +75,11 @@ export interface CodigoInvitacionApi {
 }
 
 export interface InmobiliariaAdministracionApi extends InmobiliariaApi {
+  readonly website: string | null;
+  readonly address: string | null;
+  readonly phone: string | null;
+  readonly contact_email: string | null;
+  readonly logo_url: string | null;
   readonly active: boolean;
   readonly created_at: string;
 }
@@ -282,8 +287,11 @@ export async function inmobiliariasAdministracionApi(): Promise<{
 export async function crearInmobiliariaAdministracionApi(input: {
   readonly name: string;
   readonly brand: string;
-  readonly agentEmail: string;
-  readonly agentPassword: string;
+  readonly website: string | null;
+  readonly address: string | null;
+  readonly phone: string | null;
+  readonly contactEmail: string | null;
+  readonly logoDataUrl: string | null;
 }): Promise<{ readonly agency: InmobiliariaAdministracionApi }> {
   return solicitar('/v1/superadmin/agencies', {
     method: 'POST',
@@ -293,11 +301,25 @@ export async function crearInmobiliariaAdministracionApi(input: {
 
 export async function actualizarInmobiliariaAdministracionApi(
   id: string,
-  input: Pick<InmobiliariaAdministracionApi, 'name' | 'brand' | 'active'>,
+  input: Pick<
+    InmobiliariaAdministracionApi,
+    | 'name'
+    | 'brand'
+    | 'website'
+    | 'address'
+    | 'phone'
+    | 'contact_email'
+    | 'logo_url'
+    | 'active'
+  >,
 ): Promise<{ readonly agency: InmobiliariaAdministracionApi }> {
   return solicitar(`/v1/superadmin/agencies/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      contactEmail: input.contact_email,
+      logoDataUrl: input.logo_url,
+    }),
   });
 }
 

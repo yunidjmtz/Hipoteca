@@ -16,7 +16,7 @@ La funcionalidad actual de viviendas personales se conserva: una persona podrá 
 
 Una persona cliente tendrá inicialmente una única **inmobiliaria activa**. Sus favoritos personales no se borrarán si cambia o desvincula la inmobiliaria.
 
-El superadmin es un rol global y único, separado de los roles `agent` y `admin` de cada inmobiliaria. Nadie puede obtenerlo desde la aplicación: se asigna en la configuración interna. Al crear una inmobiliaria, el superadmin define el correo y la contraseña inicial de su agente; después puede añadir cuantos empleados necesite, cambiar su rol o retirarles el acceso. Cada cuenta queda limitada por RLS a su propia inmobiliaria.
+El superadmin es un rol global y único, separado de los roles `agent` y `admin` de cada inmobiliaria. Nadie puede obtenerlo desde la aplicación: se asigna en la configuración interna. Al crear una inmobiliaria, el superadmin define su identidad comercial (foto o logo, web, dirección, teléfono y correo de contacto); después puede añadir cuantos empleados necesite, cambiar su rol o retirarles el acceso. Cada cuenta queda limitada por RLS a su propia inmobiliaria.
 
 ## Área cliente
 
@@ -97,7 +97,7 @@ Cliente
 
 Entidades sugeridas:
 
-- `real_estate_agencies`: identidad, nombre comercial, logo y estado.
+- `real_estate_agencies`: identidad, nombre comercial, logo, web, dirección, teléfono, correo de contacto y estado.
 - `agency_users`: usuario autenticado, inmobiliaria y rol de agente/administrador.
 - `agency_properties`: vivienda, datos del catálogo, URL externa, imágenes y estado de publicación.
 - `agency_invitation_codes`: inmobiliaria, código, caducidad, límite de usos y estado.

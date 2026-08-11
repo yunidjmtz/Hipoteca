@@ -89,6 +89,171 @@ function AccesoSuperadmin({ onAcceso }: { readonly onAcceso: () => void }) {
   );
 }
 
+function RecortadorLogo({
+  value,
+  onChange,
+}: {
+  readonly value: string | null;
+  readonly onChange: (logo: string | null) => void;
+}) {
+  const [origen, setOrigen] = useState<string | null>(value);
+  const [zoom, setZoom] = useState(1);
+  const [posicionX, setPosicionX] = useState(50);
+  const [posicionY, setPosicionY] = useState(50);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (origen === null || !origen.startsWith('blob:')) return;
+    return () => URL.revokeObjectURL(origen);
+  }, [origen]);
+
+  function seleccionarArchivo(evento: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = evento.target.files?.[0];
+    if (archivo === undefined) return;
+    if (!archivo.type.startsWith('image/')) {
+      setError('Selecciona una imagen válida.');
+      return;
+    }
+    if (archivo.size > 5 * 1024 * 1024) {
+      setError('La imagen no puede superar 5 MB.');
+      return;
+    }
+    setError('');
+    setZoom(1);
+    setPosicionX(50);
+    setPosicionY(50);
+    setOrigen(URL.createObjectURL(archivo));
+  }
+
+  async function aplicarRecorte() {
+    if (origen === null) return;
+    setError('');
+    const imagen = new Image();
+    imagen.src = origen;
+    try {
+      await new Promise<void>((resolver, rechazar) => {
+        imagen.onload = () => resolver();
+        imagen.onerror = () => rechazar(new Error('No se pudo cargar la imagen.'));
+      });
+      const lado = Math.min(imagen.naturalWidth, imagen.naturalHeight) / zoom;
+      const origenX = (imagen.naturalWidth - lado) * (posicionX / 100);
+      const origenY = (imagen.naturalHeight - lado) * (posicionY / 100);
+      const lienzo = document.createElement('canvas');
+      lienzo.width = 512;
+      lienzo.height = 512;
+      const contexto = lienzo.getContext('2d');
+      if (contexto === null) throw new Error('No se pudo preparar el recorte.');
+      contexto.drawImage(imagen, origenX, origenY, lado, lado, 0, 0, 512, 512);
+      const logo = lienzo.toDataURL('image/webp', 0.86);
+      setOrigen(logo);
+      onChange(logo);
+    } catch (causa) {
+      setError(causa instanceof Error ? causa.message : 'No se pudo recortar la imagen.');
+    }
+  }
+
+  return (
+    <div className="rounded-chico border border-linea bg-superficie-2 p-3 sm:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-tinta">Foto o logo</p>
+          <p className="text-xs text-tinta-media">Se guardará cuadrado y optimizado en WebP.</p>
+        </div>
+        {value !== null && (
+          <button
+            type="button"
+            onClick={() => {
+              setOrigen(null);
+              onChange(null);
+            }}
+            className="text-xs font-semibold text-no-viable"
+          >
+            Quitar foto
+          </button>
+        )}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+        <div className="relative aspect-square overflow-hidden rounded-chico bg-linea">
+          {origen === null ? (
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-tinta-suave">
+              Sin foto
+            </span>
+          ) : (
+            <img
+              src={origen}
+              alt="Vista previa del logo"
+              className="h-full w-full object-cover"
+              style={{
+                objectPosition: `${posicionX}% ${posicionY}%`,
+                transform: `scale(${zoom})`,
+              }}
+            />
+          )}
+        </div>
+        <div className="grid content-start gap-3">
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+            Seleccionar imagen
+            <input
+              type="file"
+              accept="image/*"
+              onChange={seleccionarArchivo}
+              className="block w-full text-xs text-tinta-media file:mr-3 file:rounded-chico file:border-0 file:bg-acento-tenue file:px-3 file:py-2 file:text-xs file:font-semibold file:text-acento hover:file:bg-acento/15"
+            />
+          </label>
+          {origen !== null && (
+            <>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-tinta-media">
+                Zoom
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                  value={zoom}
+                  onChange={(evento) => setZoom(Number(evento.target.value))}
+                  className="accent-acento"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-xs font-semibold text-tinta-media">
+                  Horizontal
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={posicionX}
+                    onChange={(evento) => setPosicionX(Number(evento.target.value))}
+                    className="accent-acento"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-semibold text-tinta-media">
+                  Vertical
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={posicionY}
+                    onChange={(evento) => setPosicionY(Number(evento.target.value))}
+                    className="accent-acento"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => void aplicarRecorte()}
+                className="justify-self-start rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue"
+              >
+                Aplicar recorte
+              </button>
+            </>
+          )}
+          {error !== '' && <p role="alert" className="text-xs text-no-viable">{error}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GestionInmobiliaria({
   inmobiliaria,
   onActualizada,
@@ -100,6 +265,11 @@ function GestionInmobiliaria({
 }) {
   const [nombre, setNombre] = useState(inmobiliaria.name);
   const [marca, setMarca] = useState(inmobiliaria.brand);
+  const [sitioWeb, setSitioWeb] = useState(inmobiliaria.website ?? '');
+  const [direccion, setDireccion] = useState(inmobiliaria.address ?? '');
+  const [telefono, setTelefono] = useState(inmobiliaria.phone ?? '');
+  const [correoContacto, setCorreoContacto] = useState(inmobiliaria.contact_email ?? '');
+  const [logo, setLogo] = useState<string | null>(inmobiliaria.logo_url);
   const [activa, setActiva] = useState(inmobiliaria.active);
   const [empleados, setEmpleados] = useState<readonly EmpleadoInmobiliariaApi[]>([]);
   const [email, setEmail] = useState('');
@@ -135,6 +305,11 @@ function GestionInmobiliaria({
       const { agency } = await actualizarInmobiliariaAdministracionApi(inmobiliaria.id, {
         name: nombre,
         brand: marca,
+        website: sitioWeb || null,
+        address: direccion || null,
+        phone: telefono || null,
+        contact_email: correoContacto || null,
+        logo_url: logo,
         active: activa,
       });
       onActualizada(agency);
@@ -241,6 +416,45 @@ function GestionInmobiliaria({
             className={CAMPOS}
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+          Sitio web
+          <input
+            type="url"
+            value={sitioWeb}
+            onChange={(e) => setSitioWeb(e.target.value)}
+            placeholder="https://inmobiliaria.es"
+            className={CAMPOS}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium text-tinta sm:col-span-2">
+          Dirección
+          <input
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
+            placeholder="Calle y localidad"
+            className={CAMPOS}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+          Teléfono
+          <input
+            type="tel"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            placeholder="600 000 000"
+            className={CAMPOS}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium text-tinta sm:col-span-2">
+          Correo de contacto
+          <input
+            type="email"
+            value={correoContacto}
+            onChange={(e) => setCorreoContacto(e.target.value)}
+            placeholder="contacto@inmobiliaria.es"
+            className={CAMPOS}
+          />
+        </label>
         <label className="flex items-end gap-2 text-sm font-medium text-tinta">
           <input
             type="checkbox"
@@ -250,6 +464,9 @@ function GestionInmobiliaria({
           />
           Inmobiliaria activa
         </label>
+        <div className="sm:col-span-3">
+          <RecortadorLogo value={logo} onChange={setLogo} />
+        </div>
         <div className="flex justify-end sm:col-span-3">
           <button
             disabled={guardando}
@@ -394,8 +611,11 @@ export function AdministracionInmobiliarias() {
     useState<InmobiliariaAdministracionApi | null>(null);
   const [nombre, setNombre] = useState('');
   const [marca, setMarca] = useState('');
-  const [emailAgente, setEmailAgente] = useState('');
-  const [passwordAgente, setPasswordAgente] = useState('');
+  const [sitioWeb, setSitioWeb] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [correoContacto, setCorreoContacto] = useState('');
+  const [logo, setLogo] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -432,15 +652,21 @@ export function AdministracionInmobiliarias() {
       const { agency } = await crearInmobiliariaAdministracionApi({
         name: nombre,
         brand: marca,
-        agentEmail: emailAgente,
-        agentPassword: passwordAgente,
+        website: sitioWeb || null,
+        address: direccion || null,
+        phone: telefono || null,
+        contactEmail: correoContacto || null,
+        logoDataUrl: logo,
       });
       setInmobiliarias((actual) => [agency, ...actual]);
       setInmobiliariaSeleccionada(agency);
       setNombre('');
       setMarca('');
-      setEmailAgente('');
-      setPasswordAgente('');
+      setSitioWeb('');
+      setDireccion('');
+      setTelefono('');
+      setCorreoContacto('');
+      setLogo(null);
       setAltaAbierta(false);
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : 'No se pudo crear la inmobiliaria.');
@@ -530,12 +756,25 @@ export function AdministracionInmobiliarias() {
                 key={inmobiliaria.id}
                 className="grid items-center gap-3 rounded-chico p-3 transition-colors hover:bg-superficie-2 sm:grid-cols-[auto_minmax(0,1fr)_5.5rem_7rem]"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-chico bg-acento font-cifra text-xs font-bold text-sobre-acento">
-                  {inmobiliaria.brand}
-                </span>
+                {inmobiliaria.logo_url === null ? (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-chico bg-acento font-cifra text-xs font-bold text-sobre-acento">
+                    {inmobiliaria.brand}
+                  </span>
+                ) : (
+                  <img
+                    src={inmobiliaria.logo_url}
+                    alt=""
+                    className="h-9 w-9 rounded-chico border border-linea bg-superficie object-cover"
+                  />
+                )}
                 <div className="min-w-0">
                   <h3 className="truncate font-display text-base text-tinta">{inmobiliaria.name}</h3>
-                  <p className="text-xs text-tinta-media">Marca {inmobiliaria.brand}</p>
+                  <p className="truncate text-xs text-tinta-media">
+                    {inmobiliaria.contact_email ??
+                      inmobiliaria.website ??
+                      inmobiliaria.address ??
+                      `Marca ${inmobiliaria.brand}`}
+                  </p>
                 </div>
                 <span
                   className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -583,7 +822,7 @@ export function AdministracionInmobiliarias() {
                 <h2 id="titulo-alta-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
                   Nueva inmobiliaria
                 </h2>
-            <p className="mt-1 text-xs text-tinta-media">Crea la empresa y su primer acceso.</p>
+            <p className="mt-1 text-xs text-tinta-media">Los usuarios se añaden después, desde Gestionar.</p>
               </div>
               <button
                 type="button"
@@ -616,32 +855,49 @@ export function AdministracionInmobiliarias() {
               className={CAMPOS}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-            Correo del agente
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta sm:col-span-2">
+            Sitio web <span className="font-normal text-tinta-suave">(opcional)</span>
             <input
-              required
+              type="url"
+              value={sitioWeb}
+              onChange={(e) => setSitioWeb(e.target.value)}
+              placeholder="https://inmobiliaria.es"
+              className={CAMPOS}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta sm:col-span-2">
+            Dirección <span className="font-normal text-tinta-suave">(opcional)</span>
+            <input
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              placeholder="Calle, número y localidad"
+              className={CAMPOS}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+            Teléfono <span className="font-normal text-tinta-suave">(opcional)</span>
+            <input
+              type="tel"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="600 000 000"
+              className={CAMPOS}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+            Correo de contacto <span className="font-normal text-tinta-suave">(opcional)</span>
+            <input
               type="email"
-              autoComplete="off"
-              value={emailAgente}
-              onChange={(e) => setEmailAgente(e.target.value)}
+              value={correoContacto}
+              onChange={(e) => setCorreoContacto(e.target.value)}
+              placeholder="contacto@inmobiliaria.es"
               className={CAMPOS}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-            Contraseña inicial del agente
-            <input
-              required
-              minLength={8}
-              type="password"
-              autoComplete="new-password"
-              value={passwordAgente}
-              onChange={(e) => setPasswordAgente(e.target.value)}
-              className={CAMPOS}
-            />
-          </label>
+          <RecortadorLogo value={logo} onChange={setLogo} />
           <p className="text-xs leading-relaxed text-tinta-suave sm:col-span-2">
-            Comparte estas credenciales con el agente por un canal seguro. La cuenta quedará ligada
-            solo a esta inmobiliaria.
+            La inmobiliaria se crea sin usuarios. Después entra en Gestionar para dar de alta a sus
+            empleados y definir sus permisos.
           </p>
           {error !== '' && (
             <p
@@ -663,7 +919,7 @@ export function AdministracionInmobiliarias() {
               disabled={guardando}
               className="rounded-chico bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90 disabled:opacity-60"
             >
-              {guardando ? 'Creando…' : 'Crear inmobiliaria y agente'}
+              {guardando ? 'Creando…' : 'Crear inmobiliaria'}
             </button>
           </div>
         </form>
