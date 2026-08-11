@@ -399,6 +399,7 @@ export function AdministracionInmobiliarias() {
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [altaAbierta, setAltaAbierta] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -440,6 +441,7 @@ export function AdministracionInmobiliarias() {
       setMarca('');
       setEmailAgente('');
       setPasswordAgente('');
+      setAltaAbierta(false);
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : 'No se pudo crear la inmobiliaria.');
     } finally {
@@ -457,8 +459,8 @@ export function AdministracionInmobiliarias() {
   if (!sesion) return <AccesoSuperadmin onAcceso={() => setSesion(true)} />;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-linea pb-5 xl:col-span-2">
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-linea pb-5">
         <div>
           <p className="rotulo">Centro de control</p>
           <h1 className="mt-1 font-display text-3xl text-tinta">Inmobiliarias</h1>
@@ -467,28 +469,40 @@ export function AdministracionInmobiliarias() {
             {emailSuperadmin ?? 'Comprobando acceso…'}
           </p>
         </div>
-        <button
-          onClick={() => {
-            cerrarSesionApi();
-            setSesion(false);
-            setEmailSuperadmin(null);
-          }}
-          className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2"
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              setAltaAbierta(true);
+            }}
+            className="rounded-chico bg-acento px-3 py-2 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
+          >
+            + Nueva inmobiliaria
+          </button>
+          <button
+            onClick={() => {
+              cerrarSesionApi();
+              setSesion(false);
+              setEmailSuperadmin(null);
+            }}
+            className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       {error !== '' && (
         <p
           role="alert"
-          className="rounded-chico border border-no-viable/20 bg-no-viable-tenue p-3 text-sm text-no-viable xl:col-span-2"
+          className="rounded-chico border border-no-viable/20 bg-no-viable-tenue p-3 text-sm text-no-viable"
         >
           {error}
         </p>
       )}
 
-      <section className="order-2 overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel xl:order-1">
+      <section className="overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-linea px-4 py-4 sm:px-5">
           <div>
             <p className="rotulo">Directorio</p>
@@ -550,18 +564,42 @@ export function AdministracionInmobiliarias() {
         </div>
       </section>
 
-      <aside className="order-1 xl:order-2">
-        <section className="overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel xl:sticky xl:top-6">
-          <header className="border-b border-acento/15 bg-acento-tenue px-4 py-4 sm:px-5">
+      {altaAbierta && (
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
+          onMouseDown={() => setAltaAbierta(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-alta-inmobiliaria"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-medio border border-linea bg-superficie shadow-elevado"
+            onMouseDown={(evento) => evento.stopPropagation()}
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-acento/15 bg-acento-tenue px-4 py-4 sm:px-5">
+              <div>
             <p className="rotulo text-acento">Alta inicial</p>
-            <h2 className="mt-1 font-display text-xl text-tinta">Nueva inmobiliaria</h2>
+                <h2 id="titulo-alta-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
+                  Nueva inmobiliaria
+                </h2>
             <p className="mt-1 text-xs text-tinta-media">Crea la empresa y su primer acceso.</p>
-          </header>
-          <form onSubmit={(e) => void crear(e)} className="grid gap-3 p-4 sm:p-5">
+              </div>
+              <button
+                type="button"
+                onClick={() => setAltaAbierta(false)}
+                aria-label="Cerrar formulario de nueva inmobiliaria"
+                className="flex h-8 w-8 items-center justify-center rounded-chico border border-linea bg-superficie text-lg leading-none text-tinta-media transition-colors hover:bg-superficie-2"
+              >
+                ×
+              </button>
+            </header>
+          <form onSubmit={(e) => void crear(e)} className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
           <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
             Nombre comercial
             <input
               required
+              autoFocus
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               className={CAMPOS}
@@ -601,23 +639,39 @@ export function AdministracionInmobiliarias() {
               className={CAMPOS}
             />
           </label>
-          <p className="text-xs leading-relaxed text-tinta-suave">
+          <p className="text-xs leading-relaxed text-tinta-suave sm:col-span-2">
             Comparte estas credenciales con el agente por un canal seguro. La cuenta quedará ligada
             solo a esta inmobiliaria.
           </p>
-          <div className="flex justify-end">
+          {error !== '' && (
+            <p
+              role="alert"
+              className="rounded-chico bg-no-viable-tenue p-3 text-sm text-no-viable sm:col-span-2"
+            >
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              onClick={() => setAltaAbierta(false)}
+              className="rounded-chico border border-linea px-4 py-2.5 text-sm font-semibold text-tinta transition-colors hover:bg-superficie-2"
+            >
+              Cancelar
+            </button>
             <button
               disabled={guardando}
-              className="w-full rounded-chico bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90 disabled:opacity-60"
+              className="rounded-chico bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90 disabled:opacity-60"
             >
               {guardando ? 'Creando…' : 'Crear inmobiliaria y agente'}
             </button>
           </div>
         </form>
-        </section>
-      </aside>
+          </section>
+        </div>
+      )}
       {inmobiliariaSeleccionada !== null && (
-        <div className="xl:col-span-2">
+        <div>
           <GestionInmobiliaria
             key={inmobiliariaSeleccionada.id}
             inmobiliaria={inmobiliariaSeleccionada}
