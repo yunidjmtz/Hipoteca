@@ -79,6 +79,13 @@ export interface InmobiliariaAdministracionApi extends InmobiliariaApi {
   readonly created_at: string;
 }
 
+export interface EmpleadoInmobiliariaApi {
+  readonly user_id: string;
+  readonly email: string;
+  readonly role: 'agent' | 'admin';
+  readonly created_at: string;
+}
+
 interface RespuestaSesion {
   readonly user: { readonly id: string; readonly email: string | null };
   readonly session: { readonly access_token: string; readonly refresh_token: string } | null;
@@ -282,4 +289,55 @@ export async function crearInmobiliariaAdministracionApi(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export async function actualizarInmobiliariaAdministracionApi(
+  id: string,
+  input: Pick<InmobiliariaAdministracionApi, 'name' | 'brand' | 'active'>,
+): Promise<{ readonly agency: InmobiliariaAdministracionApi }> {
+  return solicitar(`/v1/superadmin/agencies/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function eliminarInmobiliariaAdministracionApi(id: string): Promise<void> {
+  await solicitar(`/v1/superadmin/agencies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function empleadosInmobiliariaAdministracionApi(id: string): Promise<{
+  readonly employees: EmpleadoInmobiliariaApi[];
+}> {
+  return solicitar(`/v1/superadmin/agencies/${encodeURIComponent(id)}/employees`);
+}
+
+export async function crearEmpleadoInmobiliariaAdministracionApi(
+  agencyId: string,
+  input: { readonly email: string; readonly password: string; readonly role: 'agent' | 'admin' },
+): Promise<{ readonly employee: EmpleadoInmobiliariaApi }> {
+  return solicitar(`/v1/superadmin/agencies/${encodeURIComponent(agencyId)}/employees`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function actualizarRolEmpleadoInmobiliariaApi(
+  agencyId: string,
+  userId: string,
+  role: 'agent' | 'admin',
+): Promise<void> {
+  await solicitar(
+    `/v1/superadmin/agencies/${encodeURIComponent(agencyId)}/employees/${encodeURIComponent(userId)}`,
+    { method: 'PATCH', body: JSON.stringify({ role }) },
+  );
+}
+
+export async function retirarEmpleadoInmobiliariaApi(
+  agencyId: string,
+  userId: string,
+): Promise<void> {
+  await solicitar(
+    `/v1/superadmin/agencies/${encodeURIComponent(agencyId)}/employees/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
 }

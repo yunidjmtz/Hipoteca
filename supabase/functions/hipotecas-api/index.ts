@@ -475,6 +475,112 @@ Deno.serve(async (request) => {
     );
   }
 
+  const superadminAgencyMatch = path.match(/^\/v1\/superadmin\/agencies\/([0-9a-f-]{36})$/i);
+  if (request.method === 'PATCH' && superadminAgencyMatch !== null && isSuperAdmin) {
+    const body = await readBody(request);
+    const name = stringField(body, 'name');
+    const brand = stringField(body, 'brand');
+    const active = body?.active;
+    if (name === null || brand === null || typeof active !== 'boolean') {
+      return error('Indica el nombre, la marca y el estado de la inmobiliaria.', 422);
+    }
+    const { data, error: updateError } = await authenticated.client.rpc('update_agency_details', {
+      p_agency_id: superadminAgencyMatch[1],
+      p_name: name,
+      p_brand: brand,
+      p_active: active,
+    });
+    const result = data as { agency?: Record<string, unknown> } | null;
+    if (updateError !== null || result?.agency === undefined) {
+      return error(updateError?.message ?? 'No se pudo actualizar la inmobiliaria.', 422);
+    }
+    return json({ agency: result.agency });
+  }
+
+  if (request.method === 'DELETE' && superadminAgencyMatch !== null && isSuperAdmin) {
+    const { error: deleteError } = await authenticated.client.rpc('delete_agency', {
+      p_agency_id: superadminAgencyMatch[1],
+    });
+    if (deleteError !== null) return error(deleteError.message, 422);
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
+  const employeesMatch = path.match(/^\/v1\/superadmin\/agencies\/([0-9a-f-]{36})\/employees$/i);
+  if (request.method === 'GET' && employeesMatch !== null && isSuperAdmin) {
+    const { data, error: employeesError } = await authenticated.client.rpc(
+      'list_agency_employees',
+      {
+        p_agency_id: employeesMatch[1],
+      },
+    );
+    if (employeesError !== null) return error('No se pudieron cargar los empleados.', 422);
+    return json({ employees: data ?? [] });
+  }
+
+  if (request.method === 'POST' && employeesMatch !== null && isSuperAdmin) {
+    const body = await readBody(request);
+    const email = stringField(body, 'email');
+    const password = stringField(body, 'password');
+    const role = body?.role;
+    if (
+      email === null ||
+      !email.includes('@') ||
+      password === null ||
+      password.length < 8 ||
+      (role !== 'agent' && role !== 'admin')
+    ) {
+      return error('Indica el correo, el rol y una contraseña de al menos 8 caracteres.', 422);
+    }
+    const admin = adminClient();
+    if (admin === null) return error('No se puede crear la cuenta del empleado.', 503);
+    const { data: userData, error: userError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (userError !== null || userData.user === null) {
+      return error(userError?.message ?? 'No se pudo crear la cuenta del empleado.', 422);
+    }
+    const { data, error: assignmentError } = await authenticated.client.rpc(
+      'assign_agency_employee',
+      {
+        p_agency_id: employeesMatch[1],
+        p_user_id: userData.user.id,
+        p_role: role,
+      },
+    );
+    if (assignmentError !== null || data === null) {
+      await admin.auth.admin.deleteUser(userData.user.id);
+      return error(assignmentError?.message ?? 'No se pudo asignar el empleado.', 422);
+    }
+    const employee = data as Record<string, unknown>;
+    return json({ employee: { ...employee, email } }, 201);
+  }
+
+  const employeeMatch = path.match(
+    /^\/v1\/superadmin\/agencies\/([0-9a-f-]{36})\/employees\/([0-9a-f-]{36})$/i,
+  );
+  if (request.method === 'PATCH' && employeeMatch !== null && isSuperAdmin) {
+    const role = (await readBody(request))?.role;
+    if (role !== 'agent' && role !== 'admin') return error('Indica un rol válido.', 422);
+    const { error: roleError } = await authenticated.client.rpc('update_agency_employee_role', {
+      p_agency_id: employeeMatch[1],
+      p_user_id: employeeMatch[2],
+      p_role: role,
+    });
+    if (roleError !== null) return error(roleError.message, 422);
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
+  if (request.method === 'DELETE' && employeeMatch !== null && isSuperAdmin) {
+    const { error: removeError } = await authenticated.client.rpc('remove_agency_employee', {
+      p_agency_id: employeeMatch[1],
+      p_user_id: employeeMatch[2],
+    });
+    if (removeError !== null) return error(removeError.message, 422);
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
   const agent = await agentContext(authenticated.client, authenticated.user.id);
   if (path.startsWith('/v1/agent/') && agent === null) {
     return error('Tu cuenta no tiene acceso al panel de inmobiliaria.', 403);
