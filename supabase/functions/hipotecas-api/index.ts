@@ -52,6 +52,12 @@ function optionalStringField(body: JsonObject | null, field: string): string | n
   return typeof value === 'string' ? value.trim() : null;
 }
 
+function optionalProfileField(body: JsonObject | null, field: string): string | null {
+  const value = body?.[field];
+  if (value === undefined || value === null) return '';
+  return typeof value === 'string' ? value.trim() : null;
+}
+
 function positiveIntegerField(body: JsonObject | null, field: string, minimum = 1): number | null {
   const value = body?.[field];
   return typeof value === 'number' && Number.isInteger(value) && value >= minimum ? value : null;
@@ -419,11 +425,11 @@ Deno.serve(async (request) => {
     const body = await readBody(request);
     const name = stringField(body, 'name');
     const brand = stringField(body, 'brand');
-    const website = optionalStringField(body, 'website');
-    const address = optionalStringField(body, 'address');
-    const phone = optionalStringField(body, 'phone');
-    const contactEmail = optionalStringField(body, 'contactEmail');
-    const logoDataUrl = optionalStringField(body, 'logoDataUrl');
+    const website = optionalProfileField(body, 'website');
+    const address = optionalProfileField(body, 'address');
+    const phone = optionalProfileField(body, 'phone');
+    const contactEmail = optionalProfileField(body, 'contactEmail');
+    const logoDataUrl = optionalProfileField(body, 'logoDataUrl');
     if (
       name === null ||
       brand === null ||
@@ -471,11 +477,11 @@ Deno.serve(async (request) => {
     const body = await readBody(request);
     const name = stringField(body, 'name');
     const brand = stringField(body, 'brand');
-    const website = optionalStringField(body, 'website');
-    const address = optionalStringField(body, 'address');
-    const phone = optionalStringField(body, 'phone');
-    const contactEmail = optionalStringField(body, 'contactEmail');
-    const logoDataUrl = optionalStringField(body, 'logoDataUrl');
+    const website = optionalProfileField(body, 'website');
+    const address = optionalProfileField(body, 'address');
+    const phone = optionalProfileField(body, 'phone');
+    const contactEmail = optionalProfileField(body, 'contactEmail');
+    const logoDataUrl = optionalProfileField(body, 'logoDataUrl');
     const active = body?.active;
     if (
       name === null ||
