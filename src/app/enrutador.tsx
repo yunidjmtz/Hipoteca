@@ -1,5 +1,6 @@
 ﻿import { createHashRouter } from 'react-router';
 import { Disposicion } from '@/app/Disposicion';
+import { DisposicionPortalInmobiliario } from '@/app/DisposicionPortalInmobiliario';
 import { Navigate } from 'react-router';
 import { RedireccionSimulador } from '@/app/RedireccionSimulador';
 
@@ -8,6 +9,33 @@ import { RedireccionSimulador } from '@/app/RedireccionSimulador';
  * cualquier hosting estático, sin reglas de reescritura en el servidor.
  */
 export const enrutador = createHashRouter([
+  {
+    path: 'inmobiliaria',
+    element: <DisposicionPortalInmobiliario />,
+    children: [
+      {
+        index: true,
+        lazy: async () => {
+          const { PanelInmobiliaria } = await import('@/pages/PanelInmobiliaria');
+          return { Component: PanelInmobiliaria };
+        },
+      },
+    ],
+  },
+  {
+    path: 'administracion-inmobiliarias',
+    element: <DisposicionPortalInmobiliario />,
+    children: [
+      {
+        index: true,
+        lazy: async () => {
+          const { AdministracionInmobiliarias } =
+            await import('@/pages/AdministracionInmobiliarias');
+          return { Component: AdministracionInmobiliarias };
+        },
+      },
+    ],
+  },
   {
     path: '/',
     element: <Disposicion />,
@@ -47,21 +75,6 @@ export const enrutador = createHashRouter([
         lazy: async () => {
           const { Ofertas } = await import('@/pages/Ofertas');
           return { Component: Ofertas };
-        },
-      },
-      {
-        path: 'inmobiliaria',
-        lazy: async () => {
-          const { PanelInmobiliaria } = await import('@/pages/PanelInmobiliaria');
-          return { Component: PanelInmobiliaria };
-        },
-      },
-      {
-        path: 'administracion-inmobiliarias',
-        lazy: async () => {
-          const { AdministracionInmobiliarias } =
-            await import('@/pages/AdministracionInmobiliarias');
-          return { Component: AdministracionInmobiliarias };
         },
       },
       {
