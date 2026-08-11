@@ -259,10 +259,12 @@ function GestionInmobiliaria({
   inmobiliaria,
   onActualizada,
   onEliminada,
+  onVolver,
 }: {
   readonly inmobiliaria: InmobiliariaAdministracionApi;
   readonly onActualizada: (inmobiliaria: InmobiliariaAdministracionApi) => void;
   readonly onEliminada: () => void;
+  readonly onVolver: () => void;
 }) {
   const [nombre, setNombre] = useState(inmobiliaria.name);
   const [marca, setMarca] = useState(inmobiliaria.brand);
@@ -280,6 +282,7 @@ function GestionInmobiliaria({
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [confirmarEliminacion, setConfirmarEliminacion] = useState(false);
+  const [seccion, setSeccion] = useState<'datos' | 'usuarios'>('datos');
 
   useEffect(() => {
     const temporizador = window.setTimeout(() => {
@@ -384,11 +387,68 @@ function GestionInmobiliaria({
   }
 
   return (
-    <Panel
-      titulo={`Gestionar ${inmobiliaria.name}`}
-      rotulo="Configuración y accesos"
-      className="rounded-medio shadow-none"
-    >
+    <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-linea pb-5 lg:col-span-2">
+        <div className="flex min-w-0 items-center gap-3">
+          {inmobiliaria.logo_url === null ? (
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-chico bg-acento font-cifra text-xs font-bold text-sobre-acento">
+              {inmobiliaria.brand}
+            </span>
+          ) : (
+            <img
+              src={inmobiliaria.logo_url}
+              alt=""
+              className="h-11 w-11 shrink-0 rounded-chico border border-linea bg-superficie object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="rotulo">Gestión de inmobiliaria</p>
+            <h1 className="truncate font-display text-2xl text-tinta">{inmobiliaria.name}</h1>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onVolver}
+          className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-semibold text-tinta transition-colors hover:bg-superficie-2"
+        >
+          ← Volver al directorio
+        </button>
+      </header>
+      <aside className="rounded-medio border border-linea bg-superficie p-2 shadow-papel lg:self-start">
+        <p className="px-3 pb-2 pt-2 text-xs font-bold uppercase tracking-[0.08em] text-tinta-suave">
+          Configuración
+        </p>
+        <nav aria-label="Secciones de gestión" className="grid gap-1">
+          <button
+            type="button"
+            onClick={() => setSeccion('datos')}
+            className={`rounded-chico px-3 py-2 text-left text-sm font-semibold transition-colors ${
+              seccion === 'datos'
+                ? 'bg-acento-tenue text-acento'
+                : 'text-tinta-media hover:bg-superficie-2 hover:text-tinta'
+            }`}
+          >
+            Datos de la inmobiliaria
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeccion('usuarios')}
+            className={`rounded-chico px-3 py-2 text-left text-sm font-semibold transition-colors ${
+              seccion === 'usuarios'
+                ? 'bg-acento-tenue text-acento'
+                : 'text-tinta-media hover:bg-superficie-2 hover:text-tinta'
+            }`}
+          >
+            Usuarios
+            <span className="ml-2 text-xs font-medium text-tinta-suave">{empleados.length}</span>
+          </button>
+        </nav>
+      </aside>
+      <Panel
+        titulo={seccion === 'datos' ? 'Datos de la inmobiliaria' : 'Usuarios y accesos'}
+        rotulo={seccion === 'datos' ? 'Perfil comercial' : 'Equipo'}
+        className="rounded-medio shadow-none"
+      >
       {error !== '' && (
         <p
           role="alert"
@@ -397,7 +457,9 @@ function GestionInmobiliaria({
           {error}
         </p>
       )}
-      <form onSubmit={(e) => void guardarInmobiliaria(e)} className="grid gap-3 sm:grid-cols-3">
+      {seccion === 'datos' && (
+        <>
+          <form onSubmit={(e) => void guardarInmobiliaria(e)} className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Nombre
           <input
@@ -476,9 +538,12 @@ function GestionInmobiliaria({
             Guardar cambios
           </button>
         </div>
-      </form>
+          </form>
+        </>
+      )}
 
-      <div className="mt-6 border-t border-linea pt-5">
+      {seccion === 'usuarios' && (
+        <div>
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <p className="rotulo">Empleados</p>
@@ -562,9 +627,11 @@ function GestionInmobiliaria({
             </p>
           )}
         </div>
-      </div>
+        </div>
+      )}
 
-      <div className="mt-6 border-t border-no-viable/25 pt-5">
+      {seccion === 'datos' && (
+        <div className="mt-6 border-t border-no-viable/25 pt-5">
         <p className="rotulo text-no-viable">Zona de peligro</p>
         {confirmarEliminacion ? (
           <div className="mt-2 rounded-medio bg-no-viable-tenue p-3">
@@ -599,8 +666,10 @@ function GestionInmobiliaria({
             Eliminar inmobiliaria
           </button>
         )}
-      </div>
-    </Panel>
+        </div>
+      )}
+      </Panel>
+    </div>
   );
 }
 
@@ -684,6 +753,29 @@ export function AdministracionInmobiliarias() {
     );
   }
   if (!sesion) return <AccesoSuperadmin onAcceso={() => setSesion(true)} />;
+  if (inmobiliariaSeleccionada !== null) {
+    return (
+      <GestionInmobiliaria
+        key={inmobiliariaSeleccionada.id}
+        inmobiliaria={inmobiliariaSeleccionada}
+        onVolver={() => setInmobiliariaSeleccionada(null)}
+        onActualizada={(actualizada) => {
+          setInmobiliarias((actual) =>
+            actual.map((inmobiliaria) =>
+              inmobiliaria.id === actualizada.id ? actualizada : inmobiliaria,
+            ),
+          );
+          setInmobiliariaSeleccionada(actualizada);
+        }}
+        onEliminada={() => {
+          setInmobiliarias((actual) =>
+            actual.filter((inmobiliaria) => inmobiliaria.id !== inmobiliariaSeleccionada.id),
+          );
+          setInmobiliariaSeleccionada(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -925,28 +1017,6 @@ export function AdministracionInmobiliarias() {
           </div>
         </form>
           </section>
-        </div>
-      )}
-      {inmobiliariaSeleccionada !== null && (
-        <div>
-          <GestionInmobiliaria
-            key={inmobiliariaSeleccionada.id}
-            inmobiliaria={inmobiliariaSeleccionada}
-            onActualizada={(actualizada) => {
-              setInmobiliarias((actual) =>
-                actual.map((inmobiliaria) =>
-                  inmobiliaria.id === actualizada.id ? actualizada : inmobiliaria,
-                ),
-              );
-              setInmobiliariaSeleccionada(actualizada);
-            }}
-            onEliminada={() => {
-              setInmobiliarias((actual) =>
-                actual.filter((inmobiliaria) => inmobiliaria.id !== inmobiliariaSeleccionada.id),
-              );
-              setInmobiliariaSeleccionada(null);
-            }}
-          />
         </div>
       )}
     </div>
