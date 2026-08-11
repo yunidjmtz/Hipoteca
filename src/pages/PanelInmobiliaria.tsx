@@ -22,7 +22,7 @@ import {
 } from '@/services/hipotecasApi';
 
 const CAMPOS =
-  'rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50';
+  'rounded-chico border border-linea bg-superficie-2 px-3 py-2 text-sm text-tinta transition-colors focus:border-acento focus:bg-superficie focus:outline-none focus:ring-2 focus:ring-acento/20';
 
 const ETIQUETAS_ESTADO: Record<EstadoViviendaAgenciaApi, string> = {
   draft: 'Borrador',
@@ -333,13 +333,15 @@ function AccesoAgente({ onAcceso }: { readonly onAcceso: () => void }) {
     }
   }
   return (
-    <section className="mx-auto max-w-md rounded-grande border border-linea bg-superficie p-6 shadow-papel">
+    <section className="mx-auto max-w-md overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel">
+      <div className="border-b border-acento/15 bg-acento-tenue px-6 py-5">
       <p className="rotulo">Panel de inmobiliaria</p>
       <h1 className="mt-1 font-display text-2xl text-tinta">Acceso para agentes</h1>
       <p className="mt-2 text-sm text-tinta-media">
         Usa la cuenta que tu inmobiliaria ha registrado como agente.
       </p>
-      <form onSubmit={(e) => void entrar(e)} className="mt-5 flex flex-col gap-3">
+      </div>
+      <form onSubmit={(e) => void entrar(e)} className="flex flex-col gap-3 p-6">
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Correo
           <input
@@ -481,60 +483,81 @@ export function PanelInmobiliaria() {
         </Panel>
       </div>
     );
+
+  const viviendasPublicadas = viviendas.filter((vivienda) => vivienda.status === 'published').length;
+  const codigosActivos = codigos.filter((codigo) => codigo.status === 'active').length;
+
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-linea pb-5 xl:col-span-2">
         <div>
-          <p className="rotulo">Panel de inmobiliaria</p>
-          <h1 className="font-display text-2xl text-tinta">{agencia?.name ?? 'Cargando…'}</h1>
+          <p className="rotulo">Operaciones</p>
+          <h1 className="mt-1 font-display text-3xl text-tinta">{agencia?.name ?? 'Cargando…'}</h1>
           <p className="mt-1 text-sm text-tinta-media">
-            Gestiona el catálogo que verán tus clientes y sus códigos de acceso.
+            Catálogo publicado, propiedades pendientes y códigos de acceso para clientes.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              cerrarSesionApi();
-              setSesion(false);
-              setAgencia(null);
-            }}
-            className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta"
-          >
-            Cerrar sesión
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            cerrarSesionApi();
+            setSesion(false);
+            setAgencia(null);
+          }}
+          className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2"
+        >
+          Cerrar sesión
+        </button>
       </header>
       {error !== '' && (
-        <p role="alert" className="rounded-medio bg-no-viable-tenue p-3 text-sm text-no-viable">
+        <p
+          role="alert"
+          className="rounded-chico border border-no-viable/20 bg-no-viable-tenue p-3 text-sm text-no-viable xl:col-span-2"
+        >
           {error}
         </p>
       )}
+      <section className="grid grid-cols-3 gap-px overflow-hidden rounded-medio border border-linea bg-linea xl:col-span-2">
+        <div className="bg-superficie px-4 py-3.5 sm:px-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Viviendas</p>
+          <p className="mt-1 font-cifra text-2xl font-bold text-tinta">{viviendas.length}</p>
+        </div>
+        <div className="bg-superficie px-4 py-3.5 sm:px-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Publicadas</p>
+          <p className="mt-1 font-cifra text-2xl font-bold text-comodo">{viviendasPublicadas}</p>
+        </div>
+        <div className="bg-superficie px-4 py-3.5 sm:px-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Códigos activos</p>
+          <p className="mt-1 font-cifra text-2xl font-bold text-acento">{codigosActivos}</p>
+        </div>
+      </section>
       <Panel
         titulo="Catálogo de viviendas"
-        rotulo={`${viviendas.length} en gestión`}
+        rotulo="Inventario"
+        className="order-2 rounded-medio shadow-none xl:order-1"
+        contenidoClassName="p-2 sm:p-3"
         accionEncabezado={
           <button
             onClick={() => setEditando(null)}
-            className="rounded-medio bg-acento px-3 py-2 text-sm font-medium text-sobre-acento"
+            className="rounded-chico bg-acento px-3 py-2 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
           >
             + Nueva vivienda
           </button>
         }
       >
-        <div className="grid gap-3">
+        <div className="divide-y divide-linea">
           {viviendas.map((vivienda) => (
             <article
               key={vivienda.id}
-              className="flex flex-col gap-3 rounded-medio border border-linea p-3 sm:flex-row sm:items-center"
+              className="grid items-center gap-3 rounded-chico p-3 transition-colors hover:bg-superficie-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto]"
             >
               <img
                 src={vivienda.main_image_url}
                 alt=""
-                className="h-20 w-full rounded-chico object-cover sm:w-28"
+                className="h-16 w-full rounded-chico object-cover sm:w-[5.5rem]"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-display text-lg text-tinta">{vivienda.title}</h2>
+                  <h2 className="truncate font-display text-base text-tinta">{vivienda.title}</h2>
                   <Estado estado={vivienda.status} />
                 </div>
                 <p className="mt-1 text-sm text-tinta-media">
@@ -544,21 +567,26 @@ export function PanelInmobiliaria() {
               </div>
               <button
                 onClick={() => setEditando(vivienda)}
-                className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-acento hover:bg-acento-tenue"
+                className="justify-self-start rounded-chico border border-linea bg-superficie px-3 py-1.5 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue sm:justify-self-end"
               >
                 Editar
               </button>
             </article>
           ))}
           {!cargando && viviendas.length === 0 && (
-            <p className="rounded-medio border border-dashed border-linea p-5 text-center text-sm text-tinta-media">
+            <p className="m-3 rounded-chico border border-dashed border-linea p-7 text-center text-sm text-tinta-media">
               Todavía no has añadido viviendas al catálogo.
             </p>
           )}
         </div>
       </Panel>
-      <Panel titulo="Códigos para clientes" rotulo="Acceso al catálogo">
-        <div className="flex flex-wrap items-end gap-3 border-b border-linea pb-4">
+      <Panel
+        titulo="Códigos de acceso"
+        rotulo="Clientes"
+        className="order-1 rounded-medio shadow-none xl:order-2 xl:sticky xl:top-6"
+        contenidoClassName="p-4"
+      >
+        <div className="grid gap-3 border-b border-linea pb-4">
           <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
             Caducidad <span className="font-normal text-tinta-suave">(opcional)</span>
             <input
@@ -581,7 +609,7 @@ export function PanelInmobiliaria() {
           </label>
           <button
             onClick={() => void generarCodigo()}
-            className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento"
+            className="w-full rounded-chico bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
           >
             Generar código
           </button>
@@ -590,7 +618,7 @@ export function PanelInmobiliaria() {
           {codigos.map((codigo) => (
             <div
               key={codigo.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-medio border border-linea p-3"
+              className="rounded-chico border border-linea bg-superficie-2 p-3"
             >
               <div>
                 <p className="font-cifra font-bold tracking-wider text-tinta">{codigo.code}</p>

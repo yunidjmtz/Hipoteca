@@ -19,7 +19,7 @@ import {
 } from '@/services/hipotecasApi';
 
 const CAMPOS =
-  'rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50';
+  'rounded-chico border border-linea bg-superficie-2 px-3 py-2 text-sm text-tinta transition-colors focus:border-acento focus:bg-superficie focus:outline-none focus:ring-2 focus:ring-acento/20';
 
 function AccesoSuperadmin({ onAcceso }: { readonly onAcceso: () => void }) {
   const [email, setEmail] = useState('');
@@ -42,13 +42,15 @@ function AccesoSuperadmin({ onAcceso }: { readonly onAcceso: () => void }) {
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-grande border border-linea bg-superficie p-6 shadow-papel">
+    <section className="mx-auto max-w-md overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel">
+      <div className="border-b border-acento/15 bg-acento-tenue px-6 py-5">
       <p className="rotulo">Administración interna</p>
       <h1 className="mt-1 font-display text-2xl text-tinta">Acceso de superadmin</h1>
       <p className="mt-2 text-sm text-tinta-media">
         Este espacio está reservado al administrador global de las inmobiliarias.
       </p>
-      <form onSubmit={(e) => void entrar(e)} className="mt-5 flex flex-col gap-3">
+      </div>
+      <form onSubmit={(e) => void entrar(e)} className="flex flex-col gap-3 p-6">
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Correo
           <input
@@ -206,7 +208,11 @@ function GestionInmobiliaria({
   }
 
   return (
-    <Panel titulo={`Gestionar ${inmobiliaria.name}`} rotulo="Inmobiliaria y empleados">
+    <Panel
+      titulo={`Gestionar ${inmobiliaria.name}`}
+      rotulo="Configuración y accesos"
+      className="rounded-medio shadow-none"
+    >
       {error !== '' && (
         <p
           role="alert"
@@ -451,37 +457,107 @@ export function AdministracionInmobiliarias() {
   if (!sesion) return <AccesoSuperadmin onAcceso={() => setSesion(true)} />;
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-linea pb-5 xl:col-span-2">
         <div>
-          <p className="rotulo">Administración interna</p>
-          <h1 className="font-display text-2xl text-tinta">Inmobiliarias y agentes</h1>
+          <p className="rotulo">Centro de control</p>
+          <h1 className="mt-1 font-display text-3xl text-tinta">Inmobiliarias</h1>
           <p className="mt-1 text-sm text-tinta-media">
-            Superadmin: {emailSuperadmin ?? 'Comprobando acceso…'}
+            Gestiona altas, accesos y estado operativo. Superadmin:{' '}
+            {emailSuperadmin ?? 'Comprobando acceso…'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              cerrarSesionApi();
-              setSesion(false);
-              setEmailSuperadmin(null);
-            }}
-            className="rounded-medio border border-linea px-3 py-2 text-sm font-medium text-tinta"
-          >
-            Cerrar sesión
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            cerrarSesionApi();
+            setSesion(false);
+            setEmailSuperadmin(null);
+          }}
+          className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2"
+        >
+          Cerrar sesión
+        </button>
       </header>
 
       {error !== '' && (
-        <p role="alert" className="rounded-medio bg-no-viable-tenue p-3 text-sm text-no-viable">
+        <p
+          role="alert"
+          className="rounded-chico border border-no-viable/20 bg-no-viable-tenue p-3 text-sm text-no-viable xl:col-span-2"
+        >
           {error}
         </p>
       )}
 
-      <Panel titulo="Crear inmobiliaria" rotulo="Alta inicial">
-        <form onSubmit={(e) => void crear(e)} className="grid gap-4 sm:grid-cols-2">
+      <section className="order-2 overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel xl:order-1">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-linea px-4 py-4 sm:px-5">
+          <div>
+            <p className="rotulo">Directorio</p>
+            <h2 className="mt-1 font-display text-xl text-tinta">Inmobiliarias registradas</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-acento-tenue px-2.5 py-1 text-xs font-semibold text-acento">
+              {inmobiliarias.length} total
+            </span>
+            <span className="rounded-full bg-comodo-tenue px-2.5 py-1 text-xs font-semibold text-comodo">
+              {inmobiliarias.filter((inmobiliaria) => inmobiliaria.active).length} activas
+            </span>
+          </div>
+        </header>
+        <div className="p-2 sm:p-3">
+          <div className="hidden grid-cols-[auto_minmax(0,1fr)_5.5rem_7rem] gap-3 px-3 pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-tinta-suave sm:grid">
+            <span aria-hidden="true" />
+            <span>Inmobiliaria</span>
+            <span>Estado</span>
+            <span className="text-right">Acción</span>
+          </div>
+          <div className="divide-y divide-linea">
+            {inmobiliarias.map((inmobiliaria) => (
+              <article
+                key={inmobiliaria.id}
+                className="grid items-center gap-3 rounded-chico p-3 transition-colors hover:bg-superficie-2 sm:grid-cols-[auto_minmax(0,1fr)_5.5rem_7rem]"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-chico bg-acento font-cifra text-xs font-bold text-sobre-acento">
+                  {inmobiliaria.brand}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="truncate font-display text-base text-tinta">{inmobiliaria.name}</h3>
+                  <p className="text-xs text-tinta-media">Marca {inmobiliaria.brand}</p>
+                </div>
+                <span
+                  className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    inmobiliaria.active
+                      ? 'bg-comodo-tenue text-comodo'
+                      : 'bg-superficie-2 text-tinta-media'
+                  }`}
+                >
+                  {inmobiliaria.active ? 'Activa' : 'Inactiva'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInmobiliariaSeleccionada(inmobiliaria)}
+                  className="justify-self-start rounded-chico border border-linea bg-superficie px-3 py-1.5 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue sm:justify-self-end"
+                >
+                  Gestionar
+                </button>
+              </article>
+            ))}
+            {!cargando && inmobiliarias.length === 0 && (
+              <p className="m-3 rounded-chico border border-dashed border-linea p-7 text-center text-sm text-tinta-media">
+                Aún no hay inmobiliarias registradas.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <aside className="order-1 xl:order-2">
+        <section className="overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel xl:sticky xl:top-6">
+          <header className="border-b border-acento/15 bg-acento-tenue px-4 py-4 sm:px-5">
+            <p className="rotulo text-acento">Alta inicial</p>
+            <h2 className="mt-1 font-display text-xl text-tinta">Nueva inmobiliaria</h2>
+            <p className="mt-1 text-xs text-tinta-media">Crea la empresa y su primer acceso.</p>
+          </header>
+          <form onSubmit={(e) => void crear(e)} className="grid gap-3 p-4 sm:p-5">
           <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
             Nombre comercial
             <input
@@ -525,72 +601,42 @@ export function AdministracionInmobiliarias() {
               className={CAMPOS}
             />
           </label>
-          <p className="text-xs leading-relaxed text-tinta-suave sm:col-span-2">
+          <p className="text-xs leading-relaxed text-tinta-suave">
             Comparte estas credenciales con el agente por un canal seguro. La cuenta quedará ligada
             solo a esta inmobiliaria.
           </p>
-          <div className="flex justify-end sm:col-span-2">
+          <div className="flex justify-end">
             <button
               disabled={guardando}
-              className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento disabled:opacity-60"
+              className="w-full rounded-chico bg-acento px-4 py-2.5 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90 disabled:opacity-60"
             >
               {guardando ? 'Creando…' : 'Crear inmobiliaria y agente'}
             </button>
           </div>
         </form>
-      </Panel>
-
-      <Panel titulo="Inmobiliarias creadas" rotulo={`${inmobiliarias.length} registradas`}>
-        <div className="grid gap-3">
-          {inmobiliarias.map((inmobiliaria) => (
-            <article
-              key={inmobiliaria.id}
-              className="flex items-center gap-3 rounded-medio border border-linea p-3"
-            >
-              <span className="flex h-10 w-10 items-center justify-center rounded-chico bg-acento font-display text-xs font-bold text-sobre-acento">
-                {inmobiliaria.brand}
-              </span>
-              <div>
-                <h2 className="font-display text-lg text-tinta">{inmobiliaria.name}</h2>
-                <p className="text-xs text-tinta-media">
-                  {inmobiliaria.active ? 'Activa' : 'Inactiva'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInmobiliariaSeleccionada(inmobiliaria)}
-                className="ml-auto rounded-medio border border-linea px-3 py-2 text-sm font-medium text-acento hover:bg-acento-tenue"
-              >
-                Gestionar
-              </button>
-            </article>
-          ))}
-          {!cargando && inmobiliarias.length === 0 && (
-            <p className="rounded-medio border border-dashed border-linea p-5 text-center text-sm text-tinta-media">
-              Aún no hay inmobiliarias registradas.
-            </p>
-          )}
-        </div>
-      </Panel>
+        </section>
+      </aside>
       {inmobiliariaSeleccionada !== null && (
-        <GestionInmobiliaria
-          key={inmobiliariaSeleccionada.id}
-          inmobiliaria={inmobiliariaSeleccionada}
-          onActualizada={(actualizada) => {
-            setInmobiliarias((actual) =>
-              actual.map((inmobiliaria) =>
-                inmobiliaria.id === actualizada.id ? actualizada : inmobiliaria,
-              ),
-            );
-            setInmobiliariaSeleccionada(actualizada);
-          }}
-          onEliminada={() => {
-            setInmobiliarias((actual) =>
-              actual.filter((inmobiliaria) => inmobiliaria.id !== inmobiliariaSeleccionada.id),
-            );
-            setInmobiliariaSeleccionada(null);
-          }}
-        />
+        <div className="xl:col-span-2">
+          <GestionInmobiliaria
+            key={inmobiliariaSeleccionada.id}
+            inmobiliaria={inmobiliariaSeleccionada}
+            onActualizada={(actualizada) => {
+              setInmobiliarias((actual) =>
+                actual.map((inmobiliaria) =>
+                  inmobiliaria.id === actualizada.id ? actualizada : inmobiliaria,
+                ),
+              );
+              setInmobiliariaSeleccionada(actualizada);
+            }}
+            onEliminada={() => {
+              setInmobiliarias((actual) =>
+                actual.filter((inmobiliaria) => inmobiliaria.id !== inmobiliariaSeleccionada.id),
+              );
+              setInmobiliariaSeleccionada(null);
+            }}
+          />
+        </div>
       )}
     </div>
   );
