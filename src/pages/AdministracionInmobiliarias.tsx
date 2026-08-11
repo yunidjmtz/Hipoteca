@@ -102,11 +102,6 @@ function RecortadorLogo({
   const [posicionY, setPosicionY] = useState(50);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (origen === null || !origen.startsWith('blob:')) return;
-    return () => URL.revokeObjectURL(origen);
-  }, [origen]);
-
   function seleccionarArchivo(evento: React.ChangeEvent<HTMLInputElement>) {
     const archivo = evento.target.files?.[0];
     if (archivo === undefined) return;
@@ -122,7 +117,13 @@ function RecortadorLogo({
     setZoom(1);
     setPosicionX(50);
     setPosicionY(50);
-    setOrigen(URL.createObjectURL(archivo));
+    const lector = new FileReader();
+    lector.onload = () => {
+      if (typeof lector.result === 'string') setOrigen(lector.result);
+      else setError('No se pudo leer la imagen.');
+    };
+    lector.onerror = () => setError('No se pudo leer la imagen.');
+    lector.readAsDataURL(archivo);
   }
 
   async function aplicarRecorte() {
