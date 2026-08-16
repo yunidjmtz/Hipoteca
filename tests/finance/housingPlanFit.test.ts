@@ -37,24 +37,32 @@ function estadoConPlan({
     preferencias: { ...ESTADO_INICIAL.preferencias, precioObjetivo: toCents(precioObjetivo) },
     perfil: {
       ...ESTADO_INICIAL.perfil,
-      titulares: [
-        { ...ESTADO_INICIAL.perfil.titulares[0], netoPorPaga: toCents(ingreso) },
-      ] as [EstadoPersistido['perfil']['titulares'][number]],
+      titulares: [{ ...ESTADO_INICIAL.perfil.titulares[0], netoPorPaga: toCents(ingreso) }] as [
+        EstadoPersistido['perfil']['titulares'][number],
+      ],
       ahorrosActuales: toCents(ahorro),
     },
   };
 }
 
 describe('evaluarEncajePlanVivienda', () => {
-  it('marca como dentro del plan una vivienda igual o inferior al presupuesto', () => {
+  it('no da por viable una vivienda solo por estar dentro del presupuesto', () => {
     const resultado = evaluarEncajePlanVivienda(
       vivienda(100_000),
       estadoConPlan({ ingreso: 0, ahorro: 0 }),
       '2026-08-08',
     );
 
-    expect(resultado.estado).toBe('en_plan');
+    expect(resultado.estado).toBe('no_viable');
+    expect(resultado.limitante).toBe('ingresos');
     expect(resultado.diferenciaPresupuesto).toBe(ZERO);
+  });
+
+  it('marca dentro del plan cuando presupuesto, cuota y ahorro son coherentes', () => {
+    const resultado = evaluarEncajePlanVivienda(vivienda(100_000), estadoConPlan(), '2026-08-08');
+
+    expect(resultado.estado).toBe('en_plan');
+    expect(resultado.evaluacion).not.toBeNull();
   });
 
   it('indica que una vivienda por encima del plan es alcanzable si cuota y ahorro lo permiten', () => {
@@ -76,6 +84,21 @@ describe('evaluarEncajePlanVivienda', () => {
     expect(resultado.prestamoMaximoPorIngresos).toBeLessThan(
       resultado.evaluacion?.importeFinanciado ?? ZERO,
     );
+  });
+
+  it('incluye la reforma en el ahorro necesario para considerar la compra alcanzable', () => {
+    const conGranReforma = {
+      ...vivienda(100_000),
+      reformas: [{ id: 'integral', concepto: 'Reforma integral', costeEstimado: toCents(700_000) }],
+    };
+    const resultado = evaluarEncajePlanVivienda(
+      conGranReforma,
+      estadoConPlan({ ingreso: 5_000, ahorro: 70_000 }),
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('no_viable');
+    expect(resultado.limitante).toBe('ahorro');
   });
 
   it('no clasifica viviendas hasta que el plan tenga un presupuesto', () => {

@@ -178,6 +178,13 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
       })),
     };
   }
+  if (versionInicial < 13) {
+    data = {
+      ...data,
+      schemaVersion: 13,
+      viviendas: data.viviendas.map((vivienda) => ({ ...vivienda, telefono: '' })),
+    };
+  }
   return data;
 }
 

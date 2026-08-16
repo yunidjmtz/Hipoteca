@@ -34,7 +34,7 @@ export function Panel({
     >
       {(rotulo ?? titulo) !== undefined && (
         <header
-          className={`flex items-start justify-between gap-4 border-b border-linea px-4 pt-4 pb-3.5 sm:px-6 sm:pt-5 sm:pb-4 ${encabezadoClassName}`}
+          className={`flex items-start justify-between gap-4 border-b border-linea px-3 pt-4 pb-3.5 sm:px-4 sm:pt-5 sm:pb-4 ${encabezadoClassName}`}
         >
           <div>
             {rotulo !== undefined && <p className="rotulo mb-1 tracking-widest">{rotulo}</p>}
@@ -45,7 +45,7 @@ export function Panel({
           {accionEncabezado !== undefined && <div className="shrink-0">{accionEncabezado}</div>}
         </header>
       )}
-      <div className={`px-4 py-4 sm:px-6 sm:py-5 ${contenidoClassName}`}>{children}</div>
+      <div className={`px-3 py-4 sm:px-4 sm:py-5 ${contenidoClassName}`}>{children}</div>
     </section>
   );
 }

@@ -107,19 +107,10 @@ export function Meta() {
   return (
     <div className="flex flex-col gap-5">
       <section className="overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
-        <header className="flex flex-col items-start gap-2 border-b border-linea bg-acento-tenue px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="border-b border-linea bg-acento-tenue px-5 py-3">
           <h1 className="rotulo">Ahorro y progreso hacia el objetivo</h1>
-          {meses !== null && capacidadAhorroActual > 0 && (
-            <button
-              type="button"
-              onClick={() => setTablaAbierta(true)}
-              className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
-            >
-              Ver ahorro mes a mes →
-            </button>
-          )}
         </header>
-        <div className="p-5">
+        <div className="px-3 py-5 sm:px-4">
           {evaluacion.dineroMinimo <= 0 ? (
             <p className="text-sm text-tinta-media">
               Configura el precio objetivo para ver la proyección.
@@ -141,7 +132,7 @@ export function Meta() {
                 </p>
               ) : (
                 <>
-                  <div>
+                  <div className="text-center">
                     <p className="rotulo mb-1 text-acento">
                       Capacidad actual: {formatEuros(capacidadAhorroActual)} al mes
                     </p>
@@ -161,6 +152,15 @@ export function Meta() {
             </div>
           )}
         </div>
+        {meses !== null && capacidadAhorroActual > 0 && (
+          <button
+            type="button"
+            onClick={() => setTablaAbierta(true)}
+            className="flex w-full items-center justify-center border-t border-linea px-5 py-3 text-sm font-medium text-acento transition-colors hover:bg-acento-tenue"
+          >
+            Ver ahorro mes a mes →
+          </button>
+        )}
       </section>
 
       {tablaAbierta && (

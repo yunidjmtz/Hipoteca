@@ -24,11 +24,7 @@ import type { EstadoPersistido, EvaluacionPrecio, ViviendaGuardada } from '@/dom
 /** El mismo horizonte que se muestra en el plan de ahorro. */
 export const HORIZONTE_PLAN_MESES = 120;
 
-export type EstadoEncajePlanVivienda =
-  | 'en_plan'
-  | 'alcanzable'
-  | 'no_viable'
-  | 'sin_presupuesto';
+export type EstadoEncajePlanVivienda = 'en_plan' | 'alcanzable' | 'no_viable' | 'sin_presupuesto';
 
 export interface ResultadoEncajePlanVivienda {
   estado: EstadoEncajePlanVivienda;
@@ -54,32 +50,7 @@ export function evaluarEncajePlanVivienda(
   fechaInicio = fechaLocalISO(),
 ): ResultadoEncajePlanVivienda {
   const presupuestoPlanificado = estado.preferencias.precioObjetivo;
-
-  if (presupuestoPlanificado <= ZERO) {
-    return {
-      estado: 'sin_presupuesto',
-      limitante: null,
-      presupuestoPlanificado,
-      diferenciaPresupuesto: ZERO,
-      mesesHastaAlcanzar: null,
-      prestamoMaximoPorIngresos: null,
-      motivo: 'Configura el precio objetivo en Mi plan para comprobar esta vivienda.',
-      evaluacion: null,
-    };
-  }
-
-  if (vivienda.precioVenta <= presupuestoPlanificado) {
-    return {
-      estado: 'en_plan',
-      limitante: null,
-      presupuestoPlanificado,
-      diferenciaPresupuesto: ZERO,
-      mesesHastaAlcanzar: 0,
-      prestamoMaximoPorIngresos: null,
-      motivo: 'El precio de venta está dentro del presupuesto planificado.',
-      evaluacion: null,
-    };
-  }
+  const faltaPresupuesto = presupuestoPlanificado <= ZERO;
 
   const costeReforma = sumCents(vivienda.reformas.map((reforma) => reforma.costeEstimado));
   // La reforma de esta vivienda sustituye a la estimación general, igual que
@@ -92,7 +63,12 @@ export function evaluarEncajePlanVivienda(
     vivienda.precioVenta,
     construirContexto(estadoConReforma, vivienda.precioVenta),
   );
-  const diferenciaPresupuesto = subtractCents(vivienda.precioVenta, presupuestoPlanificado);
+  const estaDentroDelPresupuesto =
+    !faltaPresupuesto && vivienda.precioVenta <= presupuestoPlanificado;
+  const diferenciaPresupuesto = maxCents(
+    ZERO,
+    subtractCents(vivienda.precioVenta, presupuestoPlanificado),
+  );
   const plazoEfectivo = calcularPlazoEfectivo(
     estado.ajustes.plazoPorDefecto,
     estado.ajustes,
@@ -111,11 +87,7 @@ export function evaluarEncajePlanVivienda(
   );
   const prestamoMaximoPorIngresos =
     plazoEfectivo > 0
-      ? capitalDesdeCuota(
-          cuotaMaximaPorIngresos,
-          estado.ajustes.tinPorDefecto,
-          plazoEfectivo * 12,
-        )
+      ? capitalDesdeCuota(cuotaMaximaPorIngresos, estado.ajustes.tinPorDefecto, plazoEfectivo * 12)
       : ZERO;
 
   if (plazoEfectivo <= 0 || evaluacion.ratioBancario > estado.ajustes.ratioBancarioMaximo) {
@@ -139,7 +111,7 @@ export function evaluarEncajePlanVivienda(
     ahorroMensual: calcularCapacidadAhorroActual(estado.perfil),
     extraordinarios: estado.perfil.ingresosExtraordinarios,
     fechaInicio,
-    precioObjetivo: evaluacion.dineroMinimo,
+    precioObjetivo: evaluacion.dineroRecomendado,
     crecimientoAnualPrecio: estado.ajustes.crecimientoAnualPrecioVivienda,
     rentabilidadAnualAhorro: estado.ajustes.rentabilidadAnualAhorro,
     mesesMaximos: HORIZONTE_PLAN_MESES,
@@ -153,7 +125,37 @@ export function evaluarEncajePlanVivienda(
       diferenciaPresupuesto,
       mesesHastaAlcanzar,
       prestamoMaximoPorIngresos,
-      motivo: `No se reúne el desembolso mínimo en los próximos ${HORIZONTE_PLAN_MESES / 12} años con tu capacidad de ahorro actual.`,
+      motivo: `No se reúne el desembolso recomendado en los próximos ${HORIZONTE_PLAN_MESES / 12} años con tu capacidad de ahorro actual.`,
+      evaluacion,
+    };
+  }
+
+  if (faltaPresupuesto) {
+    return {
+      estado: 'sin_presupuesto',
+      limitante: null,
+      presupuestoPlanificado,
+      diferenciaPresupuesto: ZERO,
+      mesesHastaAlcanzar,
+      prestamoMaximoPorIngresos,
+      motivo:
+        'La cuota y el ahorro son compatibles, pero falta un precio objetivo para medir el encaje con tu plan.',
+      evaluacion,
+    };
+  }
+
+  if (estaDentroDelPresupuesto) {
+    return {
+      estado: 'en_plan',
+      limitante: null,
+      presupuestoPlanificado,
+      diferenciaPresupuesto,
+      mesesHastaAlcanzar,
+      prestamoMaximoPorIngresos,
+      motivo:
+        mesesHastaAlcanzar === 0
+          ? 'Está dentro del presupuesto, dispones del desembolso recomendado y la cuota es asumible.'
+          : `Está dentro del presupuesto y puedes reunir el desembolso recomendado en ${mesesHastaAlcanzar} ${mesesHastaAlcanzar === 1 ? 'mes' : 'meses'}.`,
       evaluacion,
     };
   }
@@ -167,8 +169,8 @@ export function evaluarEncajePlanVivienda(
     prestamoMaximoPorIngresos,
     motivo:
       mesesHastaAlcanzar === 0
-        ? 'Aunque supera el presupuesto, ya dispones del desembolso mínimo y la cuota es asumible.'
-        : `Aunque supera el presupuesto, puedes reunir el desembolso mínimo en ${mesesHastaAlcanzar} ${mesesHastaAlcanzar === 1 ? 'mes' : 'meses'}.`,
+        ? 'Aunque supera el presupuesto, ya dispones del desembolso recomendado y la cuota es asumible.'
+        : `Aunque supera el presupuesto, puedes reunir el desembolso recomendado en ${mesesHastaAlcanzar} ${mesesHastaAlcanzar === 1 ? 'mes' : 'meses'}.`,
     evaluacion,
   };
 }

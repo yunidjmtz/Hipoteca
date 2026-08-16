@@ -1,5 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
+import { cerrarSesionApi, tokenSesionApi } from '@/services/hipotecasApi';
+
+const EVENTO_CIERRE_SESION_ADMINISTRACION = 'hipotecas:cierre-sesion-administracion';
+const EVENTO_INICIO_SESION_ADMINISTRACION = 'hipotecas:inicio-sesion-administracion';
 
 /**
  * Contenedor aislado para los espacios de trabajo inmobiliarios.
@@ -10,6 +14,30 @@ import { Outlet, useLocation } from 'react-router';
 export function DisposicionPortalInmobiliario() {
   const { pathname } = useLocation();
   const esAdministracion = pathname === '/administracion-inmobiliarias';
+  const [sesionAdministracion, setSesionAdministracion] = useState(
+    () => tokenSesionApi() !== null,
+  );
+
+  function cerrarSesionAdministracion() {
+    cerrarSesionApi();
+    window.dispatchEvent(new Event(EVENTO_CIERRE_SESION_ADMINISTRACION));
+  }
+
+  useEffect(() => {
+    function marcarSesionCerrada() {
+      setSesionAdministracion(false);
+    }
+    function marcarSesionIniciada() {
+      setSesionAdministracion(true);
+    }
+
+    window.addEventListener(EVENTO_CIERRE_SESION_ADMINISTRACION, marcarSesionCerrada);
+    window.addEventListener(EVENTO_INICIO_SESION_ADMINISTRACION, marcarSesionIniciada);
+    return () => {
+      window.removeEventListener(EVENTO_CIERRE_SESION_ADMINISTRACION, marcarSesionCerrada);
+      window.removeEventListener(EVENTO_INICIO_SESION_ADMINISTRACION, marcarSesionIniciada);
+    };
+  }, []);
 
   useEffect(() => {
     const tituloAnterior = document.title;
@@ -40,12 +68,22 @@ export function DisposicionPortalInmobiliario() {
               </p>
             </div>
           </div>
-          <span className="hidden rounded-full bg-acento-tenue px-3 py-1 text-xs font-semibold text-acento sm:block">
-            Entorno seguro
-          </span>
+          {esAdministracion && sesionAdministracion ? (
+            <button
+              type="button"
+              onClick={cerrarSesionAdministracion}
+              className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-semibold text-tinta transition-colors hover:bg-superficie-2"
+            >
+              Cerrar sesión
+            </button>
+          ) : (
+            <span className="hidden rounded-full bg-acento-tenue px-3 py-1 text-xs font-semibold text-acento sm:block">
+              Entorno seguro
+            </span>
+          )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-9">
+      <main className="mx-auto w-full max-w-7xl px-2 py-6 sm:px-3 sm:py-8 lg:px-5 lg:py-9">
         <Outlet />
       </main>
     </div>

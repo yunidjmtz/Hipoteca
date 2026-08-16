@@ -1,4 +1,5 @@
 ﻿import { useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useEstado } from '@/app/EstadoProvider';
 import { Panel } from '@/components/Panel';
@@ -24,6 +25,7 @@ export function EscalaPrecios() {
   const { estado } = useEstado();
   const navegar = useNavigate();
   const { preferencias, ajustes } = estado;
+  const [mostrarTodaLaEscala, setMostrarTodaLaEscala] = useState(false);
 
   const precioMaximoPorIngresos = useMemo(
     () =>
@@ -80,6 +82,19 @@ export function EscalaPrecios() {
     );
   }
 
+  const indicePrecioObjetivo = filas.reduce(
+    (indiceMasCercano, fila, indice) =>
+      Math.abs(fila.precio - preferencias.precioObjetivo) <
+      Math.abs(filas[indiceMasCercano]!.precio - preferencias.precioObjetivo)
+        ? indice
+        : indiceMasCercano,
+    0,
+  );
+  const filasVisibles = mostrarTodaLaEscala
+    ? filas
+    : filas.slice(Math.max(0, indicePrecioObjetivo - 5), indicePrecioObjetivo + 6);
+  const hayMasFilas = filasVisibles.length < filas.length;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col items-start gap-3">
       <button
@@ -91,16 +106,14 @@ export function EscalaPrecios() {
       >
         ← Volver
       </button>
-      <Panel
-        rotulo="Escala de precios"
-        titulo="Comparativa por precio"
-        className="flex min-h-0 w-full flex-1 flex-col"
-        contenidoClassName="flex min-h-0 flex-1 flex-col"
-      >
-        <p className="mb-4 shrink-0 text-sm leading-relaxed text-tinta-media">
-          Esta escala se basa en lo que realmente podrías financiar con tus ingresos y deudas
-          actuales.
-        </p>
+      <section className="flex min-h-0 w-full flex-1 flex-col">
+        <header className="shrink-0 border-b border-linea pb-4">
+          <p className="rotulo mb-1 tracking-widest">Escala de precios</p>
+          <p className="mt-3 text-sm leading-relaxed text-tinta-media">
+            Esta escala se basa en lo que realmente podrías financiar con tus ingresos y deudas
+            actuales.
+          </p>
+        </header>
         <TablaResponsive minWidth="480px" className="min-h-0 flex-1 overflow-auto">
           <thead className="sticky top-0 z-10 bg-superficie">
             <tr className="border-b border-linea text-left text-xs text-tinta-suave">
@@ -122,7 +135,7 @@ export function EscalaPrecios() {
             </tr>
           </thead>
           <tbody>
-            {filas.map((fila) => {
+            {filasVisibles.map((fila) => {
               const esObjetivo = fila.precio === preferencias.precioObjetivo;
               return (
                 <tr
@@ -147,7 +160,7 @@ export function EscalaPrecios() {
                     )}
                   </td>
                   <td className="py-2.5 pr-3 font-mono text-tinta-media">
-                    <ValorEurosTabla valor={fila.entrada} />
+                    <ValorMiles valor={fila.entrada} />
                   </td>
                   <td className="py-2.5 pr-3 font-mono text-tinta">
                     <ValorEurosTabla valor={fila.dineroMinimo} />
@@ -165,7 +178,16 @@ export function EscalaPrecios() {
             })}
           </tbody>
         </TablaResponsive>
-      </Panel>
+        {hayMasFilas && (
+          <button
+            type="button"
+            onClick={() => setMostrarTodaLaEscala(true)}
+            className="mt-3 w-full shrink-0 rounded-medio border border-linea bg-superficie px-4 py-2.5 text-sm font-medium text-acento transition-colors hover:bg-acento-tenue"
+          >
+            Ver toda la escala →
+          </button>
+        )}
+      </section>
     </div>
   );
 }

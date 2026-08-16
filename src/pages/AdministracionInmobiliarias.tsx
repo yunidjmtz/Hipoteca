@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Panel } from '@/components/Panel';
+import { Interruptor } from '@/components/Interruptor';
 import {
   actualizarInmobiliariaAdministracionApi,
   actualizarRolEmpleadoInmobiliariaApi,
   apiHipotecasConfigurada,
-  cerrarSesionApi,
   crearEmpleadoInmobiliariaAdministracionApi,
   crearInmobiliariaAdministracionApi,
   eliminarInmobiliariaAdministracionApi,
@@ -20,6 +20,8 @@ import {
 
 const CAMPOS =
   'rounded-chico border border-linea bg-superficie-2 px-3 py-2 text-sm text-tinta transition-colors focus:border-acento focus:bg-superficie focus:outline-none focus:ring-2 focus:ring-acento/20';
+const EVENTO_CIERRE_SESION_ADMINISTRACION = 'hipotecas:cierre-sesion-administracion';
+const EVENTO_INICIO_SESION_ADMINISTRACION = 'hipotecas:inicio-sesion-administracion';
 
 function AccesoSuperadmin({ onAcceso }: { readonly onAcceso: () => void }) {
   const [email, setEmail] = useState('');
@@ -33,6 +35,7 @@ function AccesoSuperadmin({ onAcceso }: { readonly onAcceso: () => void }) {
     setError('');
     try {
       await iniciarSesionApi(email, password);
+      window.dispatchEvent(new Event(EVENTO_INICIO_SESION_ADMINISTRACION));
       onAcceso();
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : 'No se pudo iniciar sesión.');
@@ -252,6 +255,91 @@ function RecortadorLogo({
         </div>
       </div>
     </div>
+  );
+}
+
+function FotoLogoConEdicion({
+  value,
+  onChange,
+}: {
+  readonly value: string | null;
+  readonly onChange: (logo: string | null) => void;
+}) {
+  const [edicionAbierta, setEdicionAbierta] = useState(false);
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-4 rounded-chico border border-linea bg-superficie-2 p-3 sm:col-span-3">
+        <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-chico border border-linea bg-superficie">
+          {value === null ? (
+            <span className="px-2 text-center text-xs font-medium text-tinta-suave">Sin foto</span>
+          ) : (
+            <img src={value} alt="Logo de la inmobiliaria" className="h-full w-full object-cover" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-tinta">Foto o logo</p>
+          <p className="mt-1 text-xs text-tinta-media">
+            Añade o ajusta la imagen cuadrada que se mostrará en el directorio.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEdicionAbierta(true)}
+            className="mt-3 rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue"
+          >
+            {value === null ? 'Añadir foto' : 'Editar foto'}
+          </button>
+        </div>
+      </div>
+
+      {edicionAbierta && (
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
+          onMouseDown={() => setEdicionAbierta(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-editar-logo"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-medio border border-linea bg-superficie shadow-elevado"
+            onMouseDown={(evento) => evento.stopPropagation()}
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-acento/15 bg-acento-tenue px-4 py-4 sm:px-5">
+              <div>
+                <p className="rotulo text-acento">Imagen de la inmobiliaria</p>
+                <h2 id="titulo-editar-logo" className="mt-1 font-display text-xl text-tinta">
+                  Editar foto o logo
+                </h2>
+                <p className="mt-1 text-xs text-tinta-media">
+                  Selecciona la imagen y aplica el encuadre antes de guardar los cambios.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEdicionAbierta(false)}
+                aria-label="Cerrar edición de foto o logo"
+                className="flex h-8 w-8 items-center justify-center rounded-chico border border-linea bg-superficie text-lg leading-none text-tinta-media transition-colors hover:bg-superficie-2"
+              >
+                ×
+              </button>
+            </header>
+            <div className="p-4 sm:p-5">
+              <RecortadorLogo value={value} onChange={onChange} />
+            </div>
+            <footer className="flex justify-end border-t border-linea px-4 py-3 sm:px-5">
+              <button
+                type="button"
+                onClick={() => setEdicionAbierta(false)}
+                className="rounded-chico bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
+              >
+                Listo
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -518,18 +606,11 @@ function GestionInmobiliaria({
             className={CAMPOS}
           />
         </label>
-        <label className="flex items-end gap-2 text-sm font-medium text-tinta">
-          <input
-            type="checkbox"
-            checked={activa}
-            onChange={(e) => setActiva(e.target.checked)}
-            className="mb-2"
-          />
+        <label className="flex items-center gap-2 text-sm font-medium text-tinta sm:col-span-2">
+          <Interruptor activado={activa} alCambiar={(e) => setActiva(e.target.checked)} />
           Inmobiliaria activa
         </label>
-        <div className="sm:col-span-3">
-          <RecortadorLogo value={logo} onChange={setLogo} />
-        </div>
+        <FotoLogoConEdicion value={logo} onChange={setLogo} />
         <div className="flex justify-end sm:col-span-3">
           <button
             disabled={guardando}
@@ -690,6 +771,7 @@ export function AdministracionInmobiliarias() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [altaAbierta, setAltaAbierta] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   async function cargar() {
     setCargando(true);
@@ -713,6 +795,18 @@ export function AdministracionInmobiliarias() {
     const temporizador = window.setTimeout(() => void cargar(), 0);
     return () => window.clearTimeout(temporizador);
   }, [sesion]);
+
+  useEffect(() => {
+    function gestionarCierreSesion() {
+      setSesion(false);
+      setEmailSuperadmin(null);
+      setInmobiliariaSeleccionada(null);
+    }
+
+    window.addEventListener(EVENTO_CIERRE_SESION_ADMINISTRACION, gestionarCierreSesion);
+    return () =>
+      window.removeEventListener(EVENTO_CIERRE_SESION_ADMINISTRACION, gestionarCierreSesion);
+  }, []);
 
   async function crear(evento: React.FormEvent) {
     evento.preventDefault();
@@ -777,9 +871,21 @@ export function AdministracionInmobiliarias() {
     );
   }
 
+  const inmobiliariasFiltradas = inmobiliarias.filter((inmobiliaria) => {
+    const termino = busqueda.trim().toLocaleLowerCase('es-ES');
+    if (termino === '') return true;
+    return [
+      inmobiliaria.name,
+      inmobiliaria.brand,
+      inmobiliaria.contact_email,
+      inmobiliaria.website,
+      inmobiliaria.address,
+    ].some((valor) => valor?.toLocaleLowerCase('es-ES').includes(termino));
+  });
+
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-linea pb-5">
+      <header className="border-b border-linea pb-5">
         <div>
           <p className="rotulo">Centro de control</p>
           <h1 className="mt-1 font-display text-3xl text-tinta">Inmobiliarias</h1>
@@ -788,29 +894,20 @@ export function AdministracionInmobiliarias() {
             {emailSuperadmin ?? 'Comprobando acceso…'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setError('');
-              setAltaAbierta(true);
-            }}
-            className="rounded-chico bg-acento px-3 py-2 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
-          >
-            + Nueva inmobiliaria
-          </button>
-          <button
-            onClick={() => {
-              cerrarSesionApi();
-              setSesion(false);
-              setEmailSuperadmin(null);
-            }}
-            className="rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2"
-          >
-            Cerrar sesión
-          </button>
-        </div>
       </header>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => {
+            setError('');
+            setAltaAbierta(true);
+          }}
+          className="rounded-chico bg-acento px-3 py-2 text-sm font-semibold text-sobre-acento shadow-papel transition-colors hover:bg-acento/90"
+        >
+          + Nueva inmobiliaria
+        </button>
+      </div>
 
       {error !== '' && (
         <p
@@ -837,6 +934,18 @@ export function AdministracionInmobiliarias() {
           </div>
         </header>
         <div className="p-2 sm:p-3">
+          <div className="px-2 pb-3 sm:px-3">
+            <label className="flex max-w-md flex-col gap-1 text-sm font-medium text-tinta">
+              Buscar inmobiliaria
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(evento) => setBusqueda(evento.target.value)}
+                placeholder="Nombre, marca o datos de contacto"
+                className={CAMPOS}
+              />
+            </label>
+          </div>
           <div className="hidden grid-cols-[auto_minmax(0,1fr)_5.5rem_7rem] gap-3 px-3 pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-tinta-suave sm:grid">
             <span aria-hidden="true" />
             <span>Inmobiliaria</span>
@@ -844,7 +953,7 @@ export function AdministracionInmobiliarias() {
             <span className="text-right">Acción</span>
           </div>
           <div className="divide-y divide-linea">
-            {inmobiliarias.map((inmobiliaria) => (
+            {inmobiliariasFiltradas.map((inmobiliaria) => (
               <article
                 key={inmobiliaria.id}
                 className="grid items-center gap-3 rounded-chico p-3 transition-colors hover:bg-superficie-2 sm:grid-cols-[auto_minmax(0,1fr)_5.5rem_7rem]"
@@ -890,6 +999,11 @@ export function AdministracionInmobiliarias() {
             {!cargando && inmobiliarias.length === 0 && (
               <p className="m-3 rounded-chico border border-dashed border-linea p-7 text-center text-sm text-tinta-media">
                 Aún no hay inmobiliarias registradas.
+              </p>
+            )}
+            {!cargando && inmobiliarias.length > 0 && inmobiliariasFiltradas.length === 0 && (
+              <p className="m-3 rounded-chico border border-dashed border-linea p-7 text-center text-sm text-tinta-media">
+                No hay inmobiliarias que coincidan con la búsqueda.
               </p>
             )}
           </div>

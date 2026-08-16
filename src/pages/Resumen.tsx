@@ -119,10 +119,11 @@ function BarrasCapacidad({
       ratio: ratioComodo,
     },
   ];
+  const filasOrdenadas = [filas[0]!, filas[2]!, filas[1]!];
 
   return (
     <div className="space-y-4">
-      {filas.map(({ label, ayuda, value, ratio }) => {
+      {filasOrdenadas.map(({ label, ayuda, value, ratio }) => {
         return (
           <div key={label} className="rounded-medio bg-superficie-2/70 px-4 py-3.5">
             <div className="flex items-start justify-between gap-3">
@@ -160,19 +161,32 @@ function TarjetaResumen({
   detalle,
   destacado = false,
   alerta,
+  negativo = false,
+  positivo = false,
+  className,
+  pie,
 }: {
   rotulo: string;
   valor: string;
   detalle?: string;
   destacado?: boolean;
   alerta?: boolean;
+  negativo?: boolean;
+  positivo?: boolean;
+  className?: string;
+  pie?: string;
 }) {
   return (
     <div
       className={[
         'relative rounded-medio border px-4 py-3',
+        className,
         destacado
           ? 'border-acento/40 bg-acento-tenue'
+          : positivo
+            ? 'border-comodo/40 bg-comodo-tenue'
+          : negativo
+            ? 'border-no-viable/40 bg-no-viable/10'
           : alerta
             ? 'border-revisar/40 bg-revisar-tenue'
             : 'border-linea bg-superficie-2',
@@ -191,11 +205,128 @@ function TarjetaResumen({
       <p
         className={[
           'font-cifra tabular-nums text-lg font-semibold leading-tight',
-          destacado ? 'text-acento' : alerta ? 'text-revisar' : 'text-tinta',
+          destacado
+            ? 'text-acento'
+            : positivo
+              ? 'text-comodo'
+            : negativo
+              ? 'text-no-viable'
+              : alerta
+                ? 'text-revisar'
+                : 'text-tinta',
         ].join(' ')}
       >
         {valor}
       </p>
+      {pie && (
+        <p className="mt-1 whitespace-pre-line font-cifra text-xs font-medium text-tinta-media">{pie}</p>
+      )}
+    </div>
+  );
+}
+
+function BalanceMensualCircular({
+  ingresos,
+  gastos,
+  deudas,
+  ahorro,
+}: {
+  readonly ingresos: Cents;
+  readonly gastos: Cents;
+  readonly deudas: Cents;
+  readonly ahorro: Cents;
+}) {
+  const disponible = maxCents(ZERO, ahorro);
+  const superaIngresos = gastos + deudas > ingresos;
+  const total = superaIngresos ? addCents(gastos, deudas) : maxCents(ingresos, ZERO);
+  const porcentaje = (importe: Cents) => (total > ZERO ? (importe / total) * 100 : 0);
+  const segmentos = [
+    {
+      etiqueta: 'Gastos',
+      importe: gastos,
+      color: 'color-mix(in srgb, var(--c-ajustado) 78%, var(--c-superficie))',
+      claseTexto: 'text-ajustado',
+    },
+    {
+      etiqueta: 'Deudas',
+      importe: deudas,
+      color: 'color-mix(in srgb, var(--c-no-viable) 78%, var(--c-superficie))',
+      claseTexto: 'text-no-viable',
+    },
+    {
+      etiqueta: 'Dinero libre',
+      importe: disponible,
+      color: 'color-mix(in srgb, var(--c-comodo) 78%, var(--c-superficie))',
+      claseTexto: 'text-comodo',
+    },
+  ].map((segmento) => ({ ...segmento, porcentaje: porcentaje(segmento.importe) }));
+
+  let acumulado = 0;
+  const arcos = segmentos.map((segmento) => {
+    const inicio = acumulado;
+    acumulado += segmento.porcentaje;
+    return { ...segmento, inicio };
+  });
+
+  return (
+    <div className="grid items-center gap-4 sm:grid-cols-[9rem_minmax(0,1fr)]">
+      <div
+        className="relative mx-auto h-36 w-36"
+        role="img"
+        aria-label={segmentos
+          .map((segmento) => `${segmento.etiqueta}: ${formatEuros(segmento.importe)}`)
+          .join('; ')}
+      >
+        <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+          <circle cx="60" cy="60" r="48" fill="none" stroke="var(--c-linea)" strokeWidth="15" />
+          {arcos.map((segmento) => (
+            <circle
+              key={segmento.etiqueta}
+              cx="60"
+              cy="60"
+              r="48"
+              fill="none"
+              pathLength="100"
+              stroke={segmento.color}
+              strokeDasharray={`${Math.min(segmento.porcentaje, 100)} ${Math.max(0, 100 - segmento.porcentaje)}`}
+              strokeDashoffset={-segmento.inicio}
+              strokeWidth="15"
+            />
+          ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-[0.6rem] font-semibold uppercase tracking-[0.04em] text-tinta-media">
+            {superaIngresos ? 'Gastos y deudas' : 'Ingresos'}
+          </span>
+          <span className="font-cifra text-base font-semibold tabular-nums text-tinta">
+            {formatEuros(total)}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {segmentos.map((segmento) => (
+          <div key={segmento.etiqueta} className="flex items-center justify-between gap-3 text-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: segmento.color }}
+                aria-hidden="true"
+              />
+              <span className="text-tinta-media">{segmento.etiqueta}</span>
+            </div>
+            <span className={`shrink-0 font-cifra font-semibold tabular-nums ${segmento.claseTexto}`}>
+              {formatEuros(segmento.importe)} · {Math.round(segmento.porcentaje)} %
+            </span>
+          </div>
+        ))}
+        {superaIngresos && (
+          <p className="pt-1 text-xs text-no-viable">
+            Tus gastos y deudas superan tus ingresos en{' '}
+            {formatEuros(subtractCents(addCents(gastos, deudas), ingresos))}.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -275,6 +406,12 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
     calcularIngresoMensualNormalizado(perfil.titulares),
     calcularOtrosIngresosMensuales(perfil),
   );
+  const detalleIngresos = perfil.titulares
+    .map(
+      (titular, indice) =>
+        `Titular ${indice + 1}: ${formatEuros(calcularIngresoMensualNormalizado([titular]))}/Mes`,
+    )
+    .join('\n');
   const resumenVacio = ingresosMensuales <= ZERO && preferencias.precioObjetivo <= ZERO;
   const deudasMensuales = calcularDeudasMensuales(perfil.deudas);
   const alquilerMarcado = calcularAlquilerActualMensual(perfil.gastosFijos);
@@ -384,44 +521,47 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
       {modo === 'resumen' && (
         <div>
           <section className="aparece-1 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
-            <div className="flex items-center justify-between border-b border-linea bg-acento-tenue px-5 py-3">
-              <p className="rotulo">Resumen en tiempo real</p>
-              <Link
-                to="/"
-                className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
-              >
-                Actualizar datos →
-              </Link>
+            <div className="border-b border-linea bg-acento-tenue px-5 py-3">
+              <p className="rotulo">Mis finanzas</p>
             </div>
-            <div className="p-5">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="px-3 py-5 sm:px-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <TarjetaResumen
                   rotulo="Ingresos / mes"
                   valor={ingresosMensuales > 0 ? formatEuros(ingresosMensuales) : '—'}
                   detalle={perfil.titulares.length === 2 ? '2 titulares' : '1 titular'}
                   destacado={ingresosMensuales > 0}
+                  className="col-span-full"
+                  pie={detalleIngresos}
                 />
+                <div className="col-span-full rounded-medio border border-acento/40 bg-acento-tenue p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-[0.6rem] font-semibold uppercase tracking-[0.04em] text-tinta-media">
+                      Balance mensual
+                    </p>
+                    <p className="text-xs text-tinta-media">Cómo repartes tus ingresos</p>
+                  </div>
+                  <BalanceMensualCircular
+                    ingresos={ingresosMensuales}
+                    gastos={gastosDelMes}
+                    deudas={deudasMensuales}
+                    ahorro={capacidadAhorroActual}
+                  />
+                </div>
                 <TarjetaResumen
                   rotulo="Ahorros actuales"
                   valor={formatEuros(perfil.ahorrosActuales)}
-                />
-                <TarjetaResumen
-                  rotulo="Cuota máx. bancaria"
-                  valor={cuotaMaximaBancaria > 0 ? formatEuros(cuotaMaximaBancaria) : '—'}
-                  detalle={`${formatPorcentaje(ajustes.ratioBancarioMaximo)} de ingresos − deudas`}
-                />
-                <TarjetaResumen
-                  rotulo="Capacidad de ahorro"
-                  valor={ingresosMensuales > 0 ? formatEuros(capacidadAhorroActual) : '—'}
-                  detalle="Incluye alquiler y gastos actuales"
-                  alerta={ingresosMensuales > 0 && capacidadAhorroActual === 0}
-                />
-                <TarjetaResumen
-                  rotulo="Gastos del mes"
-                  valor={formatEuros(gastosDelMes)}
-                  detalle="Incluye el alquiler actual"
+                  className="col-span-full"
                 />
               </div>
+            </div>
+            <div className="flex justify-end border-t border-linea px-5 py-3">
+              <Link
+                to="/"
+                className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+              >
+                Ir a mis datos →
+              </Link>
             </div>
           </section>
         </div>
@@ -431,23 +571,8 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
         <>
           <section className="aparece-2 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
             <div className="flex items-center justify-between border-b border-linea bg-acento-tenue px-5 py-3">
-              <div className="flex items-start gap-2">
-                <span className="flex w-7 self-stretch items-center justify-center rounded-chico bg-acento-tenue text-acento">
-                  <Icono nombre="casa" tamano={16} />
-                </span>
-                <div className="flex flex-col items-start gap-1">
-                  <p className="rotulo">Mi plan hipotecario</p>
-                  {preferencias.precioObjetivo > 0 && <EstadoBadge estado={evaluacion.estado} />}
-                </div>
-              </div>
-              {evaluacion.estado !== 'no_viable' && (
-                <Link
-                  to="/plan-hipotecario"
-                  className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
-                >
-                  Ir a mi plan →
-                </Link>
-              )}
+              <p className="rotulo">Mi plan hipotecario</p>
+              {preferencias.precioObjetivo > 0 && <EstadoBadge estado={evaluacion.estado} />}
             </div>
             {preferencias.precioObjetivo > 0 && evaluacion.estado === 'no_viable' ? (
               <div className="flex flex-col items-center px-6 py-7 text-center">
@@ -484,10 +609,10 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
               </div>
             ) : preferencias.precioObjetivo > 0 ? (
               <>
-                <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:hidden">
-                  <div className="rounded-chico bg-superficie-2 px-3 py-2">
+                <div className="grid grid-cols-2 gap-3 px-3 py-4 sm:hidden">
+                  <div className="col-span-2 rounded-chico bg-superficie-2 px-3 py-2">
                     <p className="text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
-                      Precio
+                      Precio de la vivienda
                     </p>
                     <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
                       {formatEuros(evaluacion.precio)}
@@ -498,12 +623,15 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                       )}
                     </p>
                   </div>
-                  <div className="rounded-chico bg-superficie-2 px-3 py-2">
+                  <div className="col-span-2 rounded-chico bg-superficie-2 px-3 py-2">
                     <p className="text-[0.6rem] font-semibold uppercase leading-5 tracking-[0.06em] text-tinta-media">
-                      Cuota
+                      Cuota hipotecaria aproximada
                     </p>
                     <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                      {formatEuros(evaluacion.cuota)}
+                      {formatEuros(evaluacion.cuota)} /Mes
+                      <span className="mt-1 block text-xs font-medium text-tinta-media">
+                        Cuota máx. bancaria: {formatEuros(cuotaMaximaBancaria)} /Mes
+                      </span>
                     </p>
                   </div>
                   <div className="rounded-chico bg-superficie-2 px-3 py-2">
@@ -527,12 +655,12 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                     </p>
                   </div>
                 </div>
-                <div className="hidden overflow-x-auto px-5 py-4 sm:block">
+                <div className="hidden overflow-x-auto px-4 py-4 sm:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-linea text-left text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-tinta-media">
-                        <th className="pb-2 pr-4 font-semibold">Precio</th>
-                        <th className="pb-2 pr-4 text-right font-semibold">Cuota</th>
+                        <th className="pb-2 pr-4 font-semibold">Precio de la vivienda</th>
+                        <th className="pb-2 pr-4 text-right font-semibold">Cuota hipotecaria aproximada</th>
                         <th className="pb-2 pr-4 text-right font-semibold">Necesitas reunir</th>
                         <th className="pb-2 pr-4 text-right font-semibold">Faltante</th>
                       </tr>
@@ -548,7 +676,10 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                           )}
                         </td>
                         <td className="py-2 pr-4 text-right font-cifra tabular-nums text-tinta">
-                          {formatEuros(evaluacion.cuota)}
+                          {formatEuros(evaluacion.cuota)} /Mes
+                          <span className="mt-1 block text-xs font-medium text-tinta-media">
+                            Cuota máx. bancaria: {formatEuros(cuotaMaximaBancaria)} /Mes
+                          </span>
                         </td>
                         <td className="py-2 pr-4 text-right font-cifra tabular-nums text-tinta">
                           {formatEuros(evaluacion.dineroMinimo)}
@@ -566,20 +697,27 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                 </div>
               </>
             ) : (
-              <p className="px-5 py-4 text-sm text-tinta-media">
+              <p className="px-3 py-4 sm:px-4 text-sm text-tinta-media">
                 Introduce un precio objetivo en Tus datos para ver la estimación de la compra.
               </p>
+            )}
+            {evaluacion.estado !== 'no_viable' && (
+              <div className="flex justify-end border-t border-linea px-5 py-3">
+                <Link
+                  to="/plan-hipotecario"
+                  className="inline-flex items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+                >
+                  Ir a mi plan →
+                </Link>
+              </div>
             )}
           </section>
 
           <section className="aparece-3 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
             <div className="border-b border-linea bg-acento-tenue px-5 py-3">
-              <p className="rotulo">Capacidad de compra</p>
-              <h3 className="mt-1 font-display text-base text-tinta">
-                Qué precio puedes asumir hoy
-              </h3>
+              <p className="rotulo">Capacidad de compra estimada</p>
             </div>
-            <div className="p-5">
+            <div className="px-3 py-5 sm:px-4">
               <BarrasCapacidad
                 ahorro={porAhorro.precioMaximo !== null ? fromCents(porAhorro.precioMaximo) : null}
                 ingresos={
@@ -596,8 +734,9 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
 
       {modo === 'plan' && (
         <div className="flex flex-col gap-5">
-          <section className="flex items-center justify-between gap-4 rounded-grande border border-linea bg-superficie px-5 py-4 shadow-papel">
-            <div className="flex min-w-0 items-center gap-3">
+          <section className="overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-medio bg-acento-tenue text-acento">
                 <Icono nombre="casa" tamano={19} />
               </span>
@@ -606,16 +745,15 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                 <p className="font-display text-xl text-tinta tabular-nums">
                   {formatEuros(evaluacion.precio)}
                 </p>
-                <div className="mt-1.5">
-                  <EstadoBadge estado={evaluacion.estado} />
-                </div>
               </div>
+              </div>
+              <EstadoBadge estado={evaluacion.estado} />
             </div>
             <Link
               to="/escala"
-              className="inline-flex shrink-0 items-center rounded-medio border border-linea bg-superficie px-3 py-1.5 text-sm font-medium text-tinta shadow-papel transition-colors hover:bg-superficie-2"
+              className="flex w-full items-center justify-center border-t border-linea px-5 py-3 text-sm font-medium text-acento transition-colors hover:bg-acento-tenue"
             >
-              Ver escala →
+              Ver escala de precios →
             </Link>
           </section>
 
@@ -704,14 +842,13 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
           <p className="rotulo mb-1">Siguiente paso</p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-relaxed text-tinta">
-              Ajusta el interés, el plazo y el dinero que pedirías al banco para obtener una cuota
-              más precisa.
+              Añade un inmueble para comparar su precio con tu capacidad de compra y tus ahorros.
             </p>
             <Link
-              to="/hipoteca/simulador"
-              className="shrink-0 rounded-medio bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento"
+              to="/ofertas"
+              className="shrink-0 self-end rounded-medio bg-acento px-4 py-2 text-sm font-semibold text-sobre-acento"
             >
-              Añadir oferta →
+              Agregar una oferta →
             </Link>
           </div>
         </section>

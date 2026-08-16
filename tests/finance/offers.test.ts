@@ -112,6 +112,7 @@ describe('compararOfertas', () => {
         r.desglosePuntuacion.costeReal * PESOS_POR_DEFECTO.costeReal +
         r.desglosePuntuacion.cuota * PESOS_POR_DEFECTO.cuota +
         r.desglosePuntuacion.desembolsoInicial * PESOS_POR_DEFECTO.desembolsoInicial +
+        r.desglosePuntuacion.resiliencia * PESOS_POR_DEFECTO.resiliencia +
         r.desglosePuntuacion.flexibilidad * PESOS_POR_DEFECTO.flexibilidad +
         r.desglosePuntuacion.vinculaciones * PESOS_POR_DEFECTO.vinculaciones;
       expect(suma).toBeCloseTo(r.puntuacion, 1);
@@ -165,13 +166,127 @@ describe('compararOfertas', () => {
     expect(resultadoRigido?.metricas.numVinculacionesObligatorias).toBe(1);
   });
 
+  it('mantiene la puntuación entre 0 y 100 aunque los pesos no sumen 100 %', () => {
+    const resultados = compararOfertas(
+      [crearOferta('a', 0.025, 150_000, 25), crearOferta('b', 0.045, 150_000, 25)],
+      {
+        costeReal: 1,
+        cuota: 1,
+        desembolsoInicial: 1,
+        resiliencia: 1,
+        flexibilidad: 1,
+        vinculaciones: 1,
+      },
+    );
+
+    expect(resultados.every((resultado) => resultado.puntuacion <= 100)).toBe(true);
+  });
+
+  it('no convierte una diferencia mínima de coste en una puntuación de cero', () => {
+    const barata = crearOferta('barata', 0.03, 150_000, 25);
+    const casiIgual = crearOferta('casi-igual', 0.0301, 150_000, 25);
+    const resultado = compararOfertas([barata, casiIgual]).find(
+      (item) => item.oferta.id === 'casi-igual',
+    );
+
+    expect(resultado?.desglosePuntuacion.costeReal).toBeGreaterThan(95);
+  });
+
+  it('mantiene una escala gradual cuando el mejor desembolso es cero', () => {
+    const sinEntradaBase = crearOferta('sin-entrada', 0.03, 100_000, 25);
+    const sinEntrada: OfertaBancaria = {
+      ...sinEntradaBase,
+      escenario: {
+        ...sinEntradaBase.escenario,
+        precioCompra: sinEntradaBase.escenario.importeSolicitado,
+      },
+    };
+    const conEntradaBase = crearOferta('con-entrada', 0.03, 95_000, 25);
+    const conEntrada: OfertaBancaria = {
+      ...conEntradaBase,
+      escenario: {
+        ...conEntradaBase.escenario,
+        precioCompra: sinEntrada.escenario.precioCompra,
+      },
+    };
+    const resultado = compararOfertas([sinEntrada, conEntrada]).find(
+      (item) => item.oferta.id === 'con-entrada',
+    );
+
+    expect(resultado?.desglosePuntuacion.desembolsoInicial).toBeCloseTo(50, 0);
+  });
+
+  it('penaliza el riesgo de subida de una hipoteca variable', () => {
+    const fija = crearOferta('fija', 0.03, 150_000, 25);
+    const variableBase = crearOferta('variable', 0.03, 150_000, 25);
+    const variable: OfertaBancaria = {
+      ...variableBase,
+      escenario: {
+        ...variableBase.escenario,
+        tipo: 'variable',
+        euribor: 0.02,
+        diferencial: 0.01,
+        periodicidadRevision: 'anual',
+      },
+    };
+    const resultados = compararOfertas([variable, fija]);
+    const metricaFija = resultados.find((item) => item.oferta.id === 'fija')?.metricas;
+    const metricaVariable = resultados.find((item) => item.oferta.id === 'variable')?.metricas;
+
+    expect(metricaVariable?.cuotaTensionada).toBeGreaterThan(metricaVariable?.cuotaInicial ?? ZERO);
+    expect(metricaVariable?.indiceResiliencia).toBeLessThan(metricaFija?.indiceResiliencia ?? 0);
+    expect(resultados[0]?.oferta.id).toBe('fija');
+  });
+
+  it('no recomienda una oferta rechazada aunque sea la más barata', () => {
+    const rechazada: OfertaBancaria = {
+      ...crearOferta('rechazada', 0.01, 150_000, 25),
+      estado: 'rechazada',
+    };
+    const vigente = crearOferta('vigente', 0.04, 150_000, 25);
+    const resultados = compararOfertas([rechazada, vigente]);
+
+    expect(resultados[0]?.oferta.id).toBe('vigente');
+    expect(resultados.find((item) => item.oferta.id === 'rechazada')?.esMejorGlobal).toBe(false);
+  });
+
+  it('no recomienda una oferta que incumple el esfuerzo en el escenario adverso', () => {
+    const resultados = compararOfertas(
+      [crearOferta('arriesgada', 0.03, 200_000, 25)],
+      PESOS_POR_DEFECTO,
+      {
+        ingresoMensual: toCents(1_500),
+        otrasDeudasMensuales: toCents(200),
+        ratioBancarioMaximo: 0.35,
+      },
+    );
+
+    expect(resultados[0]?.esAptaParaRecomendacion).toBe(false);
+    expect(resultados[0]?.esMejorGlobal).toBe(false);
+  });
+
+  it('no recomienda una oferta cuyo efectivo total supera los ahorros', () => {
+    const resultados = compararOfertas(
+      [crearOferta('sin-ahorro', 0.03, 100_000, 25)],
+      PESOS_POR_DEFECTO,
+      {
+        ingresoMensual: toCents(5_000),
+        otrasDeudasMensuales: ZERO,
+        ratioBancarioMaximo: 0.35,
+        ahorrosDisponibles: toCents(20_000),
+        gastosCompraNoFinanciados: toCents(12_000),
+      },
+    );
+
+    expect(resultados[0]?.metricas.efectivoTotalNecesario).toBe(toCents(37_000));
+    expect(resultados[0]?.metricas.ahorroSuficiente).toBe(false);
+    expect(resultados[0]?.esAptaParaRecomendacion).toBe(false);
+  });
+
   it('no considera comparables compras con precios distintos', () => {
-    expect(
-      sonOfertasComparables([
-        crearOferta('a', 0.03, 100_000, 20),
-        crearOferta('b', 0.03, 150_000, 20),
-      ]),
-    ).toBe(false);
+    const ofertas = [crearOferta('a', 0.03, 100_000, 20), crearOferta('b', 0.03, 150_000, 20)];
+    expect(sonOfertasComparables(ofertas)).toBe(false);
+    expect(compararOfertas(ofertas).some((resultado) => resultado.esMejorGlobal)).toBe(false);
   });
 
   it('permite comparar distinta financiación sobre la misma compra', () => {

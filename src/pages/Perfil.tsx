@@ -3,6 +3,7 @@ import { useEstado } from '@/app/EstadoProvider';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputNumeroEntero } from '@/components/InputNumeroEntero';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { Interruptor } from '@/components/Interruptor';
 import { Icono } from '@/components/Icono';
 import type { NombreIcono } from '@/components/Icono';
 import { formatEuros } from '@/core/format';
@@ -133,9 +134,9 @@ const TITULO_MODAL: Record<TipoModal, { nuevo: string; editar: string; placehold
     placeholder: 'Préstamo personal, tarjeta…',
   },
   gasto: {
-    nuevo: 'Nuevo gasto',
+    nuevo: 'Nueva deuda o gasto',
     editar: 'Editar gasto',
-    placeholder: 'Comunidad, seguro, suministros…',
+    placeholder: 'Alquiler, préstamo, seguro…',
   },
 };
 
@@ -145,16 +146,19 @@ function Campo({
   htmlFor,
   etiqueta,
   ayuda,
+  icono,
   children,
 }: {
   readonly htmlFor: string;
   readonly etiqueta: string;
   readonly ayuda?: string;
+  readonly icono?: NombreIcono;
   readonly children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center">
+      <div className="flex items-center gap-1.5">
+        {icono !== undefined && <Icono nombre={icono} tamano={16} className="text-acento" />}
         <label htmlFor={htmlFor} className="text-sm font-medium text-tinta">
           {etiqueta}
         </label>
@@ -171,6 +175,7 @@ function TarjetaItem({
   concepto,
   importe,
   periodicidad,
+  tipo,
   esAlquilerActual = false,
   onEditar,
   onEliminar,
@@ -178,6 +183,7 @@ function TarjetaItem({
   readonly concepto: string;
   readonly importe: Cents;
   readonly periodicidad: Periodicidad;
+  readonly tipo?: 'Deuda' | 'Gasto';
   readonly esAlquilerActual?: boolean;
   readonly onEditar: () => void;
   readonly onEliminar: () => void;
@@ -185,7 +191,14 @@ function TarjetaItem({
   const mensual = mensualizar(importe, periodicidad);
 
   return (
-    <div className="flex items-center gap-3 rounded-medio border border-linea bg-superficie-2/40 px-4 py-3">
+    <div
+      className={[
+        'flex items-center gap-3 rounded-medio border px-4 py-3',
+        esAlquilerActual
+          ? 'border-acento/40 bg-acento-tenue'
+          : 'border-linea bg-superficie-2/40',
+      ].join(' ')}
+    >
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-tinta">
           {concepto !== '' ? (
@@ -195,6 +208,7 @@ function TarjetaItem({
           )}
         </p>
         <p className="mt-0.5 font-cifra tabular-nums text-xs text-tinta-suave">
+          {tipo !== undefined && <span>{tipo} · </span>}
           {formatEuros(importe)} · {etiquetaPeriodicidad(periodicidad)}
           {periodicidad !== 'mensual' && importe > 0 && (
             <span className="text-acento"> · {formatEuros(mensual)}/mes</span>
@@ -238,16 +252,29 @@ function TitularForm({
   titular,
   indice,
   onChange,
+  onEliminar,
 }: {
   readonly titular: Titular;
   readonly indice: number;
   readonly onChange: (t: Titular) => void;
+  readonly onEliminar?: () => void;
 }) {
   const n = indice + 1;
 
   return (
-    <fieldset className="flex flex-col gap-4 rounded-grande border border-linea bg-superficie-2/50 p-5">
+    <fieldset className="relative flex flex-col gap-4 rounded-grande border border-linea bg-superficie-2/50 p-5 pt-12">
       <legend className="px-2 text-sm font-semibold text-tinta">Titular {n}</legend>
+
+      {onEliminar !== undefined && (
+        <button
+          type="button"
+          onClick={onEliminar}
+          aria-label="Eliminar segundo titular"
+          className="absolute right-4 top-3 flex h-8 items-center justify-center rounded-medio border border-linea px-3 text-sm text-no-viable transition-colors hover:bg-no-viable/10"
+        >
+          Eliminar
+        </button>
+      )}
 
       <InputMoneda
         id={`neto-T${n}`}
@@ -316,7 +343,7 @@ type TabId = 'vivienda' | 'titulares' | 'otros-ingresos' | 'deudas-gastos';
 const TABS: readonly { id: TabId; etiqueta: string; icono: NombreIcono }[] = [
   { id: 'vivienda', etiqueta: 'Vivienda', icono: 'casa' },
   { id: 'titulares', etiqueta: 'Titulares', icono: 'perfil' },
-  { id: 'otros-ingresos', etiqueta: 'Otros ingresos', icono: 'resumen' },
+  { id: 'otros-ingresos', etiqueta: 'Ingresos', icono: 'resumen' },
   { id: 'deudas-gastos', etiqueta: 'Deudas y gastos', icono: 'escala' },
 ];
 
@@ -382,6 +409,12 @@ export function Perfil() {
     }
   }
 
+  function irATabSiguiente() {
+    const indiceActual = TABS.findIndex((tab) => tab.id === tabActiva);
+    const indiceSiguiente = (indiceActual + 1) % TABS.length;
+    setTabActiva(TABS[indiceSiguiente]!.id);
+  }
+
   // ── Handlers deudas ──
   function eliminarDeuda(id: string) {
     actualizarPerfil({ deudas: perfil.deudas.filter((d) => d.id !== id) });
@@ -400,7 +433,10 @@ export function Perfil() {
 
   function actualizarGasto(id: string, cambios: Partial<GastoFijo>) {
     actualizarPerfil({
-      gastosFijos: perfil.gastosFijos.map((g) => (g.id === id ? { ...g, ...cambios } : g)),
+      gastosFijos: perfil.gastosFijos.map((g) => {
+        if (g.id === id) return { ...g, ...cambios };
+        return cambios.esAlquilerActual === true ? { ...g, esAlquilerActual: false } : g;
+      }),
     });
   }
 
@@ -506,7 +542,9 @@ export function Perfil() {
       } else {
         actualizarPerfil({
           gastosFijos: [
-            ...perfil.gastosFijos,
+            ...(esAlquilerActual
+              ? perfil.gastosFijos.map((g) => ({ ...g, esAlquilerActual: false }))
+              : perfil.gastosFijos),
             {
               id: crypto.randomUUID(),
               concepto: conceptoFinal,
@@ -538,6 +576,10 @@ export function Perfil() {
     ZERO,
   );
 
+  const hayOtroAlquilerActual = perfil.gastosFijos.some(
+    (gasto) => gasto.esAlquilerActual && gasto.id !== modalAbierto?.editandoId,
+  );
+
   const titularUno = perfil.titulares[0];
   const titularDos = perfil.titulares.length === 2 ? perfil.titulares[1] : undefined;
 
@@ -554,65 +596,71 @@ export function Perfil() {
   const errorImporte = intentoGuardar && modalAbierto !== null && modalAbierto.importe === 0;
 
   return (
-    <div className="flex flex-col gap-5 aparece-1">
-      <header>
-        <h1 className="font-display text-2xl text-tinta">Cuéntanos tu situación</h1>
+    <div className="flex flex-col gap-5 pt-16">
+      <header className="sr-only">
+        <h1 className="font-display text-2xl text-tinta">Datos</h1>
       </header>
 
-      {/* ── Panel con tabs ────────────────────────────────────────────── */}
-      <div className="rounded-grande border border-linea bg-superficie shadow-papel overflow-hidden">
-        {/* Tab bar */}
-        <div
-          role="tablist"
-          aria-label="Datos para el cálculo"
-          className="flex border-b border-linea bg-superficie-2/60"
-        >
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              id={`tab-${tab.id}`}
-              type="button"
-              role="tab"
-              aria-selected={tabActiva === tab.id}
-              aria-controls={`panel-${tab.id}`}
-              onClick={() => setTabActiva(tab.id)}
-              className={[
-                'flex flex-1 items-center justify-center gap-2 px-3 py-3.5 text-sm font-medium',
-                'border-b-2 -mb-px transition-colors duration-150 min-h-toque',
-                tabActiva === tab.id
-                  ? 'border-acento text-acento bg-superficie'
-                  : 'border-transparent text-tinta-media hover:text-tinta hover:bg-superficie/60',
-              ].join(' ')}
-            >
-              <Icono nombre={tab.icono} tamano={14} />
-              <span className="hidden sm:inline">{tab.etiqueta}</span>
-              <span className="sm:hidden text-xs">{tab.etiqueta.split(' ')[0]}</span>
-            </button>
-          ))}
-        </div>
+      <div
+        role="tablist"
+        aria-label="Datos para el cálculo"
+        className="fixed inset-x-0 top-[3.75rem] z-[19] flex border-b border-linea bg-superficie/90 backdrop-blur-xl lg:top-0 lg:z-20"
+      >
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            id={`tab-${tab.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tabActiva === tab.id}
+            aria-controls={`panel-${tab.id}`}
+            onClick={() => setTabActiva(tab.id)}
+            className={[
+              'flex flex-1 items-center justify-center gap-2 px-3 py-3.5 text-sm font-medium',
+              'border-b-2 -mb-px transition-colors duration-150 min-h-toque',
+              tabActiva === tab.id
+                ? 'border-acento text-acento bg-superficie'
+                : 'border-transparent text-tinta-media hover:text-tinta hover:bg-superficie/60',
+            ].join(' ')}
+          >
+            <Icono nombre={tab.icono} tamano={14} />
+            <span className="hidden sm:inline">{tab.etiqueta}</span>
+            <span className="sm:hidden text-xs">{tab.etiqueta.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
 
+      {/* ── Panel con tabs ────────────────────────────────────────────── */}
+      <div className="aparece-1 overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
         {/* Tab content */}
         <div
           id={`panel-${tabActiva}`}
           role="tabpanel"
           aria-labelledby={`tab-${tabActiva}`}
-          className="p-6"
+          className="px-4 py-6"
         >
           {/* ── TAB: Vivienda ──────────────────────────────────────── */}
           {tabActiva === 'vivienda' && (
             <div className="flex flex-col gap-5">
+              <p className="rotulo">Vivienda que deseas</p>
               <div className="max-w-sm">
                 <InputMoneda
                   id="precio-objetivo"
-                  etiqueta="Precio objetivo de la vivienda"
+                  etiqueta="Precio de la vivienda"
                   valor={preferencias.precioObjetivo}
                   onChange={(v) => actualizarPreferencias({ precioObjetivo: v })}
                   ayuda={AYUDAS.precioObjetivo}
+                  icono="meta"
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Campo htmlFor="ccaa" etiqueta="Comunidad autónoma" ayuda={AYUDAS.ccaa}>
+                <Campo
+                  htmlFor="ccaa"
+                  etiqueta="Comunidad autónoma"
+                  ayuda={AYUDAS.ccaa}
+                  icono="ofertas"
+                >
                   <select
                     id="ccaa"
                     value={preferencias.ccaa}
@@ -631,6 +679,7 @@ export function Perfil() {
                   htmlFor="estado-vivienda"
                   etiqueta="Estado de la vivienda"
                   ayuda={AYUDAS.estadoVivienda}
+                  icono="casa"
                 >
                   <select
                     id="estado-vivienda"
@@ -648,7 +697,12 @@ export function Perfil() {
                   </select>
                 </Campo>
 
-                <Campo htmlFor="destino-compra" etiqueta="Destino" ayuda={AYUDAS.destino}>
+                <Campo
+                  htmlFor="destino-compra"
+                  etiqueta="Destino"
+                  ayuda={AYUDAS.destino}
+                  icono="perfil"
+                >
                   <select
                     id="destino-compra"
                     value={preferencias.destino}
@@ -674,27 +728,56 @@ export function Perfil() {
                 </div>
               )}
 
-              {preferencias.estadoVivienda === 'usada' && (
-                <div className="max-w-sm">
-                  <InputMoneda
-                    id="valor-referencia-fiscal"
-                    etiqueta="Valor fiscal de referencia, si lo conoces"
-                    valor={preferencias.valorReferenciaFiscal ?? ZERO}
-                    onChange={(valorReferenciaFiscal) =>
-                      actualizarPreferencias({ valorReferenciaFiscal })
-                    }
-                    ayuda="Si supera el precio de compra, puede aumentar el ITP. Puedes dejarlo en 0 si todavía no lo conoces."
-                  />
+              <div className="filete flex flex-col gap-4 pt-5">
+                <p className="rotulo">Características deseadas</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <Campo htmlFor="habitaciones-minimas" etiqueta="Cuartos">
+                    <InputNumeroEntero
+                      id="habitaciones-minimas"
+                      valor={preferencias.habitacionesMinimas}
+                      minimo={0}
+                      maximo={20}
+                      onChange={(habitacionesMinimas) =>
+                        actualizarPreferencias({ habitacionesMinimas })
+                      }
+                      className={claseInput}
+                    />
+                  </Campo>
+                  <Campo htmlFor="banos-minimos" etiqueta="Baños">
+                    <InputNumeroEntero
+                      id="banos-minimos"
+                      valor={preferencias.banosMinimos}
+                      minimo={0}
+                      maximo={20}
+                      onChange={(banosMinimos) => actualizarPreferencias({ banosMinimos })}
+                      className={claseInput}
+                    />
+                  </Campo>
                 </div>
-              )}
+                <div className="flex flex-wrap gap-x-5 gap-y-3">
+                  {(
+                    [
+                      ['exterior', 'Exterior'],
+                      ['trastero', 'Trastero'],
+                      ['garaje', 'Garaje'],
+                    ] as const
+                  ).map(([campo, etiqueta]) => (
+                    <label key={campo} className="flex cursor-pointer items-center gap-2 text-sm text-tinta">
+                      <Interruptor
+                        activado={preferencias[campo]}
+                        alCambiar={(e) => actualizarPreferencias({ [campo]: e.target.checked })}
+                      />
+                      {etiqueta}
+                    </label>
+                  ))}
+                </div>
+              </div>
 
               {preferencias.estadoVivienda === 'nueva' && (
                 <label className="flex items-center gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={preferencias.esVpoEspecial}
-                    onChange={(e) => actualizarPreferencias({ esVpoEspecial: e.target.checked })}
-                    className="h-4 w-4 rounded-chico border border-linea accent-acento"
+                  <Interruptor
+                    activado={preferencias.esVpoEspecial}
+                    alCambiar={(e) => actualizarPreferencias({ esVpoEspecial: e.target.checked })}
                   />
                   <span className="text-sm text-tinta">VPO de régimen especial (IVA 4 %)</span>
                   <InfoTooltip texto={AYUDAS.esVpoEspecial} />
@@ -706,6 +789,18 @@ export function Perfil() {
           {/* ── TAB: Titulares ─────────────────────────────────────── */}
           {tabActiva === 'titulares' && (
             <div className="flex flex-col gap-5">
+              {!mostrarSegundo && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={toggleSegundoTitular}
+                    className="rounded-medio border border-linea bg-superficie px-4 py-2 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+                  >
+                    + Añadir titular
+                  </button>
+                </div>
+              )}
+
               <TitularForm titular={titularUno} indice={0} onChange={(t) => handleTitular(0, t)} />
 
               {mostrarSegundo && titularDos !== undefined && (
@@ -713,36 +808,29 @@ export function Perfil() {
                   titular={titularDos}
                   indice={1}
                   onChange={(t) => handleTitular(1, t)}
+                  onEliminar={toggleSegundoTitular}
                 />
               )}
 
-              <button
-                type="button"
-                onClick={toggleSegundoTitular}
-                className="self-start rounded-medio border border-linea bg-superficie px-4 py-2 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
-              >
-                {mostrarSegundo ? '− Eliminar segundo titular' : '+ Añadir segundo titular'}
-              </button>
-
-              <div className="filete pt-5">
-                <p className="rotulo mb-3">Ahorro disponible</p>
-                <div className="max-w-xs">
-                  <InputMoneda
-                    id="ahorros-actuales"
-                    etiqueta="Ahorros actuales"
-                    valor={perfil.ahorrosActuales}
-                    onChange={(v) => actualizarPerfil({ ahorrosActuales: v })}
-                    ayuda={AYUDAS.ahorrosActuales}
-                  />
-                </div>
-              </div>
             </div>
           )}
 
           {/* ── TAB: Otros ingresos ────────────────────────────────── */}
           {tabActiva === 'otros-ingresos' && (
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="max-w-xs">
+                <InputMoneda
+                  id="ahorros-actuales"
+                  etiqueta="Ahorros actuales"
+                  valor={perfil.ahorrosActuales}
+                  onChange={(v) => actualizarPerfil({ ahorrosActuales: v })}
+                  ayuda={AYUDAS.ahorrosActuales}
+                  icono="capacidad"
+                />
+              </div>
+
+              <div className="filete flex flex-col gap-4 pt-5">
+                <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => abrirNuevo('ingreso')}
@@ -778,54 +866,14 @@ export function Perfil() {
                 </div>
               )}
             </div>
+            </div>
           )}
 
           {/* ── TAB: Deudas y gastos ───────────────────────────────── */}
           {tabActiva === 'deudas-gastos' && (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-4">
               {/* Deudas mensuales */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => abrirNuevo('deuda')}
-                    className="flex items-center gap-2 rounded-medio border border-acento px-4 py-2 text-sm text-acento transition-colors hover:bg-acento-tenue"
-                  >
-                    <span aria-hidden="true">+</span>
-                    Añadir deuda
-                  </button>
-                  {totalDeudas > 0 && (
-                    <span className="font-cifra tabular-nums text-sm text-tinta-media">
-                      Total{' '}
-                      <span className="font-semibold text-tinta">
-                        {formatEuros(totalDeudas)}/mes
-                      </span>
-                    </span>
-                  )}
-                </div>
-
-                <p className="rotulo">Deudas mensuales</p>
-
-                {perfil.deudas.length === 0 ? (
-                  <p className="text-sm text-tinta-suave">Sin deudas registradas.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {perfil.deudas.map((deuda) => (
-                      <TarjetaItem
-                        key={deuda.id}
-                        concepto={deuda.concepto}
-                        importe={deuda.importe}
-                        periodicidad={deuda.periodicidad}
-                        onEditar={() => abrirEditar('deuda', deuda)}
-                        onEliminar={() => eliminarDeuda(deuda.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Gastos fijos */}
-              <div className="filete flex flex-col gap-4 pt-5">
                 <div className="flex items-center justify-between gap-3">
                   <button
                     type="button"
@@ -835,28 +883,40 @@ export function Perfil() {
                     <span aria-hidden="true">+</span>
                     Añadir gasto
                   </button>
-                  {totalGastosFijos > 0 && (
+                  {totalDeudas + totalGastosFijos > 0 && (
                     <span className="font-cifra tabular-nums text-sm text-tinta-media">
                       Total{' '}
                       <span className="font-semibold text-tinta">
-                        {formatEuros(totalGastosFijos)}/mes
+                        {formatEuros((totalDeudas + totalGastosFijos) as Cents)}/mes
                       </span>
                     </span>
                   )}
                 </div>
 
-                <p className="rotulo">Gastos fijos del hogar</p>
+                <p className="rotulo">Deudas y gastos</p>
 
-                {perfil.gastosFijos.length === 0 ? (
-                  <p className="text-sm text-tinta-suave">Sin gastos registrados.</p>
+                {perfil.deudas.length === 0 && perfil.gastosFijos.length === 0 ? (
+                  <p className="text-sm text-tinta-suave">Sin deudas ni gastos registrados.</p>
                 ) : (
                   <div className="flex flex-col gap-2">
+                    {perfil.deudas.map((deuda) => (
+                      <TarjetaItem
+                        key={deuda.id}
+                        concepto={deuda.concepto}
+                        importe={deuda.importe}
+                        periodicidad={deuda.periodicidad}
+                        tipo="Deuda"
+                        onEditar={() => abrirEditar('deuda', deuda)}
+                        onEliminar={() => eliminarDeuda(deuda.id)}
+                      />
+                    ))}
                     {perfil.gastosFijos.map((gasto) => (
                       <TarjetaItem
                         key={gasto.id}
                         concepto={gasto.concepto}
                         importe={gasto.importe}
                         periodicidad={gasto.periodicidad}
+                        tipo="Gasto"
                         esAlquilerActual={gasto.esAlquilerActual ?? false}
                         onEditar={() => abrirEditar('gasto', gasto)}
                         onEliminar={() => eliminarGasto(gasto.id)}
@@ -865,9 +925,23 @@ export function Perfil() {
                   </div>
                 )}
               </div>
+
             </div>
           )}
         </div>
+
+        {tabActiva !== 'deudas-gastos' && (
+          <div className="flex justify-end border-t border-linea bg-superficie-2/40 px-6 py-4">
+            <button
+              type="button"
+              onClick={irATabSiguiente}
+              className="flex min-h-toque items-center gap-2 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-acento/90 focus:outline-none focus:ring-2 focus:ring-acento/40 focus:ring-offset-2"
+            >
+              Siguiente
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Modal añadir / editar ─────────────────────────────────── */}
@@ -902,6 +976,26 @@ export function Perfil() {
 
             {/* Body */}
             <div className="flex flex-col gap-4 p-6">
+              {modalAbierto.tipo !== 'ingreso' && modalAbierto.editandoId === undefined && (
+                <Campo htmlFor="modal-tipo" etiqueta="Tipo">
+                  <select
+                    id="modal-tipo"
+                    value={modalAbierto.tipo}
+                    onChange={(e) =>
+                      setModalAbierto({
+                        ...modalAbierto,
+                        tipo: e.target.value as 'deuda' | 'gasto',
+                        esAlquilerActual: false,
+                      })
+                    }
+                    className={claseSelect}
+                  >
+                    <option value="deuda">Deuda</option>
+                    <option value="gasto">Gasto</option>
+                  </select>
+                </Campo>
+              )}
+
               {/* Concepto */}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="modal-concepto" className="text-sm font-medium text-tinta">
@@ -957,15 +1051,14 @@ export function Perfil() {
                 </select>
               </Campo>
 
-              {modalAbierto.tipo === 'gasto' && (
+              {modalAbierto.tipo === 'gasto' &&
+                (modalAbierto.esAlquilerActual || !hayOtroAlquilerActual) && (
                 <label className="flex cursor-pointer items-start gap-3 rounded-medio border border-linea bg-superficie-2/40 p-3 text-sm text-tinta">
-                  <input
-                    type="checkbox"
-                    checked={modalAbierto.esAlquilerActual}
-                    onChange={(e) =>
+                  <Interruptor
+                    activado={modalAbierto.esAlquilerActual}
+                    alCambiar={(e) =>
                       setModalAbierto({ ...modalAbierto, esAlquilerActual: e.target.checked })
                     }
-                    className="mt-0.5 h-4 w-4 accent-acento"
                   />
                   <span>
                     <span className="block font-medium">Es mi alquiler actual</span>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toCents, ZERO } from '@/core/money';
 import { compararViviendas, PESOS_VIVIENDA } from '@/finance/housingComparison';
 import type { ViviendaGuardada } from '@/domain/types';
+import { ESTADO_INICIAL } from '@/storage/defaults';
 
 function crearVivienda(
   id: string,
@@ -64,9 +65,8 @@ describe('compararViviendas', () => {
 
     const resultado = compararViviendas([completa])[0];
 
-    expect(resultado?.desglose.exterior).toBe(PESOS_VIVIENDA.exterior);
-    expect(resultado?.desglose.garaje).toBe(PESOS_VIVIENDA.garaje);
-    expect(resultado?.desglose.trastero).toBe(PESOS_VIVIENDA.trastero);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
+    expect(resultado?.desglose.encajeFinanciero).toBe(PESOS_VIVIENDA.encajeFinanciero);
     expect(resultado?.puntuacion).toBe(100);
   });
 
@@ -87,5 +87,46 @@ describe('compararViviendas', () => {
     const resultados = compararViviendas([grande, pequena]);
 
     expect(resultados[0]?.vivienda.id).toBe('pequena');
+  });
+
+  it('incluye impuestos y gastos de compra cuando recibe el estado financiero', () => {
+    const piso = crearVivienda('completo', 200_000, 100);
+    const resultado = compararViviendas([piso], ESTADO_INICIAL)[0];
+
+    expect(resultado?.costeTotal).toBeGreaterThan(piso.precioVenta);
+    expect(resultado?.costePorM2).toBeGreaterThan(2_000);
+  });
+
+  it('no recomienda una vivienda que incumple una necesidad mínima', () => {
+    const piso = { ...crearVivienda('pequeno', 150_000, 80), habitaciones: 1 };
+    const estado = {
+      ...ESTADO_INICIAL,
+      preferencias: { ...ESTADO_INICIAL.preferencias, habitacionesMinimas: 3 },
+    };
+    const resultado = compararViviendas([piso], estado)[0];
+
+    expect(resultado?.criteriosNecesidadesCumplidos).toBe(0);
+    expect(resultado?.esRecomendable).toBe(false);
+  });
+
+  it('incluye el mínimo de baños en las necesidades obligatorias', () => {
+    const piso = { ...crearVivienda('un-bano', 150_000, 80), habitaciones: 3, banos: 1 };
+    const estado = {
+      ...ESTADO_INICIAL,
+      preferencias: { ...ESTADO_INICIAL.preferencias, banosMinimos: 2 },
+    };
+    const resultado = compararViviendas([piso], estado)[0];
+
+    expect(resultado?.criteriosNecesidadesCumplidos).toBe(0);
+    expect(resultado?.esRecomendable).toBe(false);
+  });
+
+  it('prioriza una vivienda disponible frente a otra retirada del mercado', () => {
+    const retirada = { ...crearVivienda('retirada', 100_000, 100), yaNoDisponible: true };
+    const disponible = crearVivienda('disponible', 180_000, 100);
+    const resultados = compararViviendas([retirada, disponible]);
+
+    expect(resultados[0]?.vivienda.id).toBe('disponible');
+    expect(resultados.find((item) => item.vivienda.id === 'retirada')?.esRecomendable).toBe(false);
   });
 });

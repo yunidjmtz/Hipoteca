@@ -61,7 +61,7 @@ describe('limpieza de datos', () => {
   });
 
   it('parte sin importes personales ni ejemplos precargados', () => {
-    expect(ESTADO_INICIAL.schemaVersion).toBe(12);
+    expect(ESTADO_INICIAL.schemaVersion).toBe(13);
     expect(ESTADO_INICIAL.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(ESTADO_INICIAL.perfil.ahorrosActuales).toBe(ZERO);
     expect(ESTADO_INICIAL.preferencias.precioObjetivo).toBe(ZERO);
@@ -96,7 +96,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(12);
+    expect(cargado.schemaVersion).toBe(13);
     expect(cargado.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(cargado.preferencias.precioObjetivo).toBe(ZERO);
     expect(cargado.escenarioSimulador.importeSolicitado).toBe(ZERO);
@@ -119,7 +119,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(12);
+    expect(cargado.schemaVersion).toBe(13);
     expect(cargado.ajustes.tinFuente).toBe('ine');
     expect(cargado.ajustes.tinPorDefecto).toBe(0.0298);
     expect(cargado.ajustes.tinReferenciaPeriodo).toBe('2026-05');
@@ -135,7 +135,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(12);
+    expect(cargado.schemaVersion).toBe(13);
     expect(cargado.viviendas).toEqual([]);
   });
 
@@ -167,8 +167,9 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(12);
+    expect(cargado.schemaVersion).toBe(13);
     expect(cargado.viviendas[0]?.anuncioUrl).toBe('');
+    expect(cargado.viviendas[0]?.telefono).toBe('');
     expect(cargado.viviendas[0]?.habitaciones).toBe(0);
   });
 

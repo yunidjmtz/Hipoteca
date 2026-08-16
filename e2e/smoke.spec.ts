@@ -68,7 +68,7 @@ test('cambiar el precio objetivo actualiza el Resumen y la Escala', async ({ pag
   await navegacionVisible(page)
     .getByRole('link', { name: /Mi plan/i })
     .click();
-  await page.getByRole('link', { name: /Ver escala completa/i }).click();
+  await page.getByRole('link', { name: /Ver escala de precios/i }).click();
 
   // La fila del precio objetivo lleva el marcador ◀
   await expect(page.getByText('◀')).toBeVisible();

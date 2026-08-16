@@ -88,6 +88,13 @@ function validLogoDataUrl(value: string | null): boolean {
   );
 }
 
+function validPropertyImage(value: string): boolean {
+  return (
+    validHttpUrl(value) ||
+    (/^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= 1_500_000)
+  );
+}
+
 type PropertyStatus = 'draft' | 'published' | 'withdrawn';
 
 type AgentPropertyPayload = {
@@ -134,7 +141,7 @@ function propertyPayload(body: JsonObject | null): AgentPropertyPayload | null {
     description === null ||
     mainImageUrl === null ||
     listingUrl === null ||
-    !validHttpUrl(mainImageUrl) ||
+    !validPropertyImage(mainImageUrl) ||
     !validHttpUrl(listingUrl) ||
     (latitude === null) !== (longitude === null) ||
     (latitude !== null && (latitude < -90 || latitude > 90)) ||
@@ -415,7 +422,9 @@ Deno.serve(async (request) => {
   if (request.method === 'GET' && path === '/v1/superadmin/agencies' && isSuperAdmin) {
     const { data, error: agenciesError } = await authenticated.client
       .from('real_estate_agencies')
-      .select('id, name, brand, website, address, phone, contact_email, logo_url, active, created_at')
+      .select(
+        'id, name, brand, website, address, phone, contact_email, logo_url, active, created_at',
+      )
       .order('created_at', { ascending: false });
     if (agenciesError !== null) return error('No se pudieron cargar las inmobiliarias.', 500);
     return json({ agencies: data ?? [] });
@@ -445,18 +454,15 @@ Deno.serve(async (request) => {
     ) {
       return error('Indica los datos válidos de la inmobiliaria.', 422);
     }
-    const { data, error: agencyError } = await authenticated.client.rpc(
-      'create_agency',
-      {
-        p_name: name,
-        p_brand: brand,
-        p_website: website === '' ? null : website,
-        p_address: address === '' ? null : address,
-        p_logo_url: logoDataUrl === '' ? null : logoDataUrl,
-        p_phone: phone === '' ? null : phone,
-        p_contact_email: contactEmail === '' ? null : contactEmail,
-      },
-    );
+    const { data, error: agencyError } = await authenticated.client.rpc('create_agency', {
+      p_name: name,
+      p_brand: brand,
+      p_website: website === '' ? null : website,
+      p_address: address === '' ? null : address,
+      p_logo_url: logoDataUrl === '' ? null : logoDataUrl,
+      p_phone: phone === '' ? null : phone,
+      p_contact_email: contactEmail === '' ? null : contactEmail,
+    });
     if (agencyError !== null || data === null) {
       return error(agencyError?.message ?? 'No se pudo crear la inmobiliaria.', 422);
     }

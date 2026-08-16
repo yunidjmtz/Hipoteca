@@ -4,12 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Panel } from '@/components/Panel';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputPorcentaje } from '@/components/InputPorcentaje';
-import { InfoTooltip } from '@/components/InfoTooltip';
+import { Interruptor } from '@/components/Interruptor';
 import {
   EncabezadoConUnidad,
   TablaResponsive,
   ValorEurosTabla,
-  ValorPorcentajeTabla,
 } from '@/components/TablaResponsive';
 import { fechaLocalISO } from '@/core/dates';
 import { formatEuros, formatPorcentaje } from '@/core/format';
@@ -49,7 +48,7 @@ import {
 } from '@/domain/mortgageScenario';
 
 // ---------------------------------------------------------------------------
-// Subcomponente: Fila de vinculación en la tabla de análisis
+// Subcomponente: tarjeta de producto vinculado
 // ---------------------------------------------------------------------------
 
 function FilaVinculacion({
@@ -82,45 +81,56 @@ function FilaVinculacion({
 
   return (
     <>
-      <tr className={`border-b border-linea ${claseResultado}`}>
-        <td className="py-2 pr-3 text-tinta">{v.nombre}</td>
-        <td className="py-2 pr-3 font-mono text-tinta-media">
-          <ValorPorcentajeTabla valor={v.bonificacionTin} />
-        </td>
-        <td className="py-2 pr-3 font-mono text-tinta-media">{formatEuros(v.costeAnual)}</td>
-        <td
-          className={[
-            'py-2 pr-3 font-mono font-medium',
-            resultadoNeto === null
-              ? 'text-tinta-suave'
-              : resultadoNeto > 0
-                ? 'text-comodo'
-                : resultadoNeto < 0
-                  ? 'text-no-viable'
-                  : 'text-tinta-media',
-          ].join(' ')}
-        >
-          {resultadoNeto === null ? '—' : formatEuros(resultadoNeto)}
-        </td>
-        <td className="py-2 text-right">
+      <article className={`rounded-medio border border-linea p-3 ${claseResultado}`}>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 truncate font-medium text-tinta">{v.nombre}</h3>
           <button
             type="button"
             onClick={onEditar}
             className="rounded-chico border border-linea px-2 py-1 text-xs font-semibold text-acento hover:bg-superficie"
           >
-            Ver
+            Editar
           </button>
-        </td>
-      </tr>
+        </div>
+        <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <dt className="text-tinta-suave">Descuento</dt>
+            <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
+              {formatPorcentaje(v.bonificacionTin)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-tinta-suave">Coste anual</dt>
+            <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
+              {formatEuros(v.costeAnual)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-tinta-suave">Ahorro/Pérdida</dt>
+            <dd
+              className={[
+                'mt-0.5 font-cifra text-sm font-bold tabular-nums',
+                resultadoNeto === null
+                  ? 'text-tinta-suave'
+                  : resultadoNeto > 0
+                    ? 'text-comodo'
+                    : resultadoNeto < 0
+                      ? 'text-no-viable'
+                      : 'text-tinta-media',
+              ].join(' ')}
+            >
+              {resultadoNeto === null ? '—' : formatEuros(resultadoNeto)}
+            </dd>
+          </div>
+        </dl>
+      </article>
       {editando && (
-        <tr className="border-b border-linea">
-          <td colSpan={5} className="p-0">
-            <div className="fixed inset-0 z-50 flex items-end bg-tinta/30 p-4 sm:items-center sm:justify-center">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4">
               <div
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={`titulo-editar-vinculacion-${v.id}`}
-                className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado"
+                className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
               >
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
@@ -143,9 +153,7 @@ function FilaVinculacion({
                 </div>
                 <EditarVinculacion vinculacion={v} onEliminar={onEliminar} onGuardar={onGuardar} />
               </div>
-            </div>
-          </td>
-        </tr>
+        </div>
       )}
     </>
   );
@@ -265,7 +273,6 @@ export function Simulador() {
   const [estadoOferta, setEstadoOferta] = useState<EstadoOferta>(
     ofertaActiva?.estado ?? 'pendiente',
   );
-  const [fechaOferta, setFechaOferta] = useState(ofertaActiva?.fecha ?? fechaLocalISO());
   const [notasOferta, setNotasOferta] = useState(ofertaActiva?.notas ?? '');
   const [errorOferta, setErrorOferta] = useState('');
   const [plazoTexto, setPlazoTexto] = useState<string | null>(null);
@@ -295,7 +302,7 @@ export function Simulador() {
       viviendaId,
       banco: bancoLimpio,
       nombre: bancoLimpio,
-      fecha: fechaOferta,
+      fecha: ofertaActiva?.fecha ?? fechaLocalISO(),
       estado: estadoOferta,
       notas: notasOferta,
     });
@@ -385,14 +392,12 @@ export function Simulador() {
     <div className="flex flex-col gap-5">
       <header>
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="rotulo">
-              {ofertaActiva === null ? 'Nueva oferta bancaria' : `Oferta de ${ofertaActiva.banco}`}
-            </p>
-            {ofertaActiva !== null && (
+          {ofertaActiva !== null && (
+            <div>
+              <p className="rotulo">{`Oferta de ${ofertaActiva.banco}`}</p>
               <h1 className="mt-1 font-display text-xl text-tinta">{ofertaActiva.nombre}</h1>
-            )}
-          </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() =>
@@ -416,7 +421,7 @@ export function Simulador() {
               Banco
               <SelectorBanco valor={banco} onChange={setBanco} />
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3">
               <label className="min-w-0 flex flex-col gap-1 text-sm font-medium text-tinta">
                 Estado
                 <select
@@ -431,15 +436,6 @@ export function Simulador() {
                   <option value="rechazada">Rechazada</option>
                   <option value="firmada">Firmada</option>
                 </select>
-              </label>
-              <label className="min-w-0 flex flex-col gap-1 text-sm font-medium text-tinta">
-                Fecha de la oferta
-                <input
-                  type="date"
-                  value={fechaOferta}
-                  onChange={(e) => setFechaOferta(e.target.value)}
-                  className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                />
               </label>
             </div>
             <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
@@ -505,7 +501,7 @@ export function Simulador() {
             />
             <InputMoneda
               id="sim-tasacion"
-              etiqueta="Valor de tasación"
+              etiqueta="Tasación"
               valor={esc.valorTasacion}
               onChange={(v) =>
                 actualizarEscenarioSimulador({
@@ -518,18 +514,15 @@ export function Simulador() {
             <div className="col-span-2 rounded-medio border border-linea bg-superficie-2/60 px-4 py-3">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs text-tinta-media">Cuánto aportarás</p>
-                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
-                    {formatEuros(aportacionActual)}
+                  <p className="text-xs text-tinta-media">Financiación del banco</p>
+                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-acento">
+                    {formatPorcentaje(esc.ltv)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="flex items-center justify-end">
-                    <p className="text-xs text-tinta-media">Financiación del banco</p>
-                    <InfoTooltip texto="Porcentaje aplicado sobre el precio de compra. El préstamo máximo definitivo se calcula sobre el menor valor entre el precio y la tasación." />
-                  </div>
-                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-acento">
-                    {formatPorcentaje(esc.ltv)}
+                  <p className="text-xs text-tinta-media">Cuánto aportarás</p>
+                  <p className="mt-0.5 font-cifra font-semibold tabular-nums text-tinta">
+                    {formatEuros(aportacionActual)}
                   </p>
                 </div>
               </div>
@@ -548,14 +541,13 @@ export function Simulador() {
                   });
                 }}
                 aria-label="Financiación del banco"
-                aria-valuetext={`${formatPorcentaje(esc.ltv)}; aportas ${formatEuros(aportacionActual)}`}
+                aria-valuetext={`${formatPorcentaje(esc.ltv)} financiado por el banco; aportas ${formatEuros(aportacionActual)}`}
                 className="mt-2 h-10 w-full cursor-pointer accent-acento"
               />
             </div>
           </div>
 
-          {/* Plazo */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
             <div className="min-w-0 flex flex-col gap-1">
               <label htmlFor="sim-plazo" className="text-sm font-medium text-tinta">
                 Plazo (años)
@@ -572,19 +564,17 @@ export function Simulador() {
                 className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
               />
             </div>
-
-            <div className="min-w-0 flex flex-col gap-1">
-              <label htmlFor="sim-fecha" className="text-sm font-medium text-tinta">
-                Fecha de la primera cuota
-              </label>
-              <input
-                id="sim-fecha"
-                type="date"
-                value={esc.fechaPrimeraCuota}
-                onChange={(e) => act('fechaPrimeraCuota', e.target.value)}
-                className="w-full min-w-0 rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-              />
-            </div>
+            <InputPorcentaje
+              id="sim-apertura"
+              etiqueta="Comisión de apertura"
+              valor={esc.comisiones.apertura}
+              onChange={(v) =>
+                actualizarEscenarioSimulador({
+                  comisiones: { ...esc.comisiones, apertura: v },
+                })
+              }
+              ayuda="Porcentaje sobre el capital. Habitualmente 0–1 %."
+            />
           </div>
 
           {/* TIN fija */}
@@ -645,7 +635,7 @@ export function Simulador() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3">
                 <InputPorcentaje
                   id="sim-euribor"
                   etiqueta="Euríbor actual"
@@ -685,20 +675,8 @@ export function Simulador() {
             </div>
           )}
 
-          {/* Comisión de apertura */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputPorcentaje
-              id="sim-apertura"
-              etiqueta="Comisión que cobra el banco al abrir"
-              valor={esc.comisiones.apertura}
-              onChange={(v) =>
-                actualizarEscenarioSimulador({
-                  comisiones: { ...esc.comisiones, apertura: v },
-                })
-              }
-              ayuda="Porcentaje sobre el capital. Habitualmente 0–1 %."
-            />
-            {esc.tipo !== 'fija' && (
+          {esc.tipo !== 'fija' && (
+            <div className="max-w-xs">
               <InputPorcentaje
                 id="sim-tae-oficial"
                 etiqueta="TAE de la oferta o FEIN (opcional)"
@@ -708,13 +686,13 @@ export function Simulador() {
                 onVaciar={() => act('taeOficial', 0)}
                 ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Panel>
 
       {/* ── Vinculaciones ──────────────────────────────────── */}
-      <Panel rotulo="Productos del banco" contenidoClassName="pt-3">
+      <Panel rotulo="Bonificaciones por vinculación" contenidoClassName="pt-3">
         <div className="flex flex-col gap-4">
           <div className="flex justify-end">
             <NuevaVinculacion
@@ -726,14 +704,13 @@ export function Simulador() {
             />
           </div>
 
-          {esc.vinculaciones.length === 0 ? (
-            <p className="text-sm text-tinta-suave">
+          {esc.vinculaciones.length > 0 && (
+            <div className="flex flex-col gap-3">
+            {/*
               Sin productos vinculados. Añade seguros, tarjetas o planes de pensiones para ver su
               impacto en el TIN y el coste real.
-            </p>
-          ) : (
-            <TablaResponsive minWidth="0">
-              <thead>
+            */}
+              {/*
                 <tr className="border-b border-linea text-left text-xs text-tinta-suave">
                   <th className="py-2 pr-3 font-medium">Producto</th>
                   <th className="py-2 pr-3 font-medium">
@@ -743,8 +720,8 @@ export function Simulador() {
                   <th className="py-2 pr-3 font-medium">Ahorro/Pérdida</th>
                   <th className="py-2 text-right font-medium">Acciones</th>
                 </tr>
-              </thead>
-              <tbody>
+              */}
+              <div className="flex flex-col gap-3">
                 {esc.vinculaciones.map((v) => (
                   <FilaVinculacion
                     key={v.id}
@@ -769,8 +746,8 @@ export function Simulador() {
                     }}
                   />
                 ))}
-              </tbody>
-            </TablaResponsive>
+              </div>
+            </div>
           )}
         </div>
       </Panel>
@@ -785,7 +762,7 @@ export function Simulador() {
                 onClick={guardarComoOferta}
                 className="rounded-medio bg-acento px-5 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90"
               >
-                {ofertaActiva === null ? 'Guardar hipoteca' : 'Actualizar hipoteca'}
+                {ofertaActiva === null ? 'Guardar' : 'Actualizar hipoteca'}
               </button>
               <button
                 type="button"
@@ -1059,6 +1036,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
   const [bonificacion, setBonificacion] = useState(0.003);
   const [costeAnual, setCosteAnual] = useState<Cents>(toCents(300));
   const [obligatorio, setObligatorio] = useState(true);
+  const [activo, setActivo] = useState(true);
   const [aniosExigidos, setAniosExigidos] = useState<number | null>(null);
 
   useEffect(() => {
@@ -1080,7 +1058,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
     onAnadir({
       id: crypto.randomUUID(),
       nombre: nombre.trim(),
-      activo: true,
+      activo,
       bonificacionTin: bonificacion,
       costeInicial: ZERO,
       costeAnual,
@@ -1092,6 +1070,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
     setNombre('');
     setBonificacion(0.003);
     setCosteAnual(toCents(300));
+    setActivo(true);
     setAbierto(false);
   }
 
@@ -1102,7 +1081,7 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
         onClick={() => setAbierto(true)}
         className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
       >
-        + Añadir producto bancario
+        + Añadir producto
       </button>
 
       {abierto && (
@@ -1171,13 +1150,12 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
               </div>
             </div>
             <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-tinta">
-              <input
-                type="checkbox"
-                checked={obligatorio}
-                onChange={(e) => setObligatorio(e.target.checked)}
-                className="h-4 w-4 accent-acento"
-              />
+              <Interruptor activado={obligatorio} alCambiar={(e) => setObligatorio(e.target.checked)} />
               El banco lo exige para obtener las condiciones del préstamo
+            </label>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-tinta">
+              <Interruptor activado={activo} alCambiar={(e) => setActivo(e.target.checked)} />
+              Incluir este producto en el cálculo
             </label>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
@@ -1286,38 +1264,28 @@ function EditarVinculacion({
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm text-tinta cursor-pointer">
-        <input
-          type="checkbox"
-          checked={obligatorio}
-          onChange={(e) => setObligatorio(e.target.checked)}
-          className="h-4 w-4 accent-acento"
-        />
+        <Interruptor activado={obligatorio} alCambiar={(e) => setObligatorio(e.target.checked)} />
         El banco lo exige para obtener las condiciones del préstamo
       </label>
       <label className="flex items-center gap-2 text-sm text-tinta cursor-pointer">
-        <input
-          type="checkbox"
-          checked={activo}
-          onChange={(e) => setActivo(e.target.checked)}
-          className="h-4 w-4 accent-acento"
-        />
+        <Interruptor activado={activo} alCambiar={(e) => setActivo(e.target.checked)} />
         Incluir este producto en el cálculo
       </label>
-      <div className="flex gap-2">
+      <div className="mt-2 flex justify-center gap-2 border-t border-linea pt-4">
         <button
           type="button"
           onClick={guardar}
           disabled={nombre.trim() === ''}
           className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento disabled:opacity-50"
         >
-          Guardar cambios
+          Guardar
         </button>
         <button
           type="button"
           onClick={onEliminar}
           className="rounded-medio border border-no-viable/40 px-4 py-2 text-sm font-medium text-no-viable hover:bg-no-viable-tenue"
         >
-          Eliminar producto
+          Eliminar
         </button>
       </div>
     </div>

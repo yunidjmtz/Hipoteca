@@ -198,6 +198,18 @@
   }
 }
 
+@property --recorrido-analizar {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes analizar-recorrido {
+  to {
+    --recorrido-analizar: 360deg;
+  }
+}
+
 @utility aparece-* {
   animation: aparecer 460ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
   animation-delay: calc(--value(integer) * 70ms);
@@ -209,6 +221,20 @@
 
 @utility tooltip-anima {
   animation: tooltip-aparecer 200ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@utility analizar-recorrido {
+  border-width: 2px !important;
+  border-color: transparent !important;
+  background:
+    linear-gradient(var(--c-superficie), var(--c-superficie)) padding-box,
+    conic-gradient(
+        from var(--recorrido-analizar),
+        var(--c-acento) 0deg 58deg,
+        var(--c-linea) 82deg 360deg
+      ) border-box !important;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--c-acento) 32%, transparent);
+  animation: analizar-recorrido 2.2s linear infinite;
 }
 
 /*

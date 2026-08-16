@@ -5,11 +5,19 @@
  *   taeEstimada, cuotaInicial, cuotaPostFija, costeRealTotal,
  *   desembolsoInicial, numVinculacionesObligatorias, indiceFlexibilidad.
  *
- * Puntuación: suma ponderada de dimensiones normalizadas 0-100.
- * Por defecto: coste real 40 %, cuota 20 %, desembolso 15 %,
- *              flexibilidad 15 %, vinculaciones 10 %.
+ * Puntuación: media ponderada de dimensiones normalizadas 0-100.
+ * Por defecto: coste real 35 %, cuota 15 %, desembolso 15 %, resistencia a
+ *              subidas 15 %, flexibilidad 10 %, vinculaciones 10 %.
  */
-import { type Cents, ZERO, addCents, maxCents, subtractCents, sumCents } from '@/core/money';
+import {
+  type Cents,
+  ZERO,
+  addCents,
+  maxCents,
+  subtractCents,
+  sumCents,
+  toCents,
+} from '@/core/money';
 import type { OfertaBancaria } from '@/domain/types';
 import { construirFlujoDeCaja } from './mortgage';
 import { calcularTaeEstimada } from './apr';
@@ -23,17 +31,27 @@ export interface PesosComparacion {
   costeReal: number;
   cuota: number;
   desembolsoInicial: number;
+  resiliencia: number;
   flexibilidad: number;
   vinculaciones: number;
 }
 
 export const PESOS_POR_DEFECTO: PesosComparacion = {
-  costeReal: 0.4,
-  cuota: 0.2,
+  costeReal: 0.35,
+  cuota: 0.15,
   desembolsoInicial: 0.15,
-  flexibilidad: 0.15,
+  resiliencia: 0.15,
+  flexibilidad: 0.1,
   vinculaciones: 0.1,
 };
+
+export interface ContextoComparacionHipotecas {
+  ingresoMensual: Cents;
+  otrasDeudasMensuales: Cents;
+  ratioBancarioMaximo: number;
+  ahorrosDisponibles?: Cents;
+  gastosCompraNoFinanciados?: Cents;
+}
 
 export interface MetricasOferta {
   ofertaId: string;
@@ -48,6 +66,15 @@ export interface MetricasOferta {
   numVinculacionesObligatorias: number;
   /** 0-100: 100 = sin comisiones de amortización. */
   indiceFlexibilidad: number;
+  /** Cuota relevante si el índice sube 2 puntos y se pierden bonificaciones. */
+  cuotaTensionada: Cents;
+  /** 0-100: penaliza el incremento de cuota en el escenario adverso. */
+  indiceResiliencia: number;
+  ratioBancarioActual: number | null;
+  ratioBancarioTensionado: number | null;
+  /** Desembolso de la oferta más gastos e impuestos no financiados de la compra. */
+  efectivoTotalNecesario: Cents | null;
+  ahorroSuficiente: boolean | null;
 }
 
 export interface ResultadoComparacion {
@@ -62,6 +89,8 @@ export interface ResultadoComparacion {
   esLaMenorCosteReal: boolean;
   esMenorDesembolso: boolean;
   esMenosVinculaciones: boolean;
+  /** Excluye ofertas rechazadas o que superan el límite de esfuerzo tensionado. */
+  esAptaParaRecomendacion: boolean;
   esMejorGlobal: boolean;
 }
 
@@ -69,7 +98,38 @@ export interface ResultadoComparacion {
 // Cálculo de métricas
 // ---------------------------------------------------------------------------
 
-export function calcularMetricasOferta(oferta: OfertaBancaria): MetricasOferta {
+function cuotaRelevante(
+  input: ReturnType<typeof flujoInputDesdeEscenario>,
+  flujo: ReturnType<typeof construirFlujoDeCaja>,
+): Cents {
+  if (input.tipo !== 'mixta') return flujo[1]?.cuota ?? ZERO;
+  const mesesFijos = Math.min((input.mixtaAniosFijos ?? 0) * 12, input.plazoMeses - 1);
+  return flujo[mesesFijos + 1]?.cuota ?? flujo[1]?.cuota ?? ZERO;
+}
+
+function inputTensionado(input: ReturnType<typeof flujoInputDesdeEscenario>) {
+  const vinculaciones = input.vinculaciones.map((vinculacion) => ({
+    ...vinculacion,
+    activo: false,
+  }));
+  if (input.tipo === 'fija') return { ...input, vinculaciones };
+
+  const euriborPorPeriodos = input.euriborPorPeriodos?.map((periodo) => ({
+    ...periodo,
+    valor: periodo.valor + 0.02,
+  }));
+  return {
+    ...input,
+    vinculaciones,
+    euribor: (input.euribor ?? 0) + 0.02,
+    ...(euriborPorPeriodos !== undefined ? { euriborPorPeriodos } : {}),
+  };
+}
+
+export function calcularMetricasOferta(
+  oferta: OfertaBancaria,
+  contexto?: ContextoComparacionHipotecas,
+): MetricasOferta {
   const esc = oferta.escenario;
   const input = flujoInputDesdeEscenario(esc);
   const lineas = construirFlujoDeCaja(input);
@@ -109,6 +169,31 @@ export function calcularMetricasOferta(oferta: OfertaBancaria): MetricasOferta {
   const comParcial = Math.min(esc.comisiones.amortizacionParcial, 0.05) / 0.05;
   const comTotal = Math.min(esc.comisiones.amortizacionTotal, 0.05) / 0.05;
   const indiceFlexibilidad = 100 - (comParcial + comTotal) * 50;
+  const cuotaBaseRelevante = cuotaRelevante(input, lineas);
+  const inputAdverso = inputTensionado(input);
+  const cuotaTensionada = cuotaRelevante(inputAdverso, construirFlujoDeCaja(inputAdverso));
+  const incrementoCuota =
+    cuotaBaseRelevante > ZERO
+      ? Math.max(0, (cuotaTensionada - cuotaBaseRelevante) / cuotaBaseRelevante)
+      : 0;
+  const indiceResiliencia = Math.max(0, 100 - incrementoCuota * 200);
+  const cuotaActualParaRatio = maxCents(cuotaInicial, cuotaPostFija ?? cuotaInicial);
+  const ratioBancarioActual =
+    contexto !== undefined && contexto.ingresoMensual > ZERO
+      ? (cuotaActualParaRatio + contexto.otrasDeudasMensuales) / contexto.ingresoMensual
+      : null;
+  const ratioBancarioTensionado =
+    contexto !== undefined && contexto.ingresoMensual > ZERO
+      ? (cuotaTensionada + contexto.otrasDeudasMensuales) / contexto.ingresoMensual
+      : null;
+  const efectivoTotalNecesario =
+    contexto?.gastosCompraNoFinanciados !== undefined
+      ? addCents(desembolsoInicial, contexto.gastosCompraNoFinanciados)
+      : null;
+  const ahorroSuficiente =
+    efectivoTotalNecesario !== null && contexto?.ahorrosDisponibles !== undefined
+      ? contexto.ahorrosDisponibles >= efectivoTotalNecesario
+      : null;
 
   return {
     ofertaId: oferta.id,
@@ -119,6 +204,12 @@ export function calcularMetricasOferta(oferta: OfertaBancaria): MetricasOferta {
     desembolsoInicial,
     numVinculacionesObligatorias,
     indiceFlexibilidad,
+    cuotaTensionada,
+    indiceResiliencia,
+    ratioBancarioActual,
+    ratioBancarioTensionado,
+    efectivoTotalNecesario,
+    ahorroSuficiente,
   };
 }
 
@@ -138,9 +229,27 @@ export function sonOfertasComparables(ofertas: readonly OfertaBancaria[]): boole
 // Comparación
 // ---------------------------------------------------------------------------
 
-function normalizar(val: number, min: number, max: number, lowerIsBetter: boolean): number {
-  if (max === min) return 100;
-  return lowerIsBetter ? ((max - val) / (max - min)) * 100 : ((val - min) / (max - min)) * 100;
+function puntuarRespectoAlMejor(valor: number, mejor: number, referenciaMinima: number): number {
+  if (valor === mejor) return 100;
+  if (valor <= 0) return 100;
+  const referencia = Math.max(mejor, referenciaMinima);
+  return Math.max(0, Math.min(100, 100 / (1 + (valor - mejor) / referencia)));
+}
+
+function mediaPonderada(
+  puntuaciones: Record<keyof PesosComparacion, number>,
+  pesos: PesosComparacion,
+): number {
+  const claves = Object.keys(pesos) as (keyof PesosComparacion)[];
+  const sumaPesos = claves.reduce((total, clave) => total + Math.max(0, pesos[clave]), 0);
+  const pesosAplicados = sumaPesos > 0 ? pesos : PESOS_POR_DEFECTO;
+  const denominador = sumaPesos > 0 ? sumaPesos : 1;
+  return (
+    claves.reduce(
+      (total, clave) => total + puntuaciones[clave] * Math.max(0, pesosAplicados[clave]),
+      0,
+    ) / denominador
+  );
 }
 
 /**
@@ -150,59 +259,62 @@ function normalizar(val: number, min: number, max: number, lowerIsBetter: boolea
 export function compararOfertas(
   ofertas: readonly OfertaBancaria[],
   pesos: PesosComparacion = PESOS_POR_DEFECTO,
+  contexto?: ContextoComparacionHipotecas,
 ): ResultadoComparacion[] {
   if (ofertas.length === 0) return [];
 
-  const todos = ofertas.map((o) => ({ oferta: o, metricas: calcularMetricasOferta(o) }));
+  const todos = ofertas.map((o) => ({
+    oferta: o,
+    metricas: calcularMetricasOferta(o, contexto),
+  }));
 
   const minCuota = Math.min(...todos.map((m) => m.metricas.cuotaInicial));
-  const maxCuota = Math.max(...todos.map((m) => m.metricas.cuotaInicial));
   const minCoste = Math.min(...todos.map((m) => m.metricas.costeRealTotal));
-  const maxCoste = Math.max(...todos.map((m) => m.metricas.costeRealTotal));
   const minDesemb = Math.min(...todos.map((m) => m.metricas.desembolsoInicial));
-  const maxDesemb = Math.max(...todos.map((m) => m.metricas.desembolsoInicial));
-  const minFlex = Math.min(...todos.map((m) => m.metricas.indiceFlexibilidad));
-  const maxFlex = Math.max(...todos.map((m) => m.metricas.indiceFlexibilidad));
-  const minVinc = Math.min(...todos.map((m) => m.metricas.numVinculacionesObligatorias));
-  const maxVinc = Math.max(...todos.map((m) => m.metricas.numVinculacionesObligatorias));
 
   const resultados: ResultadoComparacion[] = todos.map(({ oferta, metricas }) => {
-    const scoreCuota = normalizar(metricas.cuotaInicial, minCuota, maxCuota, true);
-    const scoreCoste = normalizar(metricas.costeRealTotal, minCoste, maxCoste, true);
-    const scoreDesemb = normalizar(metricas.desembolsoInicial, minDesemb, maxDesemb, true);
-    const scoreFlex = normalizar(metricas.indiceFlexibilidad, minFlex, maxFlex, false);
-    const scoreVinc = normalizar(metricas.numVinculacionesObligatorias, minVinc, maxVinc, true);
-
-    const puntuacion =
-      scoreCoste * pesos.costeReal +
-      scoreCuota * pesos.cuota +
-      scoreDesemb * pesos.desembolsoInicial +
-      scoreFlex * pesos.flexibilidad +
-      scoreVinc * pesos.vinculaciones;
+    const puntuaciones: Record<keyof PesosComparacion, number> = {
+      costeReal: puntuarRespectoAlMejor(metricas.costeRealTotal, minCoste, toCents(10_000)),
+      cuota: puntuarRespectoAlMejor(metricas.cuotaInicial, minCuota, toCents(100)),
+      desembolsoInicial: puntuarRespectoAlMejor(
+        metricas.desembolsoInicial,
+        minDesemb,
+        toCents(5_000),
+      ),
+      resiliencia: metricas.indiceResiliencia,
+      flexibilidad: metricas.indiceFlexibilidad,
+      vinculaciones: Math.max(0, 100 - metricas.numVinculacionesObligatorias * 20),
+    };
+    const ratioTensionado = metricas.ratioBancarioTensionado;
+    const esAptaParaRecomendacion =
+      oferta.estado !== 'rechazada' &&
+      metricas.ahorroSuficiente !== false &&
+      (ratioTensionado === null ||
+        contexto === undefined ||
+        ratioTensionado <= contexto.ratioBancarioMaximo);
 
     return {
       oferta,
       metricas,
-      puntuacion,
-      desglosePuntuacion: {
-        costeReal: scoreCoste,
-        cuota: scoreCuota,
-        desembolsoInicial: scoreDesemb,
-        flexibilidad: scoreFlex,
-        vinculaciones: scoreVinc,
-      },
+      puntuacion: mediaPonderada(puntuaciones, pesos),
+      desglosePuntuacion: puntuaciones,
       esLaMenorCuota: false,
       esLaMenorTaeOficial: false,
       esLaMenorTaeEstimada: false,
       esLaMenorCosteReal: false,
       esMenorDesembolso: false,
       esMenosVinculaciones: false,
+      esAptaParaRecomendacion,
       esMejorGlobal: false,
     };
   });
 
   // Marcar los mejores de cada dimensión
-  const mejorPunt = Math.max(...resultados.map((r) => r.puntuacion));
+  const candidatas = sonOfertasComparables(ofertas)
+    ? resultados.filter((resultado) => resultado.esAptaParaRecomendacion)
+    : [];
+  const mejorPunt =
+    candidatas.length > 0 ? Math.max(...candidatas.map((resultado) => resultado.puntuacion)) : null;
   const menorCuota = Math.min(...resultados.map((r) => r.metricas.cuotaInicial));
   const menorCoste = Math.min(...resultados.map((r) => r.metricas.costeRealTotal));
   const menorDesemb = Math.min(...resultados.map((r) => r.metricas.desembolsoInicial));
@@ -222,8 +334,13 @@ export function compararOfertas(
     r.esLaMenorTaeEstimada = r.metricas.taeEstimada === menorTaeEstimada;
     r.esLaMenorTaeOficial =
       r.oferta.taeOficial !== undefined && r.oferta.taeOficial === menorTaeOficial;
-    r.esMejorGlobal = Math.abs(r.puntuacion - mejorPunt) < 0.01;
+    r.esMejorGlobal =
+      r.esAptaParaRecomendacion && mejorPunt !== null && Math.abs(r.puntuacion - mejorPunt) < 0.01;
   }
 
-  return resultados.sort((a, b) => b.puntuacion - a.puntuacion);
+  return resultados.sort(
+    (a, b) =>
+      Number(b.esAptaParaRecomendacion) - Number(a.esAptaParaRecomendacion) ||
+      b.puntuacion - a.puntuacion,
+  );
 }

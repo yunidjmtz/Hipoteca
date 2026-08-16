@@ -3,6 +3,8 @@ import type { Cents } from '@/core/money';
 import { formatEuros, formatEurosMientrasSeEscribe } from '@/core/format';
 import { parseEuros } from '@/core/parseNumber';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { Icono } from '@/components/Icono';
+import type { NombreIcono } from '@/components/Icono';
 
 interface PropsInputMoneda {
   readonly valor: Cents;
@@ -13,6 +15,7 @@ interface PropsInputMoneda {
   readonly error?: string;
   readonly deshabilitado?: boolean;
   readonly minimo?: Cents;
+  readonly icono?: NombreIcono;
 }
 
 export function InputMoneda({
@@ -24,6 +27,7 @@ export function InputMoneda({
   error,
   deshabilitado = false,
   minimo,
+  icono,
 }: PropsInputMoneda) {
   const [texto, setTexto] = useState<string>(() => formatEuros(valor));
   const [editando, setEditando] = useState(false);
@@ -48,7 +52,8 @@ export function InputMoneda({
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center">
+      <div className="flex items-center gap-1.5">
+        {icono !== undefined && <Icono nombre={icono} tamano={16} className="text-acento" />}
         <label htmlFor={id} className="text-sm font-medium text-tinta">
           {etiqueta}
         </label>

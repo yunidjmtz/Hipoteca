@@ -48,7 +48,13 @@ function elementosEnfocables(contenedor: HTMLElement): HTMLElement[] {
   ].filter((elemento) => !elemento.hasAttribute('inert'));
 }
 
-function Marca({ compacta = false }: { readonly compacta?: boolean }) {
+function Marca({
+  compacta = false,
+  titulo = 'Mi Hipoteca',
+}: {
+  readonly compacta?: boolean;
+  readonly titulo?: string;
+}) {
   return (
     <div className={compacta ? 'flex items-center gap-3' : 'block'}>
       <div
@@ -64,7 +70,7 @@ function Marca({ compacta = false }: { readonly compacta?: boolean }) {
         <p
           className={`font-display font-semibold tracking-tight leading-tight text-tinta ${compacta ? 'text-base' : 'text-xl'}`}
         >
-          Mi Hipoteca
+          {titulo}
         </p>
       </div>
     </div>
@@ -82,6 +88,11 @@ export function Disposicion() {
   const dialogoCcaaRef = useRef<HTMLDivElement>(null);
   const focoAnteriorRef = useRef<HTMLElement | null>(null);
   const necesitaElegirCcaa = estado.preferencias.ccaa === '';
+  const tituloSeccionActual =
+    SECCIONES.find(
+      (seccion) =>
+        pathname === rutaDe(seccion.ruta) || pathname.startsWith(`${rutaDe(seccion.ruta)}/`),
+    )?.etiqueta ?? 'Mi Hipoteca';
 
   function abrirAjustes() {
     focoAnteriorRef.current =
@@ -155,7 +166,7 @@ export function Disposicion() {
         className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex"
       >
         <div className="px-1">
-          <Marca />
+          <Marca titulo={tituloSeccionActual} />
         </div>
 
         <nav aria-label="Secciones" className="mt-8 flex-1 overflow-y-auto">
@@ -236,7 +247,7 @@ export function Disposicion() {
       >
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <Marca compacta />
+            <Marca compacta titulo={tituloSeccionActual} />
           </div>
           <button
             type="button"
@@ -260,7 +271,7 @@ export function Disposicion() {
       <main
         inert={necesitaElegirCcaa}
         className={[
-          'mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-10',
+          'mx-auto w-full max-w-5xl px-2 sm:px-3 lg:px-5',
           pathname === '/escala'
             ? 'flex h-[calc(100svh-3.75rem)] overflow-hidden pt-4 pb-20 lg:h-dvh lg:pt-8 lg:pb-8'
             : 'pt-6 pb-32 lg:pt-8 lg:pb-12',
@@ -284,7 +295,10 @@ export function Disposicion() {
         aria-label="Secciones"
         className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
       >
-        <ul className="grid grid-cols-6">
+        <ul
+          className="grid"
+          style={{ gridTemplateColumns: `repeat(${SECCIONES.length}, minmax(0, 1fr))` }}
+        >
           {SECCIONES.map((seccion) => (
             <li key={seccion.id}>
               <NavLink

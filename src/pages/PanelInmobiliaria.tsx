@@ -92,6 +92,57 @@ function FormularioVivienda({
     setBorrador((actual) => ({ ...actual, [nombre]: valor }));
   }
 
+  async function seleccionarImagenPrincipal(evento: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = evento.target.files?.[0];
+    if (archivo === undefined) return;
+    if (!archivo.type.startsWith('image/')) {
+      setError('Selecciona un archivo de imagen válido.');
+      return;
+    }
+    if (archivo.size > 5 * 1024 * 1024) {
+      setError('La foto no puede superar los 5 MB.');
+      return;
+    }
+
+    try {
+      const origen = await new Promise<string>((resolver, rechazar) => {
+        const lector = new FileReader();
+        lector.onload = () =>
+          typeof lector.result === 'string'
+            ? resolver(lector.result)
+            : rechazar(new Error('No se pudo leer la foto.'));
+        lector.onerror = () => rechazar(new Error('No se pudo leer la foto.'));
+        lector.readAsDataURL(archivo);
+      });
+      const imagen = new Image();
+      imagen.src = origen;
+      await new Promise<void>((resolver, rechazar) => {
+        imagen.onload = () => resolver();
+        imagen.onerror = () => rechazar(new Error('No se pudo cargar la foto.'));
+      });
+      const anchoMaximo = 1600;
+      const escala = Math.min(1, anchoMaximo / imagen.naturalWidth);
+      const lienzo = document.createElement('canvas');
+      lienzo.width = Math.round(imagen.naturalWidth * escala);
+      lienzo.height = Math.round(imagen.naturalHeight * escala);
+      const contexto = lienzo.getContext('2d');
+      if (contexto === null) throw new Error('No se pudo preparar la foto.');
+      contexto.drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
+      const fotoOptimizada = lienzo.toDataURL('image/webp', 0.84);
+      if (fotoOptimizada.length > 1_500_000) {
+        throw new Error(
+          'La foto optimizada sigue siendo demasiado grande. Usa una imagen más ligera.',
+        );
+      }
+      campo('mainImageUrl', fotoOptimizada);
+      setError('');
+    } catch (causa) {
+      setError(causa instanceof Error ? causa.message : 'No se pudo preparar la foto.');
+    } finally {
+      evento.target.value = '';
+    }
+  }
+
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     const precioCents = Math.round(Number(precio.replace(',', '.')) * 100);
@@ -213,13 +264,51 @@ function FormularioVivienda({
             className={CAMPOS}
           />
         </label>
+        <div className="rounded-chico border border-linea bg-superficie-2 p-3 sm:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-tinta">Foto principal</p>
+              <p className="mt-1 text-xs text-tinta-media">
+                Se optimiza a WebP antes de guardar. Máximo 5 MB.
+              </p>
+            </div>
+            {borrador.mainImageUrl !== '' && (
+              <button
+                type="button"
+                onClick={() => campo('mainImageUrl', '')}
+                className="text-xs font-semibold text-no-viable"
+              >
+                Quitar foto
+              </button>
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {borrador.mainImageUrl !== '' && (
+              <img
+                src={borrador.mainImageUrl}
+                alt="Vista previa de la foto principal"
+                className="h-20 w-28 rounded-chico border border-linea bg-superficie object-cover"
+              />
+            )}
+            <label className="cursor-pointer rounded-chico border border-linea bg-superficie px-3 py-2 text-sm font-semibold text-acento transition-colors hover:bg-acento-tenue">
+              Seleccionar foto
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(evento) => void seleccionarImagenPrincipal(evento)}
+                className="sr-only"
+              />
+            </label>
+          </div>
+        </div>
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta sm:col-span-2">
-          URL de imagen principal
+          URL de imagen principal{' '}
+          <span className="font-normal text-tinta-suave">(alternativa)</span>
           <input
-            required
             type="url"
             value={borrador.mainImageUrl}
             onChange={(e) => campo('mainImageUrl', e.target.value)}
+            placeholder="https://…"
             className={CAMPOS}
           />
         </label>
@@ -243,30 +332,6 @@ function FormularioVivienda({
             className={CAMPOS}
           />
         </label>
-        <div className="grid grid-cols-2 gap-3 sm:col-span-2">
-          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-            Latitud{' '}
-            <input
-              inputMode="decimal"
-              value={borrador.latitude ?? ''}
-              onChange={(e) =>
-                campo('latitude', e.target.value === '' ? null : Number(e.target.value))
-              }
-              className={CAMPOS}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
-            Longitud{' '}
-            <input
-              inputMode="decimal"
-              value={borrador.longitude ?? ''}
-              onChange={(e) =>
-                campo('longitude', e.target.value === '' ? null : Number(e.target.value))
-              }
-              className={CAMPOS}
-            />
-          </label>
-        </div>
       </div>
       <aside className="rounded-grande border border-linea bg-superficie-2 p-4">
         <p className="rotulo">Vista previa</p>
@@ -335,11 +400,11 @@ function AccesoAgente({ onAcceso }: { readonly onAcceso: () => void }) {
   return (
     <section className="mx-auto max-w-md overflow-hidden rounded-medio border border-linea bg-superficie shadow-papel">
       <div className="border-b border-acento/15 bg-acento-tenue px-6 py-5">
-      <p className="rotulo">Panel de inmobiliaria</p>
-      <h1 className="mt-1 font-display text-2xl text-tinta">Acceso para agentes</h1>
-      <p className="mt-2 text-sm text-tinta-media">
-        Usa la cuenta que tu inmobiliaria ha registrado como agente.
-      </p>
+        <p className="rotulo">Panel de inmobiliaria</p>
+        <h1 className="mt-1 font-display text-2xl text-tinta">Acceso para agentes</h1>
+        <p className="mt-2 text-sm text-tinta-media">
+          Usa la cuenta que tu inmobiliaria ha registrado como agente.
+        </p>
       </div>
       <form onSubmit={(e) => void entrar(e)} className="flex flex-col gap-3 p-6">
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
@@ -484,7 +549,9 @@ export function PanelInmobiliaria() {
       </div>
     );
 
-  const viviendasPublicadas = viviendas.filter((vivienda) => vivienda.status === 'published').length;
+  const viviendasPublicadas = viviendas.filter(
+    (vivienda) => vivienda.status === 'published',
+  ).length;
   const codigosActivos = codigos.filter((codigo) => codigo.status === 'active').length;
 
   return (
@@ -518,15 +585,21 @@ export function PanelInmobiliaria() {
       )}
       <section className="grid grid-cols-3 gap-px overflow-hidden rounded-medio border border-linea bg-linea xl:col-span-2">
         <div className="bg-superficie px-4 py-3.5 sm:px-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Viviendas</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">
+            Viviendas
+          </p>
           <p className="mt-1 font-cifra text-2xl font-bold text-tinta">{viviendas.length}</p>
         </div>
         <div className="bg-superficie px-4 py-3.5 sm:px-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Publicadas</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">
+            Publicadas
+          </p>
           <p className="mt-1 font-cifra text-2xl font-bold text-comodo">{viviendasPublicadas}</p>
         </div>
         <div className="bg-superficie px-4 py-3.5 sm:px-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">Códigos activos</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-tinta-suave">
+            Códigos activos
+          </p>
           <p className="mt-1 font-cifra text-2xl font-bold text-acento">{codigosActivos}</p>
         </div>
       </section>
@@ -616,10 +689,7 @@ export function PanelInmobiliaria() {
         </div>
         <div className="mt-4 grid gap-2">
           {codigos.map((codigo) => (
-            <div
-              key={codigo.id}
-              className="rounded-chico border border-linea bg-superficie-2 p-3"
-            >
+            <div key={codigo.id} className="rounded-chico border border-linea bg-superficie-2 p-3">
               <div>
                 <p className="font-cifra font-bold tracking-wider text-tinta">{codigo.code}</p>
                 <p className="mt-1 text-xs text-tinta-media">

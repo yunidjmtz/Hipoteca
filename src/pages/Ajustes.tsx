@@ -5,7 +5,15 @@ import { InputPorcentaje } from '@/components/InputPorcentaje';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputNumeroEntero } from '@/components/InputNumeroEntero';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { INMOBILIARIA_DEMO, type InmobiliariaDemo } from '@/data/inmobiliariaDemo';
 import type { ConfigFiscalCcaa } from '@/domain/types';
+import {
+  apiHipotecasConfigurada,
+  canjearCodigoInmobiliariaApi,
+  guardarCodigoInmobiliariaApi,
+  previsualizarCodigoInmobiliariaApi,
+  type InmobiliariaApi,
+} from '@/services/hipotecasApi';
 
 // ---------------------------------------------------------------------------
 // Subcomponente: editor de una entrada fiscal por CCAA
@@ -25,6 +33,15 @@ function formatearPeriodoIne(periodo: string | undefined): string | null {
   return new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(
     new Date(anyo, mes - 1, 1),
   );
+}
+
+function inmobiliariaDesdeApi(inmobiliaria: InmobiliariaApi): InmobiliariaDemo {
+  return {
+    id: inmobiliaria.id,
+    nombre: inmobiliaria.name,
+    marca: inmobiliaria.brand,
+    codigo: '',
+  };
 }
 
 function FiscalCcaaEditor({ config, onCambiar }: PropsFiscalEditor) {
@@ -125,6 +142,7 @@ export function Ajustes() {
     estadoPersistencia,
     datosRecuperacion,
     descartarRecuperacion,
+    actualizarInmobiliariaActivaDemo,
   } = useEstado();
   const { ajustes, gastos, preferencias } = estado;
   const periodoTinIne = formatearPeriodoIne(ajustes.tinReferenciaPeriodo);
@@ -139,6 +157,13 @@ export function Ajustes() {
 
   // Input file oculto para importar datos
   const inputFileRef = useRef<HTMLInputElement>(null);
+  const [mostrarVinculoInmobiliaria, setMostrarVinculoInmobiliaria] = useState(false);
+  const [codigoInmobiliaria, setCodigoInmobiliaria] = useState('');
+  const [inmobiliariaPendiente, setInmobiliariaPendiente] = useState<InmobiliariaDemo | null>(
+    null,
+  );
+  const [errorCodigoInmobiliaria, setErrorCodigoInmobiliaria] = useState('');
+  const [comprobandoCodigoInmobiliaria, setComprobandoCodigoInmobiliaria] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Exportar datos
@@ -208,12 +233,88 @@ export function Ajustes() {
     dialogoRef.current?.close();
   }
 
+  function abrirVinculoInmobiliaria() {
+    setCodigoInmobiliaria('');
+    setInmobiliariaPendiente(null);
+    setErrorCodigoInmobiliaria('');
+    setMostrarVinculoInmobiliaria(true);
+  }
+
+  async function comprobarCodigoInmobiliaria() {
+    if (apiHipotecasConfigurada()) {
+      setComprobandoCodigoInmobiliaria(true);
+      try {
+        const { agency } = await previsualizarCodigoInmobiliariaApi(codigoInmobiliaria);
+        setInmobiliariaPendiente(inmobiliariaDesdeApi(agency));
+        setErrorCodigoInmobiliaria('');
+      } catch (error) {
+        setInmobiliariaPendiente(null);
+        setErrorCodigoInmobiliaria(
+          error instanceof Error ? error.message : 'No se pudo comprobar el código.',
+        );
+      } finally {
+        setComprobandoCodigoInmobiliaria(false);
+      }
+      return;
+    }
+
+    if (codigoInmobiliaria.trim().toUpperCase() === INMOBILIARIA_DEMO.codigo) {
+      setInmobiliariaPendiente(INMOBILIARIA_DEMO);
+      setErrorCodigoInmobiliaria('');
+      return;
+    }
+    setInmobiliariaPendiente(null);
+    setErrorCodigoInmobiliaria('No encontramos ese código. Prueba con CASA-7K3P en la demostración.');
+  }
+
+  async function confirmarVinculoInmobiliaria() {
+    if (inmobiliariaPendiente === null) return;
+    setComprobandoCodigoInmobiliaria(true);
+    try {
+      const inmobiliaria = apiHipotecasConfigurada()
+        ? inmobiliariaDesdeApi((await canjearCodigoInmobiliariaApi(codigoInmobiliaria)).agency)
+        : inmobiliariaPendiente;
+      actualizarInmobiliariaActivaDemo({
+        id: inmobiliaria.id,
+        nombre: inmobiliaria.nombre,
+        marca: inmobiliaria.marca,
+      });
+      if (apiHipotecasConfigurada()) guardarCodigoInmobiliariaApi(codigoInmobiliaria);
+      setMostrarVinculoInmobiliaria(false);
+    } catch (error) {
+      setErrorCodigoInmobiliaria(
+        error instanceof Error ? error.message : 'No se pudo vincular la inmobiliaria.',
+      );
+      setInmobiliariaPendiente(null);
+    } finally {
+      setComprobandoCodigoInmobiliaria(false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
     <div className="flex flex-col gap-6">
+      <Panel titulo="Inmuebles" rotulo="Ajustes">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-xl text-tinta">Inmobiliaria</h2>
+            <p className="mt-1 text-sm leading-relaxed text-tinta-media">
+              Vincula el código que te facilite tu agente para ver su catálogo en Inmuebles.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={abrirVinculoInmobiliaria}
+            className="shrink-0 rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+          >
+            Vincular inmobiliaria
+          </button>
+        </div>
+      </Panel>
+
       <Panel titulo="Gastos de compra" rotulo="Ajustes">
         <div className="flex flex-col gap-6">
           <section className="flex flex-col gap-4" aria-labelledby="gastos-inmobiliaria">
@@ -656,6 +757,63 @@ export function Ajustes() {
           </div>
         </div>
       </dialog>
+
+      {mostrarVinculoInmobiliaria && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/30 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-vincular-inmobiliaria"
+            className="w-full max-w-md rounded-grande bg-superficie p-5 shadow-elevado"
+          >
+            <p className="rotulo">Inmuebles</p>
+            <h2 id="titulo-vincular-inmobiliaria" className="mt-1 font-display text-xl text-tinta">
+              Vincular inmobiliaria
+            </h2>
+            {inmobiliariaPendiente === null ? (
+              <>
+                <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+                  Introduce el código que te ha compartido tu agente.
+                </p>
+                <label className="mt-5 flex flex-col gap-1 text-sm font-medium text-tinta">
+                  Código de invitación
+                  <input
+                    value={codigoInmobiliaria}
+                    onChange={(evento) => setCodigoInmobiliaria(evento.target.value.toUpperCase())}
+                    onKeyDown={(evento) => {
+                      if (evento.key === 'Enter') void comprobarCodigoInmobiliaria();
+                    }}
+                    placeholder="CASA-7K3P"
+                    autoFocus
+                    className="rounded-medio border border-linea bg-superficie px-3 py-2 font-cifra tracking-wide text-tinta uppercase focus:outline-none focus:ring-2 focus:ring-acento/50"
+                  />
+                </label>
+                {errorCodigoInmobiliaria !== '' && (
+                  <p role="alert" className="mt-2 text-xs text-no-viable">
+                    {errorCodigoInmobiliaria}
+                  </p>
+                )}
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => setMostrarVinculoInmobiliaria(false)} className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2">Cancelar</button>
+                  <button type="button" onClick={() => void comprobarCodigoInmobiliaria()} disabled={comprobandoCodigoInmobiliaria} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90">{comprobandoCodigoInmobiliaria ? 'Comprobando…' : 'Continuar'}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm text-tinta-media">Vas a vincularte con:</p>
+                <div className="mt-3 flex items-center gap-3 rounded-medio bg-acento-tenue p-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-chico bg-acento font-display text-xs font-bold text-sobre-acento">{inmobiliariaPendiente.marca}</span>
+                  <p className="font-display text-lg text-tinta">{inmobiliariaPendiente.nombre}</p>
+                </div>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => setInmobiliariaPendiente(null)} className="rounded-medio px-3 py-2 text-sm font-medium text-tinta-media hover:bg-superficie-2">Volver</button>
+                  <button type="button" onClick={() => void confirmarVinculoInmobiliaria()} disabled={comprobandoCodigoInmobiliaria} className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90">{comprobandoCodigoInmobiliaria ? 'Vinculando…' : 'Confirmar vínculo'}</button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

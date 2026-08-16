@@ -96,14 +96,14 @@ const APARTADOS: readonly ApartadoManual[] = [
     id: 'amortizacion',
     titulo: 'Amortización',
     descripcion:
-      'Desglosa una hipoteca guardada cuota a cuota y permite valorar aportaciones anticipadas.',
+      'Abre Amortizar dentro de cada tarjeta de hipoteca para ver sus cuotas y valorar aportaciones anticipadas.',
     pasos: [
-      'Selecciona una hipoteca guardada. Si no aparece ninguna, créala y guárdala en Hipoteca.',
+      'En la tarjeta de la hipoteca que quieras estudiar, pulsa Amortizar. Si no aparece ninguna, créala y guárdala en Hipoteca.',
       'Revisa el cuadro mensual o anual: separa cada cuota en intereses, capital amortizado y saldo pendiente.',
       'Para simular una amortización anticipada, indica importe, fecha y comisión cuando corresponda.',
       'Elige entre reducir cuota o reducir plazo y compara el ahorro de intereses antes de tomar una decisión.',
     ],
-    ruta: '/amortizacion',
+    ruta: '/hipoteca',
   },
   {
     id: 'escala',

@@ -9,6 +9,7 @@ export interface CamposImportablesVivienda {
   precioVenta: Cents;
   superficieM2: number;
   habitaciones: number;
+  banos: number;
   esExterior: boolean;
   tieneTrastero: boolean;
   tieneGaraje: boolean;
@@ -29,6 +30,7 @@ export function mapImportedDataToExistingForm(
   if (data.price !== undefined) patch.precioVenta = toCents(data.price);
   if (data.builtArea !== undefined) patch.superficieM2 = Math.round(data.builtArea);
   if (data.rooms !== undefined) patch.habitaciones = Math.round(data.rooms);
+  if (data.bathrooms !== undefined) patch.banos = Math.round(data.bathrooms);
   if (data.address !== undefined) patch.direccion = data.address;
   if (data.exterior !== undefined) patch.esExterior = data.exterior;
   if (data.storageRoom !== undefined) patch.tieneTrastero = data.storageRoom;
@@ -41,11 +43,12 @@ export function mapImportedDataToExistingForm(
   }
   const extras = [
     data.floor === undefined ? undefined : `Planta: ${data.floor}`,
-    data.bathrooms === undefined ? undefined : `Baños: ${data.bathrooms}`,
     data.elevator === undefined ? undefined : `Ascensor: ${data.elevator ? 'sí' : 'no'}`,
     data.terrace === undefined ? undefined : `Terraza: ${data.terrace ? 'sí' : 'no'}`,
     data.balcony === undefined ? undefined : `Balcón: ${data.balcony ? 'sí' : 'no'}`,
-    data.airConditioning === undefined ? undefined : `Aire acondicionado: ${data.airConditioning ? 'sí' : 'no'}`,
+    data.airConditioning === undefined
+      ? undefined
+      : `Aire acondicionado: ${data.airConditioning ? 'sí' : 'no'}`,
     data.heating === undefined ? undefined : `Calefacción: ${data.heating}`,
     data.orientation === undefined ? undefined : `Orientación: ${data.orientation}`,
     data.condition === undefined ? undefined : `Estado: ${data.condition}`,

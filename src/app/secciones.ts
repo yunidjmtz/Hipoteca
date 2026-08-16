@@ -45,7 +45,7 @@ export const SECCIONES: readonly Seccion[] = [
     ruta: 'plan-hipotecario',
     etiqueta: 'Mi plan hipotecario',
     etiquetaCorta: 'Mi plan',
-    icono: 'casa',
+    icono: 'meta',
     fase: 'Fase 1b',
     resumen: 'El objetivo de compra, el desembolso inicial, el ahorro necesario y tu capacidad.',
     contenidos: [
@@ -58,9 +58,9 @@ export const SECCIONES: readonly Seccion[] = [
   {
     id: 'ofertas',
     ruta: 'ofertas',
-    etiqueta: 'Ofertas',
-    etiquetaCorta: 'Ofertas',
-    icono: 'ofertas',
+    etiqueta: 'Inmuebles',
+    etiquetaCorta: 'Inmuebles',
+    icono: 'casa',
     fase: 'Fase 1b',
     resumen: 'Guarda y compara las viviendas que estás valorando.',
     contenidos: [
@@ -73,7 +73,7 @@ export const SECCIONES: readonly Seccion[] = [
     ruta: 'hipoteca',
     etiqueta: 'Hipoteca',
     etiquetaCorta: 'Hipoteca',
-    icono: 'simulador',
+    icono: 'hipoteca',
     fase: 'Fase 1b',
     resumen: 'Añade, simula y compara las propuestas de cada entidad, sin quedarte en la cuota.',
     contenidos: [
@@ -82,23 +82,6 @@ export const SECCIONES: readonly Seccion[] = [
       'TAE oficial de la FEIN, en un campo aparte de la TAE estimada por la aplicación',
       'Coste real total, desembolso inicial, comisiones y vinculaciones exigidas',
       'Puntuación transparente, configurable y desactivable',
-    ],
-  },
-  {
-    id: 'amortizacion',
-    ruta: 'amortizacion',
-    etiqueta: 'Amortización',
-    // La etiqueta corta es siempre un fragmento de la larga (WCAG 2.5.3,
-    // «Label in Name»): el nombre accesible del enlace contiene lo que se ve.
-    etiquetaCorta: 'Amortización',
-    icono: 'amortizacion',
-    fase: 'Fase 1b',
-    resumen: 'El cuadro mes a mes, cerrando exactamente en 0,00 €.',
-    contenidos: [
-      'Cuadro mensual y resumen anual: cuota, intereses, principal y pendiente',
-      'Vencimientos anclados al día de la primera cuota, sin derivas de calendario',
-      'Amortización anticipada: reducir cuota o reducir plazo, con su comisión (Fase 3)',
-      'Ahorro neto de intereses de cada amortización simulada (Fase 3)',
     ],
   },
   {

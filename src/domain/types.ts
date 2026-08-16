@@ -129,6 +129,11 @@ export interface PreferenciasCompra {
   estadoVivienda: EstadoVivienda;
   esVpoEspecial: boolean;
   precioObjetivo: Cents;
+  habitacionesMinimas: number;
+  banosMinimos: number;
+  exterior: boolean;
+  trastero: boolean;
+  garaje: boolean;
   precioMinExplorar: Cents;
   precioMaxExplorar: Cents;
   pasoEscala: 5000 | 10000 | 20000;
@@ -383,6 +388,7 @@ export interface ViviendaGuardada {
   fecha: string;
   direccion: string;
   anuncioUrl: string;
+  telefono?: string;
   /** Procedencia opcional para importar y detectar anuncios repetidos. */
   sourcePortal?: 'idealista' | 'fotocasa' | undefined;
   sourceUrl?: string;
@@ -395,6 +401,8 @@ export interface ViviendaGuardada {
   reforma: string;
   superficieM2: number;
   habitaciones: number;
+  /** Opcional para conservar compatibilidad con viviendas guardadas anteriormente. */
+  banos?: number;
   esExterior: boolean;
   tieneTrastero: boolean;
   tieneGaraje: boolean;

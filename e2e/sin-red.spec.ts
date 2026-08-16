@@ -17,7 +17,7 @@ function navegacionVisible(pagina: Page) {
  * La etiqueta corta de la barra inferior es siempre un fragmento de la larga
  * del raíl, así que una expresión regular sirve para las dos disposiciones.
  */
-const SECCIONES = ['Resumen', 'Ofertas', 'Hipoteca', 'Amortización'];
+const SECCIONES = ['Resumen', 'Inmuebles', 'Hipoteca', 'Amortización'];
 
 /**
  * El navegador solo consulta el mismo origen y el endpoint estadístico del INE.
