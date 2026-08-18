@@ -11,7 +11,7 @@ import type { ContextoReduccion } from '@/domain/types';
 import { ESTADO_INICIAL } from '@/storage/defaults';
 
 const CTX_SIN_REDUCCION: ContextoReduccion = {
-  edadMenorTitular: 40,
+  edadMaximaTitular: 40,
   discapacidadPorcentaje: 0,
   victimaViolenciaGenero: false,
   familiaNumerosa: false,
@@ -19,7 +19,7 @@ const CTX_SIN_REDUCCION: ContextoReduccion = {
 };
 
 const CTX_JOVEN: ContextoReduccion = {
-  edadMenorTitular: 30,
+  edadMaximaTitular: 30,
   discapacidadPorcentaje: 0,
   victimaViolenciaGenero: false,
   familiaNumerosa: false,

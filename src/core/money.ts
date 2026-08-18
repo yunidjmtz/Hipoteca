@@ -3,7 +3,7 @@
 export const ZERO: Cents = 0 as Cents;
 
 export function toCents(euros: number): Cents {
-  return Math.floor(euros * 100 + 0.5) as Cents;
+  return centsRoundHalfUp(euros * 100);
 }
 
 export function fromCents(cents: Cents): number {
@@ -12,7 +12,8 @@ export function fromCents(cents: Cents): number {
 
 /** Redondeo half-up de un valor decimal a céntimos enteros. */
 export function centsRoundHalfUp(value: number): Cents {
-  return Math.floor(value + 0.5) as Cents;
+  const redondeado = value < 0 ? -Math.floor(Math.abs(value) + 0.5) : Math.floor(value + 0.5);
+  return redondeado as Cents;
 }
 
 export function sumCents(values: readonly Cents[]): Cents {

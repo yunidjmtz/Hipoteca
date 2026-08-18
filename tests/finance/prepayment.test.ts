@@ -118,7 +118,7 @@ describe('caso 18 — amortización reduciendo cuota', () => {
     }
   });
 
-  it('ahorroNeto = ahorroIntereses − comisión', () => {
+  it('ahorroNeto = intereses y vinculaciones evitados − comisión', () => {
     const input = flujoFijo(150_000, 0.03, 20);
     const result = simularAmortizacionAnticipada(input, {
       importe: toCents(20_000),
@@ -126,7 +126,9 @@ describe('caso 18 — amortización reduciendo cuota', () => {
       opcion: 'cuota',
       comisionParcial: 0.015,
     });
-    expect(result.ahorroNeto).toBe(result.ahorroIntereses - result.comision);
+    expect(result.ahorroNeto).toBe(
+      result.ahorroIntereses + result.ahorroCostesVinculados - result.comision,
+    );
   });
 });
 
@@ -192,6 +194,40 @@ describe('caso 19 — amortización reduciendo plazo', () => {
     // Reducir plazo mantiene la cuota original → amortiza capital más rápido → ahorra más
     expect(fromCents(reducePlazo.ahorroIntereses)).toBeGreaterThanOrEqual(
       fromCents(reduceCuota.ahorroIntereses),
+    );
+  });
+
+  it('incluye en el ahorro neto los productos vinculados evitados al terminar antes', () => {
+    const input: FlujoInput = {
+      ...flujoFijo(100_000, 0.03, 20),
+      vinculaciones: [
+        {
+          id: 'seguro',
+          nombre: 'Seguro',
+          activo: true,
+          bonificacionTin: 0,
+          costeInicial: ZERO,
+          costeAnual: toCents(1_200),
+          incrementoAnual: 0,
+          aniosExigidos: null,
+          obligatorio: true,
+          observaciones: '',
+        },
+      ],
+    };
+    const result = simularAmortizacionAnticipada(input, {
+      importe: toCents(20_000),
+      enMes: 12,
+      opcion: 'plazo',
+      comisionParcial: 0.01,
+    });
+
+    expect(result.ahorroCostesVinculados).toBeGreaterThan(ZERO);
+    expect(result.ahorroCostesVinculados).toBe(
+      result.costesVinculadosOriginales - result.costesVinculadosAmortizados,
+    );
+    expect(result.ahorroNeto).toBe(
+      result.ahorroIntereses + result.ahorroCostesVinculados - result.comision,
     );
   });
 });
@@ -296,6 +332,18 @@ describe('invariantes del flujo amortizado', () => {
     expect(result.flujoAmortizado).toHaveLength(2);
     expect(result.flujoAmortizado.at(-1)?.pendiente).toBe(ZERO);
     expect(result.comision).toBe(toCents(1_000));
+  });
+
+  it('usa la comisión total cuando la aportación cancela todo el pendiente', () => {
+    const result = simularAmortizacionAnticipada(flujoFijo(100_000, 0.03, 20), {
+      importe: toCents(200_000),
+      enMes: 1,
+      opcion: 'cuota',
+      comisionParcial: 0.01,
+      comisionTotal: 0.02,
+    });
+
+    expect(result.comision).toBe(toCents(2_000));
   });
 
   it('reduce plazo a tipo cero usando capital dividido por cuota', () => {

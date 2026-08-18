@@ -85,9 +85,11 @@ export function analizarVinculacion(
   let puntoEquilibrioMeses: number | null = null;
 
   for (let k = 1; k <= plazoMeses; k++) {
-    const interesesConK = flujoCon[k]?.intereses ?? ZERO;
-    const interesesSinK = flujoSin[k]?.intereses ?? ZERO;
-    const ahorroMes = subtractCents(interesesSinK, interesesConK);
+    // El punto de equilibrio es de caja: compara lo que se deja de pagar en
+    // cuotas, no solo la diferencia de intereses contables de cada mes.
+    const cuotaConK = flujoCon[k]?.cuota ?? ZERO;
+    const cuotaSinK = flujoSin[k]?.cuota ?? ZERO;
+    const ahorroMes = subtractCents(cuotaSinK, cuotaConK);
     const costeMes = calcularCosteVinculacionMes(vinculacion, k);
 
     ahorroCumulativo = addCents(ahorroCumulativo, ahorroMes);

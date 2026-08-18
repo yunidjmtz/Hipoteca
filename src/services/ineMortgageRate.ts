@@ -58,14 +58,25 @@ function isIneSeries(value: unknown): value is IneSeries {
   );
 }
 
+function isValidPeriod(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (match === null) return false;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12;
+}
+
 function isCachedMortgageRate(value: unknown): value is CachedMortgageRate {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<CachedMortgageRate>;
   return (
     Number.isFinite(candidate.rate) &&
+    (candidate.rate as number) > 0 &&
+    (candidate.rate as number) <= 1 &&
     typeof candidate.period === 'string' &&
+    isValidPeriod(candidate.period) &&
     candidate.source === 'INE' &&
-    typeof candidate.consultedAt === 'string'
+    typeof candidate.consultedAt === 'string' &&
+    Number.isFinite(Date.parse(candidate.consultedAt))
   );
 }
 
@@ -102,7 +113,7 @@ export function parseAverageMortgageTin(payload: unknown, consultedAt: string): 
     });
   const observation = target?.Data[0];
   const valueAsPercent = Number(observation?.Valor);
-  const period = observation?.Fecha.slice(0, 7);
+  const period = typeof observation?.Fecha === 'string' ? observation.Fecha.slice(0, 7) : undefined;
 
   if (
     observation === undefined ||
@@ -110,7 +121,7 @@ export function parseAverageMortgageTin(payload: unknown, consultedAt: string): 
     valueAsPercent <= 0 ||
     valueAsPercent > 100 ||
     period === undefined ||
-    !/^\d{4}-\d{2}$/.test(period)
+    !isValidPeriod(period)
   ) {
     throw new Error('No se encontró el tipo medio total de las hipotecas sobre viviendas');
   }

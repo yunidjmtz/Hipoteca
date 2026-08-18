@@ -44,6 +44,11 @@ describe('centsRoundHalfUp', () => {
   it('redondea .4 hacia abajo', () => {
     expect(centsRoundHalfUp(100.4)).toBe(100);
   });
+
+  it('redondea mitades negativas alejándose de cero', () => {
+    expect(centsRoundHalfUp(-100.5)).toBe(-101);
+    expect(centsRoundHalfUp(-100.4)).toBe(-100);
+  });
 });
 
 describe('aritmética de Cents', () => {

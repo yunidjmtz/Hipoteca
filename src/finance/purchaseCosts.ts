@@ -60,7 +60,7 @@ function aplicaReduccion(
   if (r.valorMaximoInmueble !== undefined && valorInmuebleEuros > r.valorMaximoInmueble) {
     return false;
   }
-  if (r.edadMaxima !== undefined && ctx.edadMenorTitular >= r.edadMaxima) {
+  if (r.edadMaxima !== undefined && ctx.edadMaximaTitular >= r.edadMaxima) {
     return false;
   }
   if (r.discapacidadMinima !== undefined && ctx.discapacidadPorcentaje < r.discapacidadMinima) {

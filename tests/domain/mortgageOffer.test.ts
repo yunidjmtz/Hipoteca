@@ -41,4 +41,23 @@ describe('conversión entre simulación y oferta', () => {
 
     expect(simulacionDesdeOferta({ ...oferta, taeOficial: 0.034 }).taeOficial).toBe(0.034);
   });
+
+  it('no convierte una TAE vacía representada por cero en la mejor oferta', () => {
+    const oferta = ofertaDesdeSimulacion(
+      { ...ESTADO_INICIAL.escenarioSimulador, taeOficial: 0 },
+      {
+        id: 'oferta-sin-tae',
+        viviendaId: 'vivienda-1',
+        banco: 'Banco',
+        nombre: 'Oferta',
+        fecha: '2026-07-31',
+        estado: 'pendiente',
+        notas: '',
+      },
+    );
+
+    expect(oferta.escenario.taeOficial).toBeUndefined();
+    expect(oferta.taeOficial).toBeUndefined();
+    expect(simulacionDesdeOferta({ ...oferta, taeOficial: 0 }).taeOficial).toBeUndefined();
+  });
 });

@@ -11,6 +11,10 @@ export interface DatosOferta {
   notas: string;
 }
 
+function normalizarTaeOficial(valor: number | undefined): number | undefined {
+  return valor !== undefined && Number.isFinite(valor) && valor > 0 ? valor : undefined;
+}
+
 /**
  * Una oferta no tiene un cálculo hipotecario propio: es una simulación guardada
  * con los datos de seguimiento del banco.
@@ -19,10 +23,13 @@ export function ofertaDesdeSimulacion(
   escenario: EscenarioHipoteca,
   datos: DatosOferta,
 ): OfertaBancaria {
-  const escenarioGuardado = normalizarEscenarioHipoteca({
+  const escenarioNormalizado = normalizarEscenarioHipoteca({
     ...escenario,
     titulo: datos.nombre.trim(),
   });
+  const taeOficial = normalizarTaeOficial(escenarioNormalizado.taeOficial);
+  const escenarioGuardado: EscenarioHipoteca = { ...escenarioNormalizado };
+  if (taeOficial === undefined) delete escenarioGuardado.taeOficial;
 
   return {
     id: datos.id,
@@ -32,17 +39,20 @@ export function ofertaDesdeSimulacion(
     fecha: datos.fecha,
     estado: datos.estado,
     escenario: escenarioGuardado,
-    ...(escenarioGuardado.taeOficial !== undefined
-      ? { taeOficial: escenarioGuardado.taeOficial }
-      : {}),
+    ...(taeOficial !== undefined ? { taeOficial } : {}),
     notas: datos.notas.trim(),
   };
 }
 
 /** Conserva la TAE de ofertas antiguas que todavía la guardaban fuera del escenario. */
 export function simulacionDesdeOferta(oferta: OfertaBancaria): EscenarioHipoteca {
+  const taeOficial =
+    normalizarTaeOficial(oferta.taeOficial) ?? normalizarTaeOficial(oferta.escenario.taeOficial);
+  const escenarioSinTae = { ...oferta.escenario };
+  delete escenarioSinTae.taeOficial;
+
   return normalizarEscenarioHipoteca({
-    ...oferta.escenario,
-    ...(oferta.taeOficial !== undefined ? { taeOficial: oferta.taeOficial } : {}),
+    ...escenarioSinTae,
+    ...(taeOficial !== undefined ? { taeOficial } : {}),
   });
 }

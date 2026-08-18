@@ -1,5 +1,15 @@
 project_id = "hipotecas"
 
+# Configuración de desarrollo. No ejecutar `supabase config push`: consultar
+# AGENTS.md y cambiar producción de forma dirigida mediante Management API.
+
+[auth]
+enable_anonymous_sign_ins = true
+
+# Defensa nativa adicional mientras no haya claves de CAPTCHA/Turnstile.
+[auth.rate_limit]
+anonymous_users = 30
+
 # The function has public sign-up/sign-in routes and validates user JWTs for
 # every remaining route itself.
 [functions.hipotecas-api]

@@ -9,7 +9,11 @@ import {
   ValorEurosTabla,
 } from '@/components/TablaResponsive';
 import { addCents, type Cents, minCents, toCents } from '@/core/money';
-import { buscarPrecioMaximo, evaluarPrecio } from '@/finance/affordability';
+import {
+  buscarPrecioMaximo,
+  evaluarPrecio,
+  RANGO_BUSQUEDA_CAPACIDAD,
+} from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
 import type { EvaluacionPrecio } from '@/domain/types';
 
@@ -32,7 +36,7 @@ export function EscalaPrecios() {
       buscarPrecioMaximo(
         (evaluacion) => evaluacion.ratioBancario <= ajustes.ratioBancarioMaximo,
         (precio) => construirContexto(estado, precio),
-        { min: toCents(50_000), max: toCents(10_000_000) },
+        RANGO_BUSQUEDA_CAPACIDAD,
       ).precioMaximo,
     [estado, ajustes.ratioBancarioMaximo],
   );

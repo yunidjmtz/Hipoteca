@@ -29,6 +29,13 @@ import {
 } from '@/core/money';
 import { simulacionDesdeOferta } from '@/domain/mortgageOffer';
 import {
+  actualizarHistorialPrecio,
+  mismaFuenteVivienda,
+  sincronizarFavoritosCatalogo,
+  totalReformas,
+  viviendaFavoritaDesdeCatalogo,
+} from '@/domain/housingCandidate';
+import {
   calcularMetricasOferta,
   compararOfertas,
   PESOS_POR_DEFECTO,
@@ -48,6 +55,7 @@ import { ANIOS_FIJOS_MIXTO_POR_DEFECTO } from '@/domain/mortgageScenario';
 import { compararViviendas, type ResultadoComparacionVivienda } from '@/finance/housingComparison';
 import { calcularCosteVivienda } from '@/finance/housingCosts';
 import { evaluarEncajePlanVivienda, type EstadoEncajePlanVivienda } from '@/finance/housingPlanFit';
+import { importarAnuncioIdealista, normalizarAnuncioImportado } from '@/services/importarAnuncio';
 import { mapImportedDataToExistingForm } from '@/services/propertyImportMapper';
 import { textoDeCapturaInmobiliaria } from '@/services/propertyImageOcr';
 import { parsePropertyListing } from '@/services/propertyListingParser';
@@ -68,11 +76,15 @@ import {
   type ViviendaCatalogoDemo,
 } from '@/data/inmobiliariaDemo';
 import {
+  anadirFavoritoCatalogoApi,
   apiHipotecasConfigurada,
-  catalogoPorCodigoApi,
-  codigoInmobiliariaApi,
+  canjearCodigoInmobiliariaApi,
+  catalogoApi,
+  desvincularInmobiliariaApi,
   guardarCodigoInmobiliariaApi,
   previsualizarCodigoInmobiliariaApi,
+  tokenSesionApi,
+  ErrorHipotecasApi,
   type InmobiliariaApi,
   type ViviendaCatalogoApi,
 } from '@/services/hipotecasApi';
@@ -1651,10 +1663,6 @@ const VIVIENDA_VACIA: BorradorVivienda = {
   notas: '',
 };
 
-function totalReformas(reformas: readonly PartidaReforma[]): Cents {
-  return sumCents(reformas.map((reforma) => reforma.costeEstimado));
-}
-
 function borradorDesdeVivienda(vivienda: ViviendaGuardada): BorradorVivienda {
   return {
     nombre: vivienda.nombre,
@@ -1749,11 +1757,16 @@ function FormularioVivienda({
   const [resultadoImportacion, setResultadoImportacion] = useState('');
   const [errorImportacion, setErrorImportacion] = useState('');
   const [procesandoCaptura, setProcesandoCaptura] = useState(false);
+  const [procesandoEnlace, setProcesandoEnlace] = useState(false);
   const [ejemplosAbiertos, setEjemplosAbiertos] = useState(false);
   const [confirmarReemplazo, setConfirmarReemplazo] = useState<Partial<BorradorVivienda> | null>(
     null,
   );
-  const [camposTocados, setCamposTocados] = useState<Set<keyof BorradorVivienda>>(() => new Set());
+  const [camposTocados, setCamposTocados] = useState<Set<keyof BorradorVivienda>>(() =>
+    vivienda === null
+      ? new Set()
+      : new Set(['esExterior', 'tieneTrastero', 'tieneGaraje'] as const),
+  );
   const inputCaptura = useRef<HTMLInputElement>(null);
   const [modalReformasAbierto, setModalReformasAbierto] = useState(false);
   const [reformasEnEdicion, setReformasEnEdicion] = useState<PartidaReforma[]>(borrador.reformas);
@@ -1817,6 +1830,31 @@ function FormularioVivienda({
     else aplicarImportacion(patch, false);
   }
 
+  async function importarEnlaceIdealista() {
+    setProcesandoEnlace(true);
+    setErrorImportacion('');
+    setResultadoImportacion('');
+    try {
+      const datos = await importarAnuncioIdealista(borrador.anuncioUrl);
+      const fuente = detectarFuenteAnuncio(datos.url);
+      const patch = mapImportedDataToExistingForm(
+        normalizarAnuncioImportado(datos),
+        '',
+        fuente,
+      ) as Partial<BorradorVivienda>;
+      if (camposConConflicto(patch).length > 0) setConfirmarReemplazo(patch);
+      else aplicarImportacion(patch, false);
+    } catch (errorImportacionEnlace) {
+      setErrorImportacion(
+        errorImportacionEnlace instanceof Error
+          ? errorImportacionEnlace.message
+          : 'No se pudo importar el anuncio de Idealista.',
+      );
+    } finally {
+      setProcesandoEnlace(false);
+    }
+  }
+
   async function importarCaptura(archivo: File | undefined) {
     if (archivo === undefined) return;
     setProcesandoCaptura(true);
@@ -1859,7 +1897,7 @@ function FormularioVivienda({
           </p>
           <button
             type="button"
-            disabled={procesandoCaptura}
+            disabled={procesandoCaptura || procesandoEnlace}
             onClick={() => {
               setErrorImportacion('');
               setResultadoImportacion('');
@@ -1923,19 +1961,30 @@ function FormularioVivienda({
             onChange={(e) => {
               const enlace = e.target.value;
               const fuente = detectarFuenteAnuncio(enlace);
-              setBorrador((actual) => ({
-                ...actual,
-                anuncioUrl: enlace,
-                sourceUrl: enlace,
-                ...(fuente === null
-                  ? {}
-                  : { sourcePortal: fuente.portal, sourceListingId: fuente.listingId ?? '' }),
-              }));
+              setBorrador((actual) => {
+                const sinPortalAnterior = { ...actual };
+                delete sinPortalAnterior.sourcePortal;
+                return {
+                  ...sinPortalAnterior,
+                  anuncioUrl: enlace,
+                  sourceUrl: fuente?.url ?? enlace,
+                  sourceListingId: fuente?.listingId ?? '',
+                  ...(fuente === null ? {} : { sourcePortal: fuente.portal }),
+                };
+              });
             }}
             placeholder="https://www.idealista.com/inmueble/..."
             className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
           />
         </label>
+        <button
+          type="button"
+          disabled={procesandoEnlace || procesandoCaptura}
+          onClick={() => void importarEnlaceIdealista()}
+          className="-mt-2 rounded-medio border border-acento/35 bg-superficie px-3 py-2 text-sm font-medium text-acento hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60"
+        >
+          {procesandoEnlace ? 'Importando anuncio…' : 'Importar datos del enlace de Idealista'}
+        </button>
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Teléfono de contacto
           <input
@@ -2585,7 +2634,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
         <button
           type="button"
           onClick={() => void navegar('/ofertas/vivienda')}
-          className="rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+          className="ml-auto rounded-medio bg-acento px-4 py-2 text-sm font-medium text-sobre-acento hover:bg-acento/90"
         >
           + Añadir inmueble
         </button>
@@ -2635,16 +2684,23 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                   oferta.viviendaId === vivienda.id ||
                   (oferta.viviendaId === undefined && vivienda.id === primeraViviendaId),
               );
+              const hipotecasAplicables = hipotecasVivienda.filter(
+                (oferta) =>
+                  oferta.estado !== 'rechazada' &&
+                  oferta.escenario.precioCompra === vivienda.precioVenta,
+              );
               let entradaMinima: Cents | null = null;
               let mejorCuotaMensual: Cents | null = null;
               let menorPagoBanco: Cents | null = null;
+              let menorCosteReal: Cents | null = null;
+              let costesInicialesHipoteca = ZERO;
               let desgloseMejorBanco: {
                 capital: Cents;
                 intereses: Cents;
                 comisionApertura: Cents;
                 total: Cents;
               } | null = null;
-              for (const hipoteca of hipotecasVivienda) {
+              for (const hipoteca of hipotecasAplicables) {
                 const entrada = maxCents(
                   ZERO,
                   subtractCents(
@@ -2654,9 +2710,6 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                 );
                 const metricasHipoteca = calcularMetricasOferta(hipoteca);
                 const cuota = metricasHipoteca.cuotaInicial;
-                entradaMinima = entradaMinima === null ? entrada : minCents(entradaMinima, entrada);
-                mejorCuotaMensual =
-                  mejorCuotaMensual === null ? cuota : minCents(mejorCuotaMensual, cuota);
                 const flujoHipoteca = construirFlujoDeCaja(
                   flujoInputDesdeEscenario(hipoteca.escenario),
                 );
@@ -2667,8 +2720,15 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                   sumCents(flujoHipoteca.slice(1).map((linea) => linea.cuota)),
                   comisionApertura,
                 );
-                if (menorPagoBanco === null || pagoBanco < menorPagoBanco) {
+                if (menorCosteReal === null || metricasHipoteca.costeRealTotal < menorCosteReal) {
+                  entradaMinima = entrada;
+                  mejorCuotaMensual = cuota;
                   menorPagoBanco = pagoBanco;
+                  menorCosteReal = metricasHipoteca.costeRealTotal;
+                  costesInicialesHipoteca = maxCents(
+                    ZERO,
+                    subtractCents(metricasHipoteca.desembolsoInicial, entrada),
+                  );
                   desgloseMejorBanco = { capital, intereses, comisionApertura, total: pagoBanco };
                 }
               }
@@ -2702,7 +2762,11 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                 flujoAproximado[0]?.comisiones ?? ZERO,
               );
               const entradaNecesaria = entradaMinima ?? entradaEstimada;
-              const totalNecesario = addCents(entradaNecesaria, gastosCompra.total);
+              const totalNecesario = sumCents([
+                entradaNecesaria,
+                costesInicialesHipoteca,
+                gastosCompra.total,
+              ]);
               const faltaPorReunir = maxCents(
                 ZERO,
                 subtractCents(totalNecesario, estado.perfil.ahorrosActuales),
@@ -2877,7 +2941,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                   )}
                   {viviendasExpandidas.has(vivienda.id) && (
                     <>
-                      {hipotecasVivienda.length === 0 ? (
+                      {hipotecasAplicables.length === 0 ? (
                         <section className="mt-3 overflow-hidden rounded-medio border border-ajustado/35 bg-ajustado-tenue">
                           <div className="px-3 py-2">
                             <p className="rotulo text-ajustado">Simulación aproximada</p>
@@ -2925,11 +2989,11 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                       ) : (
                         <section className="mt-3 overflow-hidden rounded-medio border border-acento/25 bg-acento-tenue">
                           <div className="flex items-center justify-between gap-3 px-3 py-2">
-                            <p className="rotulo text-acento">Mejor hipoteca</p>
+                            <p className="rotulo text-acento">Menor coste real</p>
                             <span className="text-xs font-medium text-tinta-media">
-                              {hipotecasVivienda.length === 0
+                              {hipotecasAplicables.length === 0
                                 ? 'Pendiente'
-                                : `${hipotecasVivienda.length} ${hipotecasVivienda.length === 1 ? 'oferta' : 'ofertas'}`}
+                                : `${hipotecasAplicables.length} ${hipotecasAplicables.length === 1 ? 'oferta' : 'ofertas'}`}
                             </span>
                           </div>
                           <dl className="grid grid-cols-2 border-t border-acento/20 bg-superficie text-sm">
@@ -2943,7 +3007,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                             </div>
                             <div className="min-w-0 border-l border-linea px-3 py-2.5">
                               <dt className="text-[0.6875rem] font-medium text-tinta-media">
-                                Mejor cuota mensual
+                                Cuota mensual
                               </dt>
                               <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-acento sm:text-lg">
                                 {mejorCuotaMensual === null ? '—' : formatEuros(mejorCuotaMensual)}
@@ -3283,6 +3347,16 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                               {formatEuros(entradaNecesaria)}
                             </dd>
                           </div>
+                          {costesInicialesHipoteca > ZERO && (
+                            <div className="flex items-center justify-between gap-3 py-2.5">
+                              <dt className="text-tinta-media">
+                                Comisión y vinculaciones iniciales
+                              </dt>
+                              <dd className="font-cifra font-semibold tabular-nums text-tinta">
+                                {formatEuros(costesInicialesHipoteca)}
+                              </dd>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between gap-3 py-2.5">
                             <dt className="text-tinta-media">Impuestos</dt>
                             <dd className="font-cifra font-semibold tabular-nums text-tinta">
@@ -3431,18 +3505,28 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
   const catalogo = usandoApi ? catalogoRemoto : VIVIENDAS_CATALOGO_DEMO;
 
   useEffect(() => {
-    if (!usandoApi) return;
-    const codigoGuardado = codigoInmobiliariaApi();
-    if (codigoGuardado === null) return;
+    if (!usandoApi || tokenSesionApi() === null) return;
 
     let cancelado = false;
-    void catalogoPorCodigoApi(codigoGuardado)
+    void catalogoApi()
       .then(({ agency, properties }) => {
         if (cancelado) return;
         const siguienteInmobiliaria = agency === null ? null : inmobiliariaDesdeApi(agency, '');
+        const siguienteCatalogo = properties.map(viviendaCatalogoDesdeApi);
         setInmobiliariaRemota(siguienteInmobiliaria);
-        setCatalogoRemoto(properties.map(viviendaCatalogoDesdeApi));
+        setCatalogoRemoto(siguienteCatalogo);
         setErrorCatalogo('');
+        if (siguienteInmobiliaria === null) guardarCodigoInmobiliariaApi(null);
+        else {
+          actualizarViviendas((actuales) =>
+            sincronizarFavoritosCatalogo(
+              actuales,
+              siguienteCatalogo,
+              siguienteInmobiliaria,
+              fechaLocalISO(),
+            ),
+          );
+        }
         actualizarInmobiliariaActivaDemo(
           siguienteInmobiliaria === null
             ? null
@@ -3460,7 +3544,7 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     return () => {
       cancelado = true;
     };
-  }, [actualizarInmobiliariaActivaDemo, usandoApi]);
+  }, [actualizarInmobiliariaActivaDemo, actualizarViviendas, usandoApi]);
 
   function abrirCodigo() {
     setCodigo('');
@@ -3501,18 +3585,31 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
       setComprobandoCodigo(true);
       try {
         const codigoNormalizado = codigo.trim().toUpperCase();
-        guardarCodigoInmobiliariaApi(codigoNormalizado);
-        const catalogoActualizado = await catalogoPorCodigoApi(codigoNormalizado);
-        const vinculada = inmobiliariaDesdeApi(catalogoActualizado.agency, codigoNormalizado);
+        const { agency } = await canjearCodigoInmobiliariaApi(codigoNormalizado);
+        const vinculada = inmobiliariaDesdeApi(agency, codigoNormalizado);
+        guardarCodigoInmobiliariaApi(null);
         setInmobiliariaRemota(vinculada);
         actualizarInmobiliariaActivaDemo({
           id: vinculada.id,
           nombre: vinculada.nombre,
           marca: vinculada.marca,
         });
-        setCatalogoRemoto(catalogoActualizado.properties.map(viviendaCatalogoDesdeApi));
         setIndiceCatalogoActivo(0);
         setMostrarCodigo(false);
+        try {
+          const catalogoActualizado = await catalogoApi();
+          const viviendasCatalogo = catalogoActualizado.properties.map(viviendaCatalogoDesdeApi);
+          setCatalogoRemoto(viviendasCatalogo);
+          actualizarViviendas((actuales) =>
+            sincronizarFavoritosCatalogo(actuales, viviendasCatalogo, vinculada, fechaLocalISO()),
+          );
+          setErrorCatalogo('');
+        } catch (error) {
+          setCatalogoRemoto([]);
+          setErrorCatalogo(
+            error instanceof Error ? error.message : 'No se pudo cargar el catálogo.',
+          );
+        }
       } catch (error) {
         setErrorCodigo(
           error instanceof Error ? error.message : 'No se pudo vincular la inmobiliaria.',
@@ -3531,53 +3628,48 @@ function MiInmobiliaria({ conPestanas }: { readonly conPestanas: boolean }) {
     setMostrarCodigo(false);
   }
 
-  function anadirAFavoritos(idCatalogo: string) {
+  async function anadirAFavoritos(idCatalogo: string) {
     const vivienda = catalogo.find((candidata) => candidata.id === idCatalogo);
     if (vivienda === undefined || inmobiliaria === undefined) return;
     if (estado.viviendas.some((guardada) => guardada.catalogoViviendaId === vivienda.id)) return;
 
-    actualizarViviendas([
-      ...estado.viviendas,
-      {
-        id: `catalogo-${vivienda.id}`,
-        nombre: vivienda.nombre,
-        fecha: fechaLocalISO(),
-        direccion: vivienda.zona,
-        anuncioUrl: vivienda.anuncioUrl,
-        telefono: '',
-        sourceUrl: vivienda.anuncioUrl,
-        sourceListingId: vivienda.id,
-        rawListingText: '',
-        priceHistory: [{ price: vivienda.precioVenta, date: fechaLocalISO() }],
-        precioVenta: vivienda.precioVenta,
-        presupuestoReforma: ZERO,
-        reforma: '',
-        superficieM2: vivienda.superficieM2,
-        habitaciones: vivienda.habitaciones,
-        banos: vivienda.banos,
-        esExterior: true,
-        tieneTrastero: vivienda.tieneTrastero,
-        tieneGaraje: vivienda.tieneGaraje,
-        reformas: [],
-        notas: vivienda.descripcion,
-        origenInmobiliaria: inmobiliaria.nombre,
-        catalogoViviendaId: vivienda.id,
-      },
-    ]);
-  }
-
-  function desvincularInmobiliaria() {
-    if (inmobiliaria !== undefined) {
-      actualizarViviendas(
-        estado.viviendas.filter((vivienda) => vivienda.origenInmobiliaria !== inmobiliaria.nombre),
+    try {
+      if (usandoApi) {
+        try {
+          await anadirFavoritoCatalogoApi(vivienda.id);
+        } catch (error) {
+          // El favorito remoto puede sobrevivir a una eliminación o a otra
+          // instalación. Un 409 permite reconstruir la copia local.
+          if (!(error instanceof ErrorHipotecasApi) || error.status !== 409) throw error;
+        }
+      }
+      const favorita = viviendaFavoritaDesdeCatalogo(vivienda, inmobiliaria, fechaLocalISO());
+      actualizarViviendas((actuales) =>
+        actuales.some((guardada) => guardada.catalogoViviendaId === vivienda.id)
+          ? actuales
+          : [...actuales, favorita],
+      );
+      setErrorCatalogo('');
+    } catch (error) {
+      setErrorCatalogo(
+        error instanceof Error ? error.message : 'No se pudo añadir la vivienda a favoritos.',
       );
     }
-    if (usandoApi) {
+  }
+
+  async function desvincularInmobiliaria() {
+    try {
+      if (usandoApi) await desvincularInmobiliariaApi();
       guardarCodigoInmobiliariaApi(null);
       setInmobiliariaRemota(null);
       setCatalogoRemoto([]);
+      actualizarInmobiliariaActivaDemo(null);
+      setErrorCatalogo('');
+    } catch (error) {
+      setErrorCatalogo(
+        error instanceof Error ? error.message : 'No se pudo desvincular la inmobiliaria.',
+      );
     }
-    actualizarInmobiliariaActivaDemo(null);
   }
 
   const indiceCatalogoVisible = Math.min(indiceCatalogoActivo, Math.max(catalogo.length - 1, 0));
@@ -3888,29 +3980,51 @@ export function EditorVivienda() {
       : (estado.viviendas.find((candidata) => candidata.id === idVivienda) ?? null);
 
   function datosParaGuardar(borrador: BorradorVivienda, anterior?: ViviendaGuardada) {
-    const presupuestoReforma = totalReformas(borrador.reformas);
-    const reforma = borrador.reformas
+    const reformas = borrador.reformas.map((partida) => ({
+      ...partida,
+      concepto: partida.concepto.trim(),
+    }));
+    const presupuestoReforma = totalReformas(reformas);
+    const reforma = reformas
       .map((partida) => partida.concepto.trim())
       .filter((concepto) => concepto !== '')
       .join(', ');
     const priceHistory =
-      anterior !== undefined && anterior.precioVenta !== borrador.precioVenta
-        ? [
-            ...(anterior.priceHistory ?? []),
-            { price: anterior.precioVenta, date: anterior.fecha },
-            { price: borrador.precioVenta, date: fechaLocalISO() },
-          ]
-        : borrador.priceHistory;
-    return { ...borrador, priceHistory, presupuestoReforma, reforma };
+      anterior !== undefined
+        ? actualizarHistorialPrecio(
+            anterior.priceHistory ?? [],
+            anterior.precioVenta,
+            anterior.fecha,
+            borrador.precioVenta,
+            fechaLocalISO(),
+          )
+        : actualizarHistorialPrecio(
+            borrador.priceHistory,
+            ZERO,
+            '',
+            borrador.precioVenta,
+            borrador.fecha === '' ? fechaLocalISO() : borrador.fecha,
+          );
+    const datos = {
+      ...(anterior ?? {}),
+      ...borrador,
+      anuncioUrl: borrador.anuncioUrl.trim(),
+      telefono: borrador.telefono.trim(),
+      sourceUrl: borrador.sourceUrl.trim(),
+      sourceListingId: borrador.sourceListingId.trim(),
+      reformas,
+      priceHistory,
+      presupuestoReforma,
+      reforma,
+    };
+    if (borrador.sourcePortal === undefined) delete datos.sourcePortal;
+    return datos;
   }
 
   function guardar(borrador: BorradorVivienda) {
     const duplicada = estado.viviendas.find((candidata) => {
       if (candidata.id === vivienda?.id) return false;
-      return borrador.sourcePortal !== undefined && borrador.sourceListingId !== ''
-        ? candidata.sourcePortal === borrador.sourcePortal &&
-            candidata.sourceListingId === borrador.sourceListingId
-        : borrador.sourceUrl !== '' && candidata.sourceUrl === borrador.sourceUrl;
+      return mismaFuenteVivienda(candidata, borrador);
     });
     if (duplicada !== undefined) {
       setPendienteDuplicado(borrador);
@@ -3932,10 +4046,7 @@ export function EditorVivienda() {
   function actualizarDuplicada() {
     if (pendienteDuplicado === null) return;
     const duplicada = estado.viviendas.find((candidata) =>
-      pendienteDuplicado.sourcePortal !== undefined && pendienteDuplicado.sourceListingId !== ''
-        ? candidata.sourcePortal === pendienteDuplicado.sourcePortal &&
-          candidata.sourceListingId === pendienteDuplicado.sourceListingId
-        : candidata.sourceUrl === pendienteDuplicado.sourceUrl,
+      mismaFuenteVivienda(candidata, pendienteDuplicado),
     );
     if (duplicada === undefined) return;
     const datos = datosParaGuardar(pendienteDuplicado, duplicada);
@@ -3988,11 +4099,14 @@ export function EditorVivienda() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  void navegar(
-                    `/ofertas/vivienda?vivienda=${encodeURIComponent(estado.viviendas.find((candidata) => candidata.sourceUrl === pendienteDuplicado.sourceUrl)?.id ?? '')}`,
-                  )
-                }
+                onClick={() => {
+                  const duplicada = estado.viviendas.find((candidata) =>
+                    mismaFuenteVivienda(candidata, pendienteDuplicado),
+                  );
+                  if (duplicada !== undefined) {
+                    void navegar(`/ofertas/vivienda?vivienda=${encodeURIComponent(duplicada.id)}`);
+                  }
+                }}
                 className="rounded-medio border border-linea px-4 py-2 text-sm font-medium text-tinta"
               >
                 Ver vivienda
@@ -4015,9 +4129,7 @@ export function EditorVivienda() {
 export function Ofertas() {
   const { estado } = useEstado();
   const [parametros] = useSearchParams();
-  const tieneInmobiliaria = apiHipotecasConfigurada()
-    ? codigoInmobiliariaApi() !== null
-    : estado.inmobiliariaActivaDemo !== undefined;
+  const tieneInmobiliaria = estado.inmobiliariaActivaDemo !== undefined;
   const [pestanaActiva, setPestanaActiva] = useState<PestanaOfertas>(
     tieneInmobiliaria ? 'inmobiliaria' : 'favoritos',
   );

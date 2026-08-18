@@ -5,10 +5,15 @@ type JsonObject = Record<string, unknown>;
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const MAX_REQUEST_BODY_BYTES = 1_600_000;
+const INVITATION_CODE_PATTERN = /^CASA-[A-Z0-9]{4,12}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 if (supabaseUrl === undefined || supabaseAnonKey === undefined) {
   throw new Error('Faltan SUPABASE_URL o SUPABASE_ANON_KEY en el entorno de la función.');
 }
+const configuredSupabaseUrl: string = supabaseUrl;
+const configuredSupabaseAnonKey: string = supabaseAnonKey;
 
 function corsHeaders(): HeadersInit {
   return {
@@ -22,7 +27,11 @@ function corsHeaders(): HeadersInit {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json; charset=utf-8' },
+    headers: {
+      ...corsHeaders(),
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
   });
 }
 
@@ -30,37 +39,102 @@ function error(message: string, status = 400): Response {
   return json({ error: message }, status);
 }
 
+class RequestInputError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'RequestInputError';
+    this.status = status;
+  }
+}
+
 async function readBody(request: Request): Promise<JsonObject | null> {
+  const contentType = request.headers.get('Content-Type')?.toLowerCase() ?? '';
+  if (!contentType.includes('application/json')) {
+    throw new RequestInputError('La petición debe usar contenido JSON.', 415);
+  }
+
+  const contentLength = request.headers.get('Content-Length');
+  const declaredLength = contentLength === null ? NaN : Number(contentLength);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
+    throw new RequestInputError('La petición supera el tamaño permitido.', 413);
+  }
+
   try {
-    const value: unknown = await request.json();
+    if (request.body === null) return null;
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BODY_BYTES) {
+        await reader.cancel();
+        throw new RequestInputError('La petición supera el tamaño permitido.', 413);
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
     return typeof value === 'object' && value !== null && !Array.isArray(value)
       ? (value as JsonObject)
       : null;
-  } catch {
+  } catch (cause) {
+    if (cause instanceof RequestInputError) throw cause;
     return null;
   }
 }
 
-function stringField(body: JsonObject | null, field: string): string | null {
+function stringField(body: JsonObject | null, field: string, maxLength = 10_000): string | null {
   const value = body?.[field];
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed !== '' && trimmed.length <= maxLength ? trimmed : null;
 }
 
-function optionalStringField(body: JsonObject | null, field: string): string | null {
+function optionalStringField(
+  body: JsonObject | null,
+  field: string,
+  maxLength = 10_000,
+): string | null | undefined {
   const value = body?.[field];
   if (value === undefined || value === null) return null;
-  return typeof value === 'string' ? value.trim() : null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length <= maxLength ? trimmed : undefined;
 }
 
-function optionalProfileField(body: JsonObject | null, field: string): string | null {
+function optionalProfileField(
+  body: JsonObject | null,
+  field: string,
+  maxLength = 1_500_000,
+): string | null {
   const value = body?.[field];
   if (value === undefined || value === null) return '';
-  return typeof value === 'string' ? value.trim() : null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length <= maxLength ? trimmed : null;
 }
 
 function positiveIntegerField(body: JsonObject | null, field: string, minimum = 1): number | null {
   const value = body?.[field];
   return typeof value === 'number' && Number.isInteger(value) && value >= minimum ? value : null;
+}
+
+function invitationCodeField(body: JsonObject | null): string | null {
+  const code = stringField(body, 'code', 17)?.toUpperCase() ?? null;
+  return code !== null && INVITATION_CODE_PATTERN.test(code) ? code : null;
+}
+
+function uuidField(body: JsonObject | null, field: string): string | null {
+  const value = stringField(body, field, 36);
+  return value !== null && UUID_PATTERN.test(value) ? value : null;
 }
 
 function optionalCoordinateField(
@@ -73,12 +147,21 @@ function optionalCoordinateField(
 }
 
 function validHttpUrl(value: string): boolean {
+  if (value.length > 2_048) return false;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:';
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      url.username === '' &&
+      url.password === ''
+    );
   } catch {
     return false;
   }
+}
+
+function validEmail(value: string): boolean {
+  return value.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function validLogoDataUrl(value: string | null): boolean {
@@ -115,24 +198,25 @@ type AgentPropertyPayload = {
 };
 
 function propertyPayload(body: JsonObject | null): AgentPropertyPayload | null {
-  const title = stringField(body, 'title');
+  const title = stringField(body, 'title', 300);
   const priceCents = positiveIntegerField(body, 'priceCents');
-  const zone = stringField(body, 'zone');
-  const address = optionalStringField(body, 'address');
+  const zone = stringField(body, 'zone', 300);
+  const address = optionalStringField(body, 'address', 500);
   const latitude = optionalCoordinateField(body, 'latitude');
   const longitude = optionalCoordinateField(body, 'longitude');
   const areaM2 = positiveIntegerField(body, 'areaM2');
   const bedrooms = positiveIntegerField(body, 'bedrooms', 0);
   const bathrooms = positiveIntegerField(body, 'bathrooms', 0);
-  const description = stringField(body, 'description');
-  const mainImageUrl = stringField(body, 'mainImageUrl');
-  const listingUrl = stringField(body, 'listingUrl');
+  const description = stringField(body, 'description', 10_000);
+  const mainImageUrl = stringField(body, 'mainImageUrl', 1_500_000);
+  const listingUrl = stringField(body, 'listingUrl', 2_048);
   const status = body?.status;
   const galleryUrls = body?.galleryUrls;
   if (
     title === null ||
     priceCents === null ||
     zone === null ||
+    address === undefined ||
     latitude === undefined ||
     longitude === undefined ||
     areaM2 === null ||
@@ -143,6 +227,10 @@ function propertyPayload(body: JsonObject | null): AgentPropertyPayload | null {
     listingUrl === null ||
     !validPropertyImage(mainImageUrl) ||
     !validHttpUrl(listingUrl) ||
+    priceCents > 100_000_000_000 ||
+    areaM2 > 10_000 ||
+    bedrooms > 100 ||
+    bathrooms > 100 ||
     (latitude === null) !== (longitude === null) ||
     (latitude !== null && (latitude < -90 || latitude > 90)) ||
     (longitude !== null && (longitude < -180 || longitude > 180)) ||
@@ -172,7 +260,7 @@ function propertyPayload(body: JsonObject | null): AgentPropertyPayload | null {
 }
 
 function apiClient(accessToken?: string) {
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(configuredSupabaseUrl, configuredSupabaseAnonKey, {
     global:
       accessToken === undefined
         ? undefined
@@ -183,12 +271,16 @@ function apiClient(accessToken?: string) {
 
 function adminClient() {
   if (supabaseServiceRoleKey === undefined) return null;
-  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+  return createClient(configuredSupabaseUrl, supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
 async function agencyFromInvitationCode(code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  if (!INVITATION_CODE_PATTERN.test(normalizedCode)) {
+    return { agency: null, unavailable: false };
+  }
   const admin = adminClient();
   if (admin === null) return { agency: null, unavailable: true };
   const { data: invitation, error: invitationError } = await admin
@@ -196,16 +288,24 @@ async function agencyFromInvitationCode(code: string) {
     .select(
       'status, expires_at, max_uses, uses_count, agency:real_estate_agencies(id, name, brand, active)',
     )
-    .eq('code', code.toUpperCase())
+    .eq('code', normalizedCode)
     .maybeSingle();
+  if (invitationError !== null) return { agency: null, unavailable: true };
   const agency = invitation?.agency as
     { id: string; name: string; brand: string; active: boolean } | null | undefined;
+  const expiresAtValue = invitation?.expires_at;
+  const expiresAt =
+    expiresAtValue === null
+      ? null
+      : typeof expiresAtValue === 'string'
+        ? new Date(expiresAtValue)
+        : undefined;
   if (
-    invitationError !== null ||
     invitation === null ||
+    expiresAt === undefined ||
     invitation.status !== 'active' ||
     invitation.uses_count >= invitation.max_uses ||
-    (invitation.expires_at !== null && new Date(invitation.expires_at) <= new Date()) ||
+    (expiresAt !== null && (Number.isNaN(expiresAt.valueOf()) || expiresAt <= new Date())) ||
     agency === null ||
     agency === undefined ||
     !agency.active
@@ -258,10 +358,54 @@ async function superAdminContext(client: ReturnType<typeof apiClient>, userId: s
 }
 
 function sessionResponse(user: { id: string; email?: string | null }, session: unknown) {
-  return json({ user: { id: user.id, email: user.email ?? null }, session });
+  const email =
+    typeof user.email === 'string' && user.email.trim() !== '' ? user.email.trim() : null;
+  if (session === null) {
+    return json({ user: { id: user.id, email }, session: null });
+  }
+  if (typeof session !== 'object') return error('La sesión recibida no es válida.', 500);
+  const accessToken = 'access_token' in session ? session.access_token : undefined;
+  const refreshToken = 'refresh_token' in session ? session.refresh_token : undefined;
+  if (typeof accessToken !== 'string' || typeof refreshToken !== 'string') {
+    return error('La sesión recibida no es válida.', 500);
+  }
+  return json({
+    user: { id: user.id, email },
+    session: { access_token: accessToken, refresh_token: refreshToken },
+  });
 }
 
-Deno.serve(async (request) => {
+function invitationCodeView(value: unknown): JsonObject | null {
+  const code = typeof value === 'object' && value !== null ? (value as JsonObject) : null;
+  if (
+    code === null ||
+    typeof code.id !== 'string' ||
+    typeof code.code !== 'string' ||
+    (code.expires_at !== null && typeof code.expires_at !== 'string') ||
+    typeof code.max_uses !== 'number' ||
+    typeof code.uses_count !== 'number' ||
+    (code.status !== 'active' &&
+      code.status !== 'used' &&
+      code.status !== 'expired' &&
+      code.status !== 'revoked') ||
+    typeof code.created_at !== 'string' ||
+    (code.revoked_at !== null && typeof code.revoked_at !== 'string')
+  ) {
+    return null;
+  }
+  return {
+    id: code.id,
+    code: code.code,
+    expires_at: code.expires_at,
+    max_uses: code.max_uses,
+    uses_count: code.uses_count,
+    status: code.status,
+    created_at: code.created_at,
+    revoked_at: code.revoked_at,
+  };
+}
+
+async function routeRequest(request: Request): Promise<Response> {
   if (request.method === 'OPTIONS')
     return new Response(null, { status: 204, headers: corsHeaders() });
 
@@ -270,37 +414,62 @@ Deno.serve(async (request) => {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/(?:functions\/v1\/)?hipotecas-api/, '');
 
+  if (request.method === 'POST' && path === '/v1/auth/anonymous') {
+    const { data, error: anonymousError } = await apiClient().auth.signInAnonymously();
+    if (anonymousError !== null || data.user === null || data.session === null) {
+      return error(
+        anonymousError?.status === 429
+          ? 'Se han creado demasiadas sesiones. Inténtalo más tarde.'
+          : 'No se puede iniciar la vinculación anónima en este momento.',
+        anonymousError?.status === 429 ? 429 : 503,
+      );
+    }
+    return sessionResponse(data.user, data.session);
+  }
+
+  if (request.method === 'POST' && path === '/v1/auth/refresh') {
+    const refreshToken = stringField(await readBody(request), 'refreshToken', 20_000);
+    if (refreshToken === null) return error('Falta la sesión que se quiere renovar.');
+    const { data, error: refreshError } = await apiClient().auth.refreshSession({
+      refresh_token: refreshToken,
+    });
+    if (refreshError !== null || data.user === null || data.session === null) {
+      return error('La sesión ha caducado. Vuelve a iniciar la vinculación.', 401);
+    }
+    return sessionResponse(data.user, data.session);
+  }
+
   if (request.method === 'POST' && path === '/v1/auth/sign-up') {
     const body = await readBody(request);
-    const email = stringField(body, 'email');
-    const password = stringField(body, 'password');
+    const email = stringField(body, 'email', 320);
+    const password = stringField(body, 'password', 1_024);
     if (email === null || password === null || password.length < 8) {
       return error('Indica un correo válido y una contraseña de al menos 8 caracteres.');
     }
     const { data, error: signUpError } = await apiClient().auth.signUp({ email, password });
     if (signUpError !== null || data.user === null) {
-      return error(signUpError?.message ?? 'No se pudo crear la cuenta.', 422);
+      return error('No se pudo crear la cuenta con esos datos.', 422);
     }
     return sessionResponse(data.user, data.session);
   }
 
   if (request.method === 'POST' && path === '/v1/auth/sign-in') {
     const body = await readBody(request);
-    const email = stringField(body, 'email');
-    const password = stringField(body, 'password');
+    const email = stringField(body, 'email', 320);
+    const password = stringField(body, 'password', 1_024);
     if (email === null || password === null) return error('Indica tu correo y contraseña.');
     const { data, error: signInError } = await apiClient().auth.signInWithPassword({
       email,
       password,
     });
     if (signInError !== null || data.user === null) {
-      return error(signInError?.message ?? 'No se pudo iniciar sesión.', 401);
+      return error('El correo o la contraseña no son correctos.', 401);
     }
     return sessionResponse(data.user, data.session);
   }
 
   if (request.method === 'POST' && path === '/v1/agency-links/preview') {
-    const code = stringField(await readBody(request), 'code');
+    const code = invitationCodeField(await readBody(request));
     if (code === null) return error('Indica el código de invitación.');
     const result = await agencyFromInvitationCode(code);
     if (result.unavailable) return error('No se puede comprobar el código en este momento.', 503);
@@ -308,33 +477,11 @@ Deno.serve(async (request) => {
     return json({ agency: result.agency });
   }
 
-  if (request.method === 'GET' && path === '/v1/catalog/properties') {
-    const code = url.searchParams.get('code');
-    if (code !== null) {
-      const result = await agencyFromInvitationCode(code);
-      const admin = adminClient();
-      if (result.unavailable || admin === null) {
-        return error('No se puede cargar el catálogo en este momento.', 503);
-      }
-      if (result.agency === null) return error('El código no es válido o ya no está activo.', 422);
-      const { data: properties, error: propertiesError } = await admin
-        .from('agency_properties')
-        .select(
-          'id, title, price_cents, zone, area_m2, bedrooms, bathrooms, description, main_image_url, listing_url, status',
-        )
-        .eq('agency_id', result.agency.id)
-        .eq('status', 'published')
-        .order('published_at', { ascending: false });
-      if (propertiesError !== null) return error('No se pudo cargar el catálogo.', 500);
-      return json({ agency: result.agency, properties: properties ?? [] });
-    }
-  }
-
   const authenticated = await authenticatedClient(request);
   if (authenticated === null) return error('Debes iniciar sesión para realizar esta acción.', 401);
 
   if (request.method === 'POST' && path === '/v1/agency-links/redeem') {
-    const code = stringField(await readBody(request), 'code');
+    const code = invitationCodeField(await readBody(request));
     if (code === null) return error('Indica el código de invitación.');
     const { data, error: redeemError } = await authenticated.client.rpc(
       'redeem_agency_invitation_code',
@@ -349,7 +496,10 @@ Deno.serve(async (request) => {
       resultado.agency.name === undefined ||
       resultado.agency.brand === undefined
     ) {
-      return error(redeemError?.message ?? 'No se pudo canjear el código.', 422);
+      return error(
+        redeemError?.code === 'P0001' ? redeemError.message : 'No se pudo canjear el código.',
+        422,
+      );
     }
     return json({ agency: resultado.agency });
   }
@@ -371,7 +521,7 @@ Deno.serve(async (request) => {
     if (linkError !== null) return error('No se pudo cargar la inmobiliaria vinculada.', 500);
     if (link === null || link.agency === null) return json({ agency: null, properties: [] });
 
-    const agency = link.agency as { id: string; name: string; brand: string };
+    const agency = link.agency as unknown as { id: string; name: string; brand: string };
     const { data: properties, error: propertiesError } = await authenticated.client
       .from('agency_properties')
       .select(
@@ -379,13 +529,14 @@ Deno.serve(async (request) => {
       )
       .eq('agency_id', agency.id)
       .eq('status', 'published')
-      .order('published_at', { ascending: false });
+      .order('published_at', { ascending: false })
+      .limit(5_000);
     if (propertiesError !== null) return error('No se pudo cargar el catálogo.', 500);
     return json({ agency, properties: properties ?? [] });
   }
 
   if (request.method === 'POST' && path === '/v1/favorites') {
-    const agencyPropertyId = stringField(await readBody(request), 'agencyPropertyId');
+    const agencyPropertyId = uuidField(await readBody(request), 'agencyPropertyId');
     if (agencyPropertyId === null) return error('Indica la vivienda que quieres guardar.');
     const { data: visibleProperty, error: propertyError } = await authenticated.client
       .from('agency_properties')
@@ -403,7 +554,7 @@ Deno.serve(async (request) => {
       return error(
         favoriteError.code === '23505'
           ? 'Esta vivienda ya está en tus favoritos.'
-          : favoriteError.message,
+          : 'No se pudo añadir la vivienda a favoritos.',
         favoriteError.code === '23505' ? 409 : 422,
       );
     }
@@ -425,20 +576,21 @@ Deno.serve(async (request) => {
       .select(
         'id, name, brand, website, address, phone, contact_email, logo_url, active, created_at',
       )
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(1_000);
     if (agenciesError !== null) return error('No se pudieron cargar las inmobiliarias.', 500);
     return json({ agencies: data ?? [] });
   }
 
   if (request.method === 'POST' && path === '/v1/superadmin/agencies' && isSuperAdmin) {
     const body = await readBody(request);
-    const name = stringField(body, 'name');
-    const brand = stringField(body, 'brand');
-    const website = optionalProfileField(body, 'website');
-    const address = optionalProfileField(body, 'address');
-    const phone = optionalProfileField(body, 'phone');
-    const contactEmail = optionalProfileField(body, 'contactEmail');
-    const logoDataUrl = optionalProfileField(body, 'logoDataUrl');
+    const name = stringField(body, 'name', 200);
+    const brand = stringField(body, 'brand', 200);
+    const website = optionalProfileField(body, 'website', 2_048);
+    const address = optionalProfileField(body, 'address', 500);
+    const phone = optionalProfileField(body, 'phone', 32);
+    const contactEmail = optionalProfileField(body, 'contactEmail', 320);
+    const logoDataUrl = optionalProfileField(body, 'logoDataUrl', 1_500_000);
     if (
       name === null ||
       brand === null ||
@@ -448,8 +600,7 @@ Deno.serve(async (request) => {
       contactEmail === null ||
       logoDataUrl === null ||
       (website !== '' && !validHttpUrl(website)) ||
-      phone.length > 32 ||
-      (contactEmail !== '' && !contactEmail.includes('@')) ||
+      (contactEmail !== '' && !validEmail(contactEmail)) ||
       !validLogoDataUrl(logoDataUrl === '' ? null : logoDataUrl)
     ) {
       return error('Indica los datos válidos de la inmobiliaria.', 422);
@@ -464,7 +615,7 @@ Deno.serve(async (request) => {
       p_contact_email: contactEmail === '' ? null : contactEmail,
     });
     if (agencyError !== null || data === null) {
-      return error(agencyError?.message ?? 'No se pudo crear la inmobiliaria.', 422);
+      return error('No se pudo crear la inmobiliaria.', 422);
     }
     const result = data as { agency?: Record<string, unknown> };
     if (
@@ -481,13 +632,13 @@ Deno.serve(async (request) => {
   const superadminAgencyMatch = path.match(/^\/v1\/superadmin\/agencies\/([0-9a-f-]{36})$/i);
   if (request.method === 'PATCH' && superadminAgencyMatch !== null && isSuperAdmin) {
     const body = await readBody(request);
-    const name = stringField(body, 'name');
-    const brand = stringField(body, 'brand');
-    const website = optionalProfileField(body, 'website');
-    const address = optionalProfileField(body, 'address');
-    const phone = optionalProfileField(body, 'phone');
-    const contactEmail = optionalProfileField(body, 'contactEmail');
-    const logoDataUrl = optionalProfileField(body, 'logoDataUrl');
+    const name = stringField(body, 'name', 200);
+    const brand = stringField(body, 'brand', 200);
+    const website = optionalProfileField(body, 'website', 2_048);
+    const address = optionalProfileField(body, 'address', 500);
+    const phone = optionalProfileField(body, 'phone', 32);
+    const contactEmail = optionalProfileField(body, 'contactEmail', 320);
+    const logoDataUrl = optionalProfileField(body, 'logoDataUrl', 1_500_000);
     const active = body?.active;
     if (
       name === null ||
@@ -499,8 +650,7 @@ Deno.serve(async (request) => {
       logoDataUrl === null ||
       typeof active !== 'boolean' ||
       (website !== '' && !validHttpUrl(website)) ||
-      phone.length > 32 ||
-      (contactEmail !== '' && !contactEmail.includes('@')) ||
+      (contactEmail !== '' && !validEmail(contactEmail)) ||
       !validLogoDataUrl(logoDataUrl === '' ? null : logoDataUrl)
     ) {
       return error('Indica los datos válidos de la inmobiliaria.', 422);
@@ -518,7 +668,7 @@ Deno.serve(async (request) => {
     });
     const result = data as { agency?: Record<string, unknown> } | null;
     if (updateError !== null || result?.agency === undefined) {
-      return error(updateError?.message ?? 'No se pudo actualizar la inmobiliaria.', 422);
+      return error('No se pudo actualizar la inmobiliaria.', 422);
     }
     return json({ agency: result.agency });
   }
@@ -527,7 +677,7 @@ Deno.serve(async (request) => {
     const { error: deleteError } = await authenticated.client.rpc('delete_agency', {
       p_agency_id: superadminAgencyMatch[1],
     });
-    if (deleteError !== null) return error(deleteError.message, 422);
+    if (deleteError !== null) return error('No se pudo eliminar la inmobiliaria.', 422);
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
@@ -545,12 +695,12 @@ Deno.serve(async (request) => {
 
   if (request.method === 'POST' && employeesMatch !== null && isSuperAdmin) {
     const body = await readBody(request);
-    const email = stringField(body, 'email');
-    const password = stringField(body, 'password');
+    const email = stringField(body, 'email', 320);
+    const password = stringField(body, 'password', 1_024);
     const role = body?.role;
     if (
       email === null ||
-      !email.includes('@') ||
+      !validEmail(email) ||
       password === null ||
       password.length < 8 ||
       (role !== 'agent' && role !== 'admin')
@@ -577,7 +727,7 @@ Deno.serve(async (request) => {
     );
     if (assignmentError !== null || data === null) {
       await admin.auth.admin.deleteUser(userData.user.id);
-      return error(assignmentError?.message ?? 'No se pudo asignar el empleado.', 422);
+      return error('No se pudo asignar el empleado.', 422);
     }
     const employee = data as Record<string, unknown>;
     return json({ employee: { ...employee, email } }, 201);
@@ -594,7 +744,7 @@ Deno.serve(async (request) => {
       p_user_id: employeeMatch[2],
       p_role: role,
     });
-    if (roleError !== null) return error(roleError.message, 422);
+    if (roleError !== null) return error('No se pudo actualizar el rol del empleado.', 422);
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
@@ -603,7 +753,7 @@ Deno.serve(async (request) => {
       p_agency_id: employeeMatch[1],
       p_user_id: employeeMatch[2],
     });
-    if (removeError !== null) return error(removeError.message, 422);
+    if (removeError !== null) return error('No se pudo retirar el empleado.', 422);
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
@@ -626,7 +776,8 @@ Deno.serve(async (request) => {
         'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
       )
       .eq('agency_id', agent.agencyId)
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .limit(5_000);
     if (propertiesError !== null) return error('No se pudieron cargar las viviendas.', 500);
     return json({ properties: data ?? [] });
   }
@@ -647,7 +798,7 @@ Deno.serve(async (request) => {
         'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
       )
       .single();
-    if (createError !== null) return error(createError.message, 422);
+    if (createError !== null) return error('No se pudo crear la vivienda.', 422);
     return json({ property: data }, 201);
   }
 
@@ -665,16 +816,15 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (currentError !== null || current === null)
       return error('No se encontró esa vivienda.', 404);
+    const publicationPatch =
+      payload.status === 'published' && current.status === 'published'
+        ? {}
+        : { published_at: payload.status === 'published' ? new Date().toISOString() : null };
     const { data, error: updateError } = await authenticated.client
       .from('agency_properties')
       .update({
         ...payload,
-        published_at:
-          payload.status === 'published'
-            ? current.status === 'published'
-              ? undefined
-              : new Date().toISOString()
-            : null,
+        ...publicationPatch,
       })
       .eq('id', propertyMatch[1])
       .eq('agency_id', agent.agencyId)
@@ -682,7 +832,7 @@ Deno.serve(async (request) => {
         'id, title, price_cents, zone, address, latitude, longitude, area_m2, bedrooms, bathrooms, description, main_image_url, gallery_urls, listing_url, status, published_at, created_at, updated_at',
       )
       .single();
-    if (updateError !== null) return error(updateError.message, 422);
+    if (updateError !== null) return error('No se pudo actualizar la vivienda.', 422);
     return json({ property: data });
   }
 
@@ -691,16 +841,30 @@ Deno.serve(async (request) => {
       .from('agency_invitation_codes')
       .select('id, code, expires_at, max_uses, uses_count, status, created_at, revoked_at')
       .eq('agency_id', agent.agencyId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10_000);
     if (codesError !== null) return error('No se pudieron cargar los códigos.', 500);
-    return json({ codes: data ?? [] });
+    const now = Date.now();
+    const codes = (data ?? []).map((code) => {
+      if (
+        code.status !== 'active' ||
+        code.expires_at === null ||
+        new Date(code.expires_at).valueOf() > now
+      ) {
+        return code;
+      }
+      return { ...code, status: 'expired' };
+    });
+    return json({ codes });
   }
 
   if (request.method === 'POST' && path === '/v1/agent/invitation-codes' && agent !== null) {
     const body = await readBody(request);
-    const maxUses = positiveIntegerField(body, 'maxUses') ?? 1;
+    const maxUses = body?.maxUses === undefined ? 1 : positiveIntegerField(body, 'maxUses');
+    if (maxUses === null) return error('El límite de usos debe ser un entero positivo.', 422);
     if (maxUses > 10000) return error('El límite de usos no puede superar 10.000.', 422);
     const expiresAtText = optionalStringField(body, 'expiresAt');
+    if (expiresAtText === undefined) return error('La fecha de caducidad no es válida.', 422);
     const expiresAt =
       expiresAtText === null || expiresAtText === '' ? null : new Date(expiresAtText);
     if (
@@ -717,9 +881,11 @@ Deno.serve(async (request) => {
       },
     );
     if (generateError !== null || data === null) {
-      return error(generateError?.message ?? 'No se pudo generar el código.', 422);
+      return error('No se pudo generar el código.', 422);
     }
-    return json({ code: data }, 201);
+    const code = invitationCodeView(data);
+    if (code === null) return error('No se pudo generar el código.', 500);
+    return json({ code }, 201);
   }
 
   const codeMatch = path.match(/^\/v1\/agent\/invitation-codes\/([0-9a-f-]{36})\/revoke$/i);
@@ -729,10 +895,26 @@ Deno.serve(async (request) => {
       { p_code_id: codeMatch[1] },
     );
     if (revokeError !== null || data === null) {
-      return error(revokeError?.message ?? 'No se pudo revocar el código.', 422);
+      return error(
+        revokeError?.code === 'P0001' ? revokeError.message : 'No se pudo revocar el código.',
+        422,
+      );
     }
-    return json({ code: data });
+    const code = invitationCodeView(data);
+    if (code === null) return error('No se pudo revocar el código.', 500);
+    return json({ code });
   }
 
   return error('Ruta no encontrada.', 404);
-});
+}
+
+export async function handleRequest(request: Request): Promise<Response> {
+  try {
+    return await routeRequest(request);
+  } catch (cause) {
+    if (cause instanceof RequestInputError) return error(cause.message, cause.status);
+    return error('No se pudo completar la solicitud.', 500);
+  }
+}
+
+Deno.serve(handleRequest);

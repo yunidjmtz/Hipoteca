@@ -2,21 +2,23 @@
 
 /**
  * Configuración fiscal de Aragón.
- * Fuentes y fechas de verificación anotadas en PLAN.md §10 (filas 1–3).
  *
  * ITP — tarifa progresiva por tramos (DLeg 1/2005 Aragón).
- * Fuente: aragon.es/transmisiones-patrimoniales-onerosas — 30/07/2026.
+ * Fuente: https://www.aragon.es/-/transmisiones-patrimoniales-onerosas
  *
  * AJD — tipo general 1,5 % sobre documentos notariales.
- * Fuente: aragon.es/actos-juridicos-documentados — 30/07/2026.
+ * Fuente: https://www.aragon.es/-/actos-juridicos-documentados-documentos-notariales-y-judiciales-
  *
  * IVA vivienda nueva — nacional (LIVA art. 91).
  * 10 % libre / 4 % VPO régimen especial o promoción pública (primera entrega).
- * Fuente: invertirenvivienda.es + sede.agenciatributaria.gob.es — 30/07/2026.
+ * Fuente: https://sede.agenciatributaria.gob.es/Sede/iva/iva-operaciones-inmobiliarias/compro-vivienda-tengo-que-pagar-itp.html
+ *
+ * Verificado el 16/08/2026 contra los portales oficiales y el texto
+ * consolidado del Decreto Legislativo 1/2005.
  */
 export const FISCAL_ARAGON: ConfigFiscalCcaa = {
   ccaa: 'Aragón',
-  revisadoEl: '30/07/2026',
+  revisadoEl: '16/08/2026',
 
   // ITP: tarifa progresiva. Tramos sobre la base imponible (precio de compraventa).
   // La cuota se acumula tramo a tramo, igual que el IRPF (R2).
@@ -58,7 +60,11 @@ export const FISCAL_ARAGON: ConfigFiscalCcaa = {
   // AJD compraventa: tipo general 1,5 %.
   ajdCompraventa: 0.015,
 
-  // Bonificaciones AJD en cuota (30 % para <35 años / discap. / VG; 60 % familia numerosa).
+  // Bonificaciones AJD en cuota (30 % para <35 años / discap. / VG).
+  // La bonificación de familia numerosa (60 %) no se automatiza: también
+  // exige renta, venta/primera vivienda y aumento de superficie, datos que el
+  // modelo aún no recoge. Aplicarla solo por declarar familia numerosa daría
+  // una cifra fiscal incorrecta. Lo mismo afecta a su bonificación ITP (50 %).
   ajdReducciones: [
     {
       id: 'aragon-ajd-joven',
@@ -80,12 +86,6 @@ export const FISCAL_ARAGON: ConfigFiscalCcaa = {
       victimaViolenciaGenero: true,
       valorMaximoInmueble: 100_000,
       bonificacionCuota: 0.3,
-    },
-    {
-      id: 'aragon-ajd-familia-numerosa',
-      descripcion: 'Familia numerosa — AJD vivienda habitual',
-      familiaNumerosa: true,
-      bonificacionCuota: 0.6,
     },
   ],
 

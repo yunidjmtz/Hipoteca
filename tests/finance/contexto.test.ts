@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { construirContexto } from '@/finance/contexto';
+import { calcularBonificacionAplicable } from '@/finance/purchaseCosts';
 import { ESTADO_INICIAL } from '@/storage/defaults';
 import { toCents } from '@/core/money';
 import type { EstadoPersistido } from '@/domain/types';
@@ -9,7 +10,7 @@ function estadoCon(cambios: Partial<EstadoPersistido>): EstadoPersistido {
 }
 
 describe('construirContexto', () => {
-  it('usa la CCAA seleccionada, la menor edad y una tasación inferior', () => {
+  it('usa la CCAA seleccionada, la mayor edad y una tasación inferior', () => {
     const estado = estadoCon({
       perfil: {
         ...ESTADO_INICIAL.perfil,
@@ -28,9 +29,31 @@ describe('construirContexto', () => {
     const contexto = construirContexto(estado, toCents(200_000), toCents(180_000));
     expect(contexto.valorTasacion).toBe(toCents(180_000));
     expect(contexto.valorReferenciaFiscal).toBe(toCents(210_000));
-    expect(contexto.reduccion.edadMenorTitular).toBe(37);
+    expect(contexto.reduccion.edadMaximaTitular).toBe(42);
     expect(contexto.reduccion.esViviendaHabitual).toBe(true);
     expect(contexto.configFiscal.ccaa).toBe(estado.preferencias.ccaa);
+  });
+
+  it('no activa la bonificación joven completa en una compra con un titular de 35 o más', () => {
+    const estado = estadoCon({
+      perfil: {
+        ...ESTADO_INICIAL.perfil,
+        titulares: [
+          { ...ESTADO_INICIAL.perfil.titulares[0], edad: 30 },
+          { ...ESTADO_INICIAL.perfil.titulares[0], edad: 40 },
+        ],
+      },
+    });
+
+    const contexto = construirContexto(estado, toCents(90_000));
+    expect(contexto.reduccion.edadMaximaTitular).toBe(40);
+    expect(
+      calcularBonificacionAplicable(
+        contexto.reduccion,
+        contexto.configFiscal.itpReducciones,
+        90_000,
+      ),
+    ).toBe(0);
   });
 
   it('usa la configuración genérica y no eleva la tasación sobre el precio', () => {

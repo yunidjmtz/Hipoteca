@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { esUrlIdealistaValida, importarAnuncioIdealista } from '@/services/importarAnuncio';
+import {
+  esUrlIdealistaValida,
+  importarAnuncioIdealista,
+  normalizarAnuncioImportado,
+  normalizarUrlIdealista,
+} from '@/services/importarAnuncio';
 
 const DATOS_IMPORTADOS = {
   fuente: 'idealista',
@@ -20,7 +25,15 @@ describe('importación de anuncios', () => {
     expect(esUrlIdealistaValida('https://idealista.com/inmueble/123')).toBe(true);
     expect(esUrlIdealistaValida('https://idealista.com/venta-viviendas/zaragoza/')).toBe(false);
     expect(esUrlIdealistaValida('https://idealista.example/inmueble/123/')).toBe(false);
+    expect(esUrlIdealistaValida('https://usuario@idealista.com/inmueble/123/')).toBe(false);
+    expect(esUrlIdealistaValida('https://idealista.com:444/inmueble/123/')).toBe(false);
     expect(esUrlIdealistaValida('javascript:alert(1)')).toBe(false);
+  });
+
+  it('elimina parámetros y fragmentos antes de enviar o atribuir la procedencia', () => {
+    expect(
+      normalizarUrlIdealista(' https://www.idealista.com/inmueble/123/?utm_source=x#fotos '),
+    ).toBe('https://www.idealista.com/inmueble/123/');
   });
 
   it('envía el enlace al endpoint propio y valida sus datos', async () => {
@@ -54,6 +67,56 @@ describe('importación de anuncios', () => {
     await expect(importarAnuncioIdealista(DATOS_IMPORTADOS.url, fetcher)).rejects.toThrow(
       'Falta configurar el proveedor.',
     );
+  });
+
+  it('rechaza una respuesta atribuida a otro anuncio', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ ...DATOS_IMPORTADOS, url: 'https://idealista.com/inmueble/2/' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    await expect(importarAnuncioIdealista(DATOS_IMPORTADOS.url, fetcher)).rejects.toThrow(
+      'datos de otro anuncio',
+    );
+  });
+
+  it('limita el tamaño de la respuesta y valida cotas antes del mapeo', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ ...DATOS_IMPORTADOS, habitaciones: 101 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': '70000' },
+      }),
+    );
+
+    await expect(importarAnuncioIdealista(DATOS_IMPORTADOS.url, fetcher)).rejects.toThrow(
+      'respuesta no válida',
+    );
+  });
+
+  it('conserva como desconocidas las características que el anuncio no acredita', () => {
+    const datos = {
+      fuente: DATOS_IMPORTADOS.fuente,
+      url: DATOS_IMPORTADOS.url,
+      titulo: DATOS_IMPORTADOS.titulo,
+      direccion: DATOS_IMPORTADOS.direccion,
+      precioEuros: DATOS_IMPORTADOS.precioEuros,
+      superficieM2: DATOS_IMPORTADOS.superficieM2,
+      habitaciones: DATOS_IMPORTADOS.habitaciones,
+    };
+
+    expect(normalizarAnuncioImportado(datos)).toEqual({
+      sourcePortal: 'idealista',
+      title: datos.titulo,
+      address: datos.direccion,
+      price: datos.precioEuros,
+      builtArea: datos.superficieM2,
+      rooms: datos.habitaciones,
+    });
   });
 
   it('explica cómo activar la función cuando Vite devuelve un 404', async () => {

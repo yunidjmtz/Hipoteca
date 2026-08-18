@@ -31,10 +31,42 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
 
 const CLAVE = 'hipotecas-v1';
 const CLAVE_RECUPERACION = 'hipotecas-recuperacion-v1';
-const SCHEMA_ACTUAL = 12;
+// La versión soportada debe tener una única fuente de verdad. Mantener una
+// constante independiente permitió que el estado inicial avanzase a v13
+// mientras las cargas seguían considerando v12 como la versión actual.
+const SCHEMA_ACTUAL = ESTADO_INICIAL.schemaVersion;
 
 // Referencia al timer de debounce; vive a nivel de módulo para persistir entre llamadas.
 let timerId: ReturnType<typeof setTimeout> | null = null;
+let estadoPendiente: EstadoPersistido | null = null;
+let onResultadoPendiente: ((guardado: boolean) => void) | undefined;
+
+function esVersionFutura(data: unknown): boolean {
+  if (typeof data !== 'object' || data === null || !('schemaVersion' in data)) return false;
+  const { schemaVersion } = data as { schemaVersion?: unknown };
+  return (
+    typeof schemaVersion === 'number' &&
+    Number.isInteger(schemaVersion) &&
+    schemaVersion > SCHEMA_ACTUAL
+  );
+}
+
+function escribirEstado(estado: EstadoPersistido): boolean {
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify(estado));
+    return true;
+  } catch (error) {
+    console.error('[store] No se pudo guardar el estado:', error);
+    return false;
+  }
+}
+
+function cancelarGuardadoPendiente(): void {
+  if (timerId !== null) clearTimeout(timerId);
+  timerId = null;
+  estadoPendiente = null;
+  onResultadoPendiente = undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Migraciones
@@ -182,7 +214,10 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
     data = {
       ...data,
       schemaVersion: 13,
-      viviendas: data.viviendas.map((vivienda) => ({ ...vivienda, telefono: '' })),
+      viviendas: data.viviendas.map((vivienda) => ({
+        ...vivienda,
+        telefono: vivienda.telefono ?? '',
+      })),
     };
   }
   return data;
@@ -227,6 +262,15 @@ export function cargarEstado(): EstadoPersistido {
     return ESTADO_INICIAL;
   }
 
+  // Zod elimina por defecto las propiedades desconocidas. Una copia creada
+  // por una versión posterior debe rechazarse antes de analizarla para no
+  // guardar de nuevo una representación incompleta.
+  if (esVersionFutura(parsed)) {
+    console.error('[store] El estado fue creado por una versión posterior de la aplicación.');
+    guardarDatosRecuperacion(raw);
+    return ESTADO_INICIAL;
+  }
+
   const resultado = zEstadoPersistido.safeParse(parsed);
   if (!resultado.success) {
     console.error('[store] Estado almacenado no válido:', resultado.error);
@@ -248,30 +292,33 @@ export function guardarEstadoConDebounce(
   onResultado?: (guardado: boolean) => void,
 ): void {
   if (timerId !== null) clearTimeout(timerId);
+  estadoPendiente = estado;
+  onResultadoPendiente = onResultado;
   timerId = setTimeout(() => {
-    try {
-      localStorage.setItem(CLAVE, JSON.stringify(estado));
-      onResultado?.(true);
-    } catch (error) {
-      console.error('[store] No se pudo guardar el estado:', error);
-      onResultado?.(false);
-    }
+    const pendiente = estadoPendiente;
+    const callback = onResultadoPendiente;
     timerId = null;
+    estadoPendiente = null;
+    onResultadoPendiente = undefined;
+    if (pendiente === null) return;
+    callback?.(escribirEstado(pendiente));
   }, 500);
 }
 
+/** Fuerza la escritura del último estado programado, por ejemplo al ocultar o cerrar la página. */
+export function guardarEstadoPendienteAhora(): boolean {
+  if (estadoPendiente === null) return true;
+  const pendiente = estadoPendiente;
+  const callback = onResultadoPendiente;
+  cancelarGuardadoPendiente();
+  const guardado = escribirEstado(pendiente);
+  callback?.(guardado);
+  return guardado;
+}
+
 export function guardarEstadoAhora(estado: EstadoPersistido): boolean {
-  if (timerId !== null) {
-    clearTimeout(timerId);
-    timerId = null;
-  }
-  try {
-    localStorage.setItem(CLAVE, JSON.stringify(estado));
-    return true;
-  } catch (error) {
-    console.error('[store] No se pudo guardar el estado:', error);
-    return false;
-  }
+  cancelarGuardadoPendiente();
+  return escribirEstado(estado);
 }
 
 export function exportarJSON(estado: EstadoPersistido): string {
@@ -286,6 +333,11 @@ export function importarJSON(json: string): EstadoPersistido | null {
     return null;
   }
 
+  if (esVersionFutura(parsed)) {
+    console.error('[store] El archivo fue creado por una versión posterior de la aplicación.');
+    return null;
+  }
+
   const resultado = zEstadoPersistido.safeParse(parsed);
   if (!resultado.success) {
     console.error('[store] JSON importado no válido:', resultado.error);
@@ -296,10 +348,7 @@ export function importarJSON(json: string): EstadoPersistido | null {
 }
 
 export function limpiarAlmacenamiento(): void {
-  if (timerId !== null) {
-    clearTimeout(timerId);
-    timerId = null;
-  }
+  cancelarGuardadoPendiente();
   try {
     localStorage.removeItem(CLAVE);
   } catch {

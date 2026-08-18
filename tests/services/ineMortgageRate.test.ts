@@ -47,6 +47,20 @@ describe('referencia hipotecaria del INE', () => {
     expect(resultado.rate).toBe(0.0298);
   });
 
+  it('rechaza observaciones con fecha o mes inválidos', () => {
+    const fechaNoTexto = [{ ...PAYLOAD_INE[2], Data: [{ Fecha: 20260501, Valor: 2.98 }] }];
+    const mesInexistente = [
+      { ...PAYLOAD_INE[2], Data: [{ Fecha: '2026-99-01T00:00:00Z', Valor: 2.98 }] },
+    ];
+
+    expect(() => parseAverageMortgageTin(fechaNoTexto, '2026-08-16T00:00:00Z')).toThrow(
+      /tipo medio/i,
+    );
+    expect(() => parseAverageMortgageTin(mesInexistente, '2026-08-16T00:00:00Z')).toThrow(
+      /tipo medio/i,
+    );
+  });
+
   it('reutiliza durante 24 horas el dato guardado en caché', async () => {
     const storage = crearAlmacenamiento();
     const fetchFn = vi
@@ -93,5 +107,29 @@ describe('referencia hipotecaria del INE', () => {
     expect(resultado.rate).toBe(0.0298);
     expect(resultado.fromCache).toBe(true);
     expect(resultado.stale).toBe(true);
+  });
+
+  it('no usa como respaldo una caché con tipo o periodo corruptos', async () => {
+    const storage = crearAlmacenamiento();
+    storage.setItem(
+      'hipotecas-ine-tin-v1',
+      JSON.stringify({
+        rate: -0.5,
+        period: '2026-99',
+        source: 'INE',
+        consultedAt: 'fecha-invalida',
+      }),
+    );
+    const respuestaFallida = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(
+      fetchAverageMortgageTin({
+        now: new Date('2026-08-16T12:00:00.000Z'),
+        fetchFn: respuestaFallida,
+        storage,
+      }),
+    ).rejects.toThrow(/503/);
   });
 });

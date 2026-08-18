@@ -28,6 +28,7 @@ export function proyectarAhorro(input: InputProyeccion): PuntoProyeccion[] {
     crecimientoAnualPrecio,
     rentabilidadAnualAhorro,
     mesesMaximos,
+    objetivoEnMes,
   } = input;
 
   const puntos: PuntoProyeccion[] = [];
@@ -41,30 +42,35 @@ export function proyectarAhorro(input: InputProyeccion): PuntoProyeccion[] {
   const partesInicio = fechaInicio.split('-');
   const anchorDay = parseInt(partesInicio[2] ?? '1', 10);
 
-  let objetivoCreciente: Cents = precioObjetivo;
+  let objetivoCreciente: Cents = objetivoEnMes?.(0) ?? precioObjetivo;
+  let fechaAnterior = fechaInicio;
 
   for (let mes = 0; mes <= mesesMaximos; mes++) {
     const fecha = mes === 0 ? fechaInicio : addMonthsAnchored(fechaInicio, anchorDay, mes);
 
-    // Ingresos extraordinarios que caen en este mes
-    const extraEste = extraordinarios
-      .filter((e) => e.fecha.slice(0, 7) === fecha.slice(0, 7))
-      .reduce<Cents>((acc, e) => addCents(acc, e.importe), ZERO);
-
-    const diferencia = subtractCents(ahorroAcumulado, objetivoCreciente);
-
-    puntos.push({ mes, fecha, ahorroAcumulado, objetivoCreciente, diferencia });
-
-    if (mes < mesesMaximos) {
+    if (mes > 0) {
       // Rentabilidad sobre el ahorro acumulado
       const rendimiento = centsRoundHalfUp(ahorroAcumulado * (factorAhorroMensual - 1));
+      // Solo se suman ingresos posteriores al inicio y recibidos hasta este
+      // corte. La comparación ISO es cronológica porque las fechas están
+      // validadas como YYYY-MM-DD.
+      const extraEsteIntervalo = extraordinarios
+        .filter((e) => e.fecha > fechaAnterior && e.fecha <= fecha)
+        .reduce<Cents>((acc, e) => addCents(acc, e.importe), ZERO);
       ahorroAcumulado = addCents(
         addCents(addCents(ahorroAcumulado, rendimiento), ahorroMensual),
-        extraEste,
+        extraEsteIntervalo,
       );
-      // Crecimiento del precio objetivo
-      objetivoCreciente = multiplyCents(objetivoCreciente, factorPrecioMensual);
+      // Si el consumidor conoce el desglose del objetivo, lo recalcula desde
+      // el precio futuro. El crecimiento compuesto directo queda como respaldo
+      // para proyecciones de un importe simple.
+      objetivoCreciente =
+        objetivoEnMes?.(mes) ?? multiplyCents(objetivoCreciente, factorPrecioMensual);
     }
+
+    const diferencia = subtractCents(ahorroAcumulado, objetivoCreciente);
+    puntos.push({ mes, fecha, ahorroAcumulado, objetivoCreciente, diferencia });
+    fechaAnterior = fecha;
   }
 
   return puntos;

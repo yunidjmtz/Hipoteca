@@ -15,6 +15,7 @@ import type {
   GastoFijo,
   OtroIngreso,
   Periodicidad,
+  PerfilFinanciero,
   Titular,
 } from '@/domain/types';
 
@@ -175,7 +176,6 @@ function TarjetaItem({
   concepto,
   importe,
   periodicidad,
-  tipo,
   esAlquilerActual = false,
   onEditar,
   onEliminar,
@@ -183,7 +183,6 @@ function TarjetaItem({
   readonly concepto: string;
   readonly importe: Cents;
   readonly periodicidad: Periodicidad;
-  readonly tipo?: 'Deuda' | 'Gasto';
   readonly esAlquilerActual?: boolean;
   readonly onEditar: () => void;
   readonly onEliminar: () => void;
@@ -208,7 +207,6 @@ function TarjetaItem({
           )}
         </p>
         <p className="mt-0.5 font-cifra tabular-nums text-xs text-tinta-suave">
-          {tipo !== undefined && <span>{tipo} · </span>}
           {formatEuros(importe)} · {etiquetaPeriodicidad(periodicidad)}
           {periodicidad !== 'mensual' && importe > 0 && (
             <span className="text-acento"> · {formatEuros(mensual)}/mes</span>
@@ -262,14 +260,19 @@ function TitularForm({
   const n = indice + 1;
 
   return (
-    <fieldset className="relative flex flex-col gap-4 rounded-grande border border-linea bg-superficie-2/50 p-5 pt-12">
-      <legend className="px-2 text-sm font-semibold text-tinta">Titular {n}</legend>
+    <fieldset className="relative flex flex-col gap-4 rounded-grande border border-linea bg-superficie-2/50 p-5 pt-8">
+      <legend className="px-2 text-sm font-semibold text-tinta">
+        <span className="inline-flex items-center gap-1.5">
+          <Icono nombre="perfil" tamano={16} className="text-tinta" />
+          Titular {n}
+        </span>
+      </legend>
 
       {onEliminar !== undefined && (
         <button
           type="button"
           onClick={onEliminar}
-          aria-label="Eliminar segundo titular"
+          aria-label={`Eliminar titular ${n}`}
           className="absolute right-4 top-3 flex h-8 items-center justify-center rounded-medio border border-linea px-3 text-sm text-no-viable transition-colors hover:bg-no-viable/10"
         >
           Eliminar
@@ -354,7 +357,6 @@ export function Perfil() {
   const { perfil, preferencias } = estado;
 
   const [tabActiva, setTabActiva] = useState<TabId>('vivienda');
-  const [mostrarSegundo, setMostrarSegundo] = useState<boolean>(perfil.titulares.length === 2);
   const [modalAbierto, setModalAbierto] = useState<EstadoModal | null>(null);
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
@@ -378,41 +380,37 @@ export function Perfil() {
 
   // ── Handlers titulares ──
   function handleTitular(indice: number, t: Titular) {
-    if (indice === 0) {
-      if (perfil.titulares.length === 2) {
-        const segundo = perfil.titulares[1];
-        actualizarPerfil({ titulares: [t, segundo] });
-      } else {
-        actualizarPerfil({ titulares: [t] });
-      }
-    } else {
-      const primero = perfil.titulares[0];
-      actualizarPerfil({ titulares: [primero, t] });
-    }
+    const titulares = perfil.titulares.map((titular, posicion) => (posicion === indice ? t : titular));
+    actualizarPerfil({ titulares: titulares as PerfilFinanciero['titulares'] });
   }
 
-  function toggleSegundoTitular() {
-    if (mostrarSegundo) {
-      const primero = perfil.titulares[0];
-      actualizarPerfil({ titulares: [primero] });
-      setMostrarSegundo(false);
-    } else {
-      const primero = perfil.titulares[0];
-      const segundoPorDefecto: Titular = {
-        netoPorPaga: ZERO,
-        numeroPagas: 12,
-        edad: 35,
-        situacionLaboral: 'indefinido',
-      };
-      actualizarPerfil({ titulares: [primero, segundoPorDefecto] });
-      setMostrarSegundo(true);
-    }
+  function anadirTitular() {
+    const titularPorDefecto: Titular = {
+      netoPorPaga: ZERO,
+      numeroPagas: 12,
+      edad: 35,
+      situacionLaboral: 'indefinido',
+    };
+    actualizarPerfil({
+      titulares: [...perfil.titulares, titularPorDefecto] as PerfilFinanciero['titulares'],
+    });
+  }
+
+  function eliminarTitular(indice: number) {
+    const titulares = perfil.titulares.filter((_, posicion) => posicion !== indice);
+    actualizarPerfil({ titulares: titulares as PerfilFinanciero['titulares'] });
   }
 
   function irATabSiguiente() {
     const indiceActual = TABS.findIndex((tab) => tab.id === tabActiva);
     const indiceSiguiente = (indiceActual + 1) % TABS.length;
     setTabActiva(TABS[indiceSiguiente]!.id);
+  }
+
+  function irATabAnterior() {
+    const indiceActual = TABS.findIndex((tab) => tab.id === tabActiva);
+    const indiceAnterior = (indiceActual - 1 + TABS.length) % TABS.length;
+    setTabActiva(TABS[indiceAnterior]!.id);
   }
 
   // ── Handlers deudas ──
@@ -579,9 +577,6 @@ export function Perfil() {
   const hayOtroAlquilerActual = perfil.gastosFijos.some(
     (gasto) => gasto.esAlquilerActual && gasto.id !== modalAbierto?.editandoId,
   );
-
-  const titularUno = perfil.titulares[0];
-  const titularDos = perfil.titulares.length === 2 ? perfil.titulares[1] : undefined;
 
   // ── Modal info ──
   const modalInfo = modalAbierto !== null ? TITULO_MODAL[modalAbierto.tipo] : undefined;
@@ -789,27 +784,26 @@ export function Perfil() {
           {/* ── TAB: Titulares ─────────────────────────────────────── */}
           {tabActiva === 'titulares' && (
             <div className="flex flex-col gap-5">
-              {!mostrarSegundo && (
-                <div className="flex justify-end">
+              {perfil.titulares.map((titular, indice) => (
+                <TitularForm
+                  key={indice}
+                  titular={titular}
+                  indice={indice}
+                  onChange={(titularActualizado) => handleTitular(indice, titularActualizado)}
+                  {...(indice === 0 ? {} : { onEliminar: () => eliminarTitular(indice) })}
+                />
+              ))}
+
+              {perfil.titulares.length < 3 && (
+                <div className="flex justify-center">
                   <button
                     type="button"
-                    onClick={toggleSegundoTitular}
+                    onClick={anadirTitular}
                     className="rounded-medio border border-linea bg-superficie px-4 py-2 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
                   >
                     + Añadir titular
                   </button>
                 </div>
-              )}
-
-              <TitularForm titular={titularUno} indice={0} onChange={(t) => handleTitular(0, t)} />
-
-              {mostrarSegundo && titularDos !== undefined && (
-                <TitularForm
-                  titular={titularDos}
-                  indice={1}
-                  onChange={(t) => handleTitular(1, t)}
-                  onEliminar={toggleSegundoTitular}
-                />
               )}
 
             </div>
@@ -874,7 +868,7 @@ export function Perfil() {
             <div className="flex flex-col gap-4">
               {/* Deudas mensuales */}
               <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => abrirNuevo('gasto')}
@@ -883,45 +877,59 @@ export function Perfil() {
                     <span aria-hidden="true">+</span>
                     Añadir gasto
                   </button>
-                  {totalDeudas + totalGastosFijos > 0 && (
-                    <span className="font-cifra tabular-nums text-sm text-tinta-media">
-                      Total{' '}
-                      <span className="font-semibold text-tinta">
-                        {formatEuros((totalDeudas + totalGastosFijos) as Cents)}/mes
-                      </span>
-                    </span>
-                  )}
                 </div>
 
-                <p className="rotulo">Deudas y gastos</p>
-
-                {perfil.deudas.length === 0 && perfil.gastosFijos.length === 0 ? (
-                  <p className="text-sm text-tinta-suave">Sin deudas ni gastos registrados.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {perfil.deudas.map((deuda) => (
-                      <TarjetaItem
-                        key={deuda.id}
-                        concepto={deuda.concepto}
-                        importe={deuda.importe}
-                        periodicidad={deuda.periodicidad}
-                        tipo="Deuda"
-                        onEditar={() => abrirEditar('deuda', deuda)}
-                        onEliminar={() => eliminarDeuda(deuda.id)}
-                      />
-                    ))}
-                    {perfil.gastosFijos.map((gasto) => (
-                      <TarjetaItem
-                        key={gasto.id}
-                        concepto={gasto.concepto}
-                        importe={gasto.importe}
-                        periodicidad={gasto.periodicidad}
-                        tipo="Gasto"
-                        esAlquilerActual={gasto.esAlquilerActual ?? false}
-                        onEditar={() => abrirEditar('gasto', gasto)}
-                        onEliminar={() => eliminarGasto(gasto.id)}
-                      />
-                    ))}
+                {(perfil.deudas.length > 0 || perfil.gastosFijos.length > 0) && (
+                  <div className="flex flex-col gap-4">
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {perfil.deudas.length > 0 && (
+                      <section aria-label="Deudas" className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h2 className="text-sm font-medium text-tinta">Deudas</h2>
+                          <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                            Total{' '}
+                            <span className="font-semibold text-tinta">{formatEuros(totalDeudas)}/mes</span>
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {perfil.deudas.map((deuda) => (
+                            <TarjetaItem
+                              key={deuda.id}
+                              concepto={deuda.concepto}
+                              importe={deuda.importe}
+                              periodicidad={deuda.periodicidad}
+                              onEditar={() => abrirEditar('deuda', deuda)}
+                              onEliminar={() => eliminarDeuda(deuda.id)}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                      )}
+                      {perfil.gastosFijos.length > 0 && (
+                      <section aria-label="Gastos" className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h2 className="text-sm font-medium text-tinta">Gastos</h2>
+                          <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                            Total{' '}
+                            <span className="font-semibold text-tinta">{formatEuros(totalGastosFijos)}/mes</span>
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {perfil.gastosFijos.map((gasto) => (
+                            <TarjetaItem
+                              key={gasto.id}
+                              concepto={gasto.concepto}
+                              importe={gasto.importe}
+                              periodicidad={gasto.periodicidad}
+                              esAlquilerActual={gasto.esAlquilerActual ?? false}
+                              onEditar={() => abrirEditar('gasto', gasto)}
+                              onEliminar={() => eliminarGasto(gasto.id)}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -930,8 +938,20 @@ export function Perfil() {
           )}
         </div>
 
-        {tabActiva !== 'deudas-gastos' && (
-          <div className="flex justify-end border-t border-linea bg-superficie-2/40 px-6 py-4">
+        <div className="flex justify-between border-t border-linea bg-superficie-2/40 px-6 py-4">
+          {tabActiva !== 'vivienda' ? (
+            <button
+              type="button"
+              onClick={irATabAnterior}
+              className="flex min-h-toque items-center gap-2 rounded-medio border border-linea bg-superficie px-4 py-2 text-sm font-medium text-tinta transition-colors hover:bg-superficie-2 focus:outline-none focus:ring-2 focus:ring-acento/40 focus:ring-offset-2"
+            >
+              <span aria-hidden="true">←</span>
+              Anterior
+            </button>
+          ) : (
+            <span />
+          )}
+          {tabActiva !== 'deudas-gastos' && (
             <button
               type="button"
               onClick={irATabSiguiente}
@@ -940,8 +960,8 @@ export function Perfil() {
               Siguiente
               <span aria-hidden="true">→</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Modal añadir / editar ─────────────────────────────────── */}

@@ -26,8 +26,8 @@ export function formatEuros(cents: Cents): string {
 export function formatEurosMientrasSeEscribe(input: string): string {
   let cleaned = input.replace(/[€\s]/g, '');
   const puntos = cleaned.split('.');
-  if (!cleaned.includes(',') && puntos.length === 2 && (puntos[1]?.length ?? 0) <= 2) {
-    cleaned = `${puntos[0] ?? ''},${puntos[1] ?? ''}`;
+  if (!cleaned.includes(',') && puntos.length === 2 && puntos[1]!.length <= 2) {
+    cleaned = `${puntos[0]!},${puntos[1]!}`;
   }
   const [enteroRaw = '', ...decimalesRaw] = cleaned.split(',');
   const enteroSinSeparadores = enteroRaw.replace(/\D/g, '');
@@ -50,7 +50,7 @@ export function formatEntero(value: number): string {
 
 export function formatFecha(isoDate: string): string {
   const partes = isoDate.split('-');
-  const year = Number(partes[0] ?? '1970');
+  const year = Number(partes[0]);
   const month = Number(partes[1] ?? '1');
   const day = Number(partes[2] ?? '1');
   // Fecha local para evitar desplazamientos UTC

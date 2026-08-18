@@ -19,7 +19,7 @@ export interface InputDineroNecesario {
 }
 
 export interface ResultadoDineroNecesario {
-  dineroMinimo: Cents; // entrada + impuestos + gastosObligatorios
+  dineroMinimo: Cents; // entrada + impuestos + gastos obligatorios y comerciales
   dineroRecomendado: Cents; // mínimo + gastos de transición (reforma, muebles…)
   dineroComodo: Cents; // igual que recomendado
   ahorroUtilizable: Cents; // ahorrosActuales

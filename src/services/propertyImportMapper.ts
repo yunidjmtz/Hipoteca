@@ -25,7 +25,8 @@ export function mapImportedDataToExistingForm(
   rawText: string,
   source: FuenteAnuncio | null,
 ): Partial<CamposImportablesVivienda> {
-  const patch: Partial<CamposImportablesVivienda> = { rawListingText: rawText };
+  const patch: Partial<CamposImportablesVivienda> = {};
+  if (rawText.trim() !== '') patch.rawListingText = rawText;
   if (data.title !== undefined) patch.nombre = data.title;
   if (data.price !== undefined) patch.precioVenta = toCents(data.price);
   if (data.builtArea !== undefined) patch.superficieM2 = Math.round(data.builtArea);

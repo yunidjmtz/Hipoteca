@@ -16,7 +16,38 @@ const zCents = z
 
 const zPorcentaje = z.number().finite().min(0).max(1);
 const zTipoInteres = z.number().finite().min(-0.1).max(1);
-const zFechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+function esFechaIsoReal(valor: string): boolean {
+  const coincidencia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  if (coincidencia === null) return false;
+  const anio = Number(coincidencia[1]);
+  const mes = Number(coincidencia[2]);
+  const dia = Number(coincidencia[3]);
+  if (mes < 1 || mes > 12 || dia < 1) return false;
+  const bisiesto = anio % 4 === 0 && (anio % 100 !== 0 || anio % 400 === 0);
+  const diasPorMes = [31, bisiesto ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return dia <= (diasPorMes[mes - 1] ?? 0);
+}
+
+const zFechaIso = z
+  .string()
+  .refine(esFechaIsoReal, 'La fecha debe ser un día real en formato AAAA-MM-DD');
+const zFechaIsoOpcionalVacia = z.union([zFechaIso, z.literal('')]);
+
+function idsNoVaciosYUnicos(elementos: readonly { readonly id: string }[]): boolean {
+  const ids = elementos.map((elemento) => elemento.id.trim());
+  return ids.every((id) => id !== '') && new Set(ids).size === ids.length;
+}
+
+function tramosOrdenadosYCerrados(tramos: readonly { readonly hasta: number | null }[]): boolean {
+  if (tramos.length === 0 || tramos.at(-1)?.hasta !== null) return false;
+  let limiteAnterior = 0;
+  for (const [indice, tramo] of tramos.entries()) {
+    if (tramo.hasta === null) return indice === tramos.length - 1;
+    if (tramo.hasta <= limiteAnterior) return false;
+    limiteAnterior = tramo.hasta;
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Enumeraciones de cadena como uniones de literales (Zod 4 no tiene z.enum)
@@ -82,17 +113,26 @@ const zReduccionFiscal = z.object({
   bonificacionCuota: zPorcentaje,
 });
 
-const zConfigFiscalCcaa = z.object({
-  ccaa: z.string(),
-  revisadoEl: z.string(),
-  itpTramos: z.array(zTramoImpositivo),
-  itpReducciones: z.array(zReduccionFiscal),
-  ajdCompraventa: zPorcentaje,
-  ajdReducciones: z.array(zReduccionFiscal),
-  ivaViviendaNueva: zPorcentaje,
-  ivaVpoEspecial: zPorcentaje,
-  tipoManualOverride: zPorcentaje.optional(),
-});
+const zConfigFiscalCcaa = z
+  .object({
+    ccaa: z.string().min(1),
+    revisadoEl: z.string(),
+    itpTramos: z.array(zTramoImpositivo).min(1),
+    itpReducciones: z
+      .array(zReduccionFiscal)
+      .refine(idsNoVaciosYUnicos, 'Las reducciones ITP deben tener identificadores únicos'),
+    ajdCompraventa: zPorcentaje,
+    ajdReducciones: z
+      .array(zReduccionFiscal)
+      .refine(idsNoVaciosYUnicos, 'Las reducciones AJD deben tener identificadores únicos'),
+    ivaViviendaNueva: zPorcentaje,
+    ivaVpoEspecial: zPorcentaje,
+    tipoManualOverride: zPorcentaje.optional(),
+  })
+  .refine(
+    (config) => tramosOrdenadosYCerrados(config.itpTramos),
+    'Los tramos ITP deben estar ordenados y terminar en un tramo sin límite',
+  );
 
 // ---------------------------------------------------------------------------
 // Perfil financiero
@@ -134,20 +174,36 @@ export const zIngresoExtraordinario = z.object({
   fecha: zFechaIso,
 });
 
-// Un array con uno o exactamente dos titulares.
-// Zod 4 z.tuple admite rest; usamos z.union de las dos variantes exactas.
-const zTitulares = z.union([z.tuple([zTitular]), z.tuple([zTitular, zTitular])]);
+// Un array con entre uno y tres titulares.
+// Zod 4 z.tuple admite rest; usamos las variantes exactas para conservar el mínimo requerido.
+const zTitulares = z.union([
+  z.tuple([zTitular]),
+  z.tuple([zTitular, zTitular]),
+  z.tuple([zTitular, zTitular, zTitular]),
+]);
 
 export const zPerfilFinanciero = z.object({
   titulares: zTitulares,
-  otrosIngresos: z.array(zOtroIngreso).optional().default([]),
+  otrosIngresos: z
+    .array(zOtroIngreso)
+    .refine(idsNoVaciosYUnicos, 'Los ingresos deben tener identificadores únicos')
+    .optional()
+    .default([]),
   otrosIngresosMensuales: zCents,
-  deudas: z.array(zDeudaMensual),
-  gastosFijos: z.array(zGastoFijo).optional().default([]),
+  deudas: z
+    .array(zDeudaMensual)
+    .refine(idsNoVaciosYUnicos, 'Las deudas deben tener identificadores únicos'),
+  gastosFijos: z
+    .array(zGastoFijo)
+    .refine(idsNoVaciosYUnicos, 'Los gastos deben tener identificadores únicos')
+    .optional()
+    .default([]),
   ahorrosActuales: zCents,
   ahorroMensualPrevisto: zCents,
-  ingresosExtraordinarios: z.array(zIngresoExtraordinario),
-  fechaObjetivoCompra: z.string().optional(),
+  ingresosExtraordinarios: z
+    .array(zIngresoExtraordinario)
+    .refine(idsNoVaciosYUnicos, 'Los ingresos extraordinarios deben tener identificadores únicos'),
+  fechaObjetivoCompra: zFechaIso.optional(),
   alquilerActual: zCents,
 });
 
@@ -157,23 +213,28 @@ export const zPerfilFinanciero = z.object({
 
 const zPasoEscala = z.union([z.literal(5000), z.literal(10000), z.literal(20000)]);
 
-export const zPreferenciasCompra = z.object({
-  ccaa: z.string(),
-  provincia: z.string(),
-  destino: zDestinoCompra,
-  estadoVivienda: zEstadoVivienda,
-  esVpoEspecial: z.boolean(),
-  precioObjetivo: zCents,
-  habitacionesMinimas: z.number().int().min(0).max(20).default(0),
-  banosMinimos: z.number().int().min(0).max(20).default(0),
-  exterior: z.boolean().default(false),
-  trastero: z.boolean().default(false),
-  garaje: z.boolean().default(false),
-  precioMinExplorar: zCents,
-  precioMaxExplorar: zCents,
-  pasoEscala: zPasoEscala,
-  valorReferenciaFiscal: zCents.optional(),
-});
+export const zPreferenciasCompra = z
+  .object({
+    ccaa: z.string(),
+    provincia: z.string(),
+    destino: zDestinoCompra,
+    estadoVivienda: zEstadoVivienda,
+    esVpoEspecial: z.boolean(),
+    precioObjetivo: zCents,
+    habitacionesMinimas: z.number().int().min(0).max(20).default(0),
+    banosMinimos: z.number().int().min(0).max(20).default(0),
+    exterior: z.boolean().default(false),
+    trastero: z.boolean().default(false),
+    garaje: z.boolean().default(false),
+    precioMinExplorar: zCents,
+    precioMaxExplorar: zCents,
+    pasoEscala: zPasoEscala,
+    valorReferenciaFiscal: zCents.optional(),
+  })
+  .refine(
+    (preferencias) => preferencias.precioMinExplorar <= preferencias.precioMaxExplorar,
+    'El precio mínimo de exploración no puede superar el máximo',
+  );
 
 export const zGastosCompra = z.object({
   notariaCompraventa: zCents,
@@ -255,7 +316,9 @@ export const zEscenarioHipoteca = z
     sueloTin: zTipoInteres,
     taeOficial: zPorcentaje.optional(),
     comisiones: zComisiones,
-    vinculaciones: z.array(zProductoVinculado),
+    vinculaciones: z
+      .array(zProductoVinculado)
+      .refine(idsNoVaciosYUnicos, 'Las vinculaciones deben tener identificadores únicos'),
     fechaPrimeraCuota: zFechaIso,
   })
   .transform((escenario) => {
@@ -268,11 +331,17 @@ export const zEscenarioHipoteca = z
 // Ajustes
 // ---------------------------------------------------------------------------
 
-const zUmbralesViabilidad = z.object({
-  ratioComodo: zPorcentaje,
-  ratioViable: zPorcentaje,
-  ratioAjustado: zPorcentaje,
-});
+const zUmbralesViabilidad = z
+  .object({
+    ratioComodo: zPorcentaje,
+    ratioViable: zPorcentaje,
+    ratioAjustado: zPorcentaje,
+  })
+  .refine(
+    ({ ratioComodo, ratioAjustado, ratioViable }) =>
+      ratioComodo <= ratioAjustado && ratioAjustado <= ratioViable,
+    'Los umbrales deben cumplir cómodo ≤ ajustado ≤ viable',
+  );
 
 export const zAjustes = z.object({
   ratioBancarioMaximo: zPorcentaje,
@@ -281,12 +350,16 @@ export const zAjustes = z.object({
   criterioEdad: zCriterioEdad,
   crecimientoAnualPrecioVivienda: z.number().finite().min(-0.99).max(10),
   rentabilidadAnualAhorro: z.number().finite().min(-0.99).max(10),
-  umbralesViabilidad: z.object({
-    ratioComodo: zUmbralesViabilidad.shape.ratioComodo,
-    ratioViable: zUmbralesViabilidad.shape.ratioViable,
-    ratioAjustado: zUmbralesViabilidad.shape.ratioAjustado,
-  }),
-  fiscal: z.array(zConfigFiscalCcaa),
+  umbralesViabilidad: zUmbralesViabilidad,
+  fiscal: z
+    .array(zConfigFiscalCcaa)
+    .min(1)
+    .refine(
+      (configuraciones) =>
+        new Set(configuraciones.map((configuracion) => configuracion.ccaa)).size ===
+        configuraciones.length,
+      'Las configuraciones fiscales deben corresponder a comunidades distintas',
+    ),
   ltvPorDefecto: zPorcentaje,
   plazoPorDefecto: z.number().int().min(1).max(40),
   tinPorDefecto: zTipoInteres,
@@ -307,7 +380,7 @@ export const zSimulacionGuardada = z.object({
   nombre: z.string(),
   notas: z.string(),
   favorita: z.boolean(),
-  creadoEl: z.string(),
+  creadoEl: zFechaIso,
   snapshot: z.object({
     perfil: zPerfilFinanciero,
     ajustes: zAjustes,
@@ -320,7 +393,7 @@ export const zOfertaBancaria = z.object({
   viviendaId: z.string().optional(),
   banco: z.string(),
   nombre: z.string(),
-  fecha: z.string(),
+  fecha: zFechaIso,
   estado: zEstadoOferta,
   escenario: zEscenarioHipoteca,
   taeOficial: zPorcentaje.optional(),
@@ -330,7 +403,7 @@ export const zOfertaBancaria = z.object({
 export const zViviendaGuardada = z.object({
   id: z.string(),
   nombre: z.string().default(''),
-  fecha: z.string().default(''),
+  fecha: zFechaIsoOpcionalVacia.default(''),
   direccion: z.string(),
   anuncioUrl: z.string().default(''),
   telefono: z.string().default(''),
@@ -338,7 +411,7 @@ export const zViviendaGuardada = z.object({
   sourceUrl: z.string().default(''),
   sourceListingId: z.string().default(''),
   rawListingText: z.string().default(''),
-  priceHistory: z.array(z.object({ price: zCents, date: z.string() })).default([]),
+  priceHistory: z.array(z.object({ price: zCents, date: zFechaIso })).default([]),
   precioVenta: zCents,
   presupuestoReforma: zCents,
   reforma: z.string(),
@@ -356,6 +429,7 @@ export const zViviendaGuardada = z.object({
         costeEstimado: zCents,
       }),
     )
+    .refine(idsNoVaciosYUnicos, 'Las reformas deben tener identificadores únicos')
     .default([]),
   notas: z.string(),
   origenInmobiliaria: z.string().optional(),
@@ -373,7 +447,7 @@ export const zMeta = z.object({
   id: z.string(),
   nombre: z.string(),
   precioObjetivo: zCents,
-  fechaCreacion: z.string(),
+  fechaCreacion: zFechaIso,
   notas: z.string(),
 });
 
@@ -388,12 +462,19 @@ export const zEstadoPersistido = z.object({
   gastos: zGastosCompra,
   costesRecurrentes: zCostesRecurrentes,
   ajustes: zAjustes,
-  simulaciones: z.array(zSimulacionGuardada),
-  ofertas: z.array(zOfertaBancaria),
+  simulaciones: z
+    .array(zSimulacionGuardada)
+    .refine(idsNoVaciosYUnicos, 'Las simulaciones deben tener identificadores únicos'),
+  ofertas: z
+    .array(zOfertaBancaria)
+    .refine(idsNoVaciosYUnicos, 'Las ofertas deben tener identificadores únicos'),
   // v7: opcional para que los datos guardados antes de las viviendas sigan cargando.
-  viviendas: z.array(zViviendaGuardada).optional(),
+  viviendas: z
+    .array(zViviendaGuardada)
+    .refine(idsNoVaciosYUnicos, 'Las viviendas deben tener identificadores únicos')
+    .optional(),
   inmobiliariaActivaDemo: zInmobiliariaActivaDemo.optional(),
-  metas: z.array(zMeta),
+  metas: z.array(zMeta).refine(idsNoVaciosYUnicos, 'Las metas deben tener identificadores únicos'),
   // v2: optional para compatibilidad con datos v1; se rellena en la migración
   escenarioSimulador: zEscenarioHipoteca.optional(),
 });

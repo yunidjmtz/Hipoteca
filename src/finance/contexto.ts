@@ -13,10 +13,13 @@ export function construirContexto(
 ): ContextoEvaluacion {
   const { perfil, gastos, costesRecurrentes, ajustes, preferencias } = estado;
 
-  const edadMenorTitular = Math.min(...perfil.titulares.map((t) => t.edad));
+  // En compras pro indiviso la bonificación personal se prorratea según la
+  // participación de cada comprador. Como el perfil no guarda ese reparto,
+  // solo se aplica automáticamente cuando todos cumplen el límite de edad.
+  const edadMaximaTitular = Math.max(...perfil.titulares.map((t) => t.edad));
 
   const reduccion: ContextoReduccion = {
-    edadMenorTitular,
+    edadMaximaTitular,
     discapacidadPorcentaje: 0,
     victimaViolenciaGenero: false,
     familiaNumerosa: false,

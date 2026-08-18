@@ -3,7 +3,11 @@ import { toCents, ZERO } from '@/core/money';
 import { ESTADO_INICIAL } from '@/storage/defaults';
 import {
   cargarEstado,
+  exportarJSON,
   guardarEstadoAhora,
+  guardarEstadoConDebounce,
+  guardarEstadoPendienteAhora,
+  importarJSON,
   limpiarDatosConservandoConfiguracion,
   obtenerDatosRecuperacion,
 } from '@/storage/store';
@@ -57,6 +61,7 @@ describe('limpieza de datos', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -171,6 +176,169 @@ describe('limpieza de datos', () => {
     expect(cargado.viviendas[0]?.anuncioUrl).toBe('');
     expect(cargado.viviendas[0]?.telefono).toBe('');
     expect(cargado.viviendas[0]?.habitaciones).toBe(0);
+  });
+
+  it('migra la versión 12 a la actual sin borrar un teléfono ya guardado', () => {
+    localStorage.setItem(
+      'hipotecas-v1',
+      JSON.stringify({
+        ...ESTADO_INICIAL,
+        schemaVersion: 12,
+        viviendas: [
+          {
+            id: 'version-12',
+            nombre: 'Piso con contacto',
+            fecha: '2026-08-01',
+            direccion: 'Zaragoza',
+            anuncioUrl: 'https://example.com/piso',
+            telefono: '600 123 123',
+            precioVenta: toCents(180_000),
+            presupuestoReforma: ZERO,
+            reforma: '',
+            superficieM2: 80,
+            habitaciones: 3,
+            esExterior: true,
+            tieneTrastero: false,
+            tieneGaraje: false,
+            reformas: [],
+            notas: '',
+          },
+        ],
+      }),
+    );
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.viviendas[0]?.telefono).toBe('600 123 123');
+  });
+
+  it('rechaza versiones futuras sin eliminar el original recuperable', () => {
+    const raw = JSON.stringify({
+      ...ESTADO_INICIAL,
+      schemaVersion: ESTADO_INICIAL.schemaVersion + 1,
+      campoDeVersionFutura: 'debe conservarse en bruto',
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    localStorage.setItem('hipotecas-v1', raw);
+
+    expect(cargarEstado()).toEqual(ESTADO_INICIAL);
+    expect(obtenerDatosRecuperacion()).toBe(raw);
+    expect(importarJSON(raw)).toBeNull();
+  });
+
+  it('exporta e importa el estado actual sin modificar sus datos', () => {
+    const titularBase = ESTADO_INICIAL.perfil.titulares[0];
+    const estado: EstadoPersistido = {
+      ...estadoConDatos(),
+      schemaVersion: ESTADO_INICIAL.schemaVersion,
+      perfil: {
+        ...estadoConDatos().perfil,
+        titulares: [
+          titularBase,
+          { ...titularBase, edad: 38, netoPorPaga: toCents(1_800) },
+          { ...titularBase, edad: 41, netoPorPaga: toCents(1_200) },
+        ],
+      },
+    };
+
+    expect(importarJSON(exportarJSON(estado))).toEqual(estado);
+  });
+
+  it('fuerza el último guardado pendiente antes de que venza el debounce', () => {
+    vi.useFakeTimers();
+    const onResultado = vi.fn();
+    const estado: EstadoPersistido = {
+      ...ESTADO_INICIAL,
+      preferencias: {
+        ...ESTADO_INICIAL.preferencias,
+        precioObjetivo: toCents(240_000),
+      },
+    };
+
+    guardarEstadoConDebounce(estado, onResultado);
+    expect(localStorage.getItem('hipotecas-v1')).toBeNull();
+
+    expect(guardarEstadoPendienteAhora()).toBe(true);
+    expect(JSON.parse(localStorage.getItem('hipotecas-v1') ?? '{}')).toMatchObject({
+      schemaVersion: 13,
+      preferencias: { precioObjetivo: toCents(240_000) },
+    });
+    expect(onResultado).toHaveBeenCalledWith(true);
+
+    vi.runAllTimers();
+    expect(onResultado).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechaza fechas con formato ISO pero con un día inexistente', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const json = exportarJSON({
+      ...ESTADO_INICIAL,
+      escenarioSimulador: {
+        ...ESTADO_INICIAL.escenarioSimulador,
+        fechaPrimeraCuota: '2026-02-30',
+      },
+    });
+
+    expect(importarJSON(json)).toBeNull();
+  });
+
+  it('rechaza identificadores duplicados en las colecciones persistidas', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deuda = {
+      id: 'duplicada',
+      concepto: 'Préstamo',
+      importe: toCents(100),
+      periodicidad: 'mensual' as const,
+    };
+    const json = exportarJSON({
+      ...ESTADO_INICIAL,
+      perfil: {
+        ...ESTADO_INICIAL.perfil,
+        deudas: [deuda, { ...deuda, concepto: 'Otra deuda' }],
+      },
+    });
+
+    expect(importarJSON(json)).toBeNull();
+  });
+
+  it('rechaza umbrales de viabilidad contradictorios', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const json = exportarJSON({
+      ...ESTADO_INICIAL,
+      ajustes: {
+        ...ESTADO_INICIAL.ajustes,
+        umbralesViabilidad: {
+          ratioComodo: 0.35,
+          ratioAjustado: 0.3,
+          ratioViable: 0.32,
+        },
+      },
+    });
+
+    expect(importarJSON(json)).toBeNull();
+  });
+
+  it('rechaza tramos fiscales desordenados o sin cierre', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const primeraFiscal = ESTADO_INICIAL.ajustes.fiscal[0]!;
+    const json = exportarJSON({
+      ...ESTADO_INICIAL,
+      ajustes: {
+        ...ESTADO_INICIAL.ajustes,
+        fiscal: [
+          {
+            ...primeraFiscal,
+            itpTramos: [
+              { hasta: 200_000, tipo: 0.08 },
+              { hasta: 100_000, tipo: 0.09 },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(importarJSON(json)).toBeNull();
   });
 
   it('conserva para recuperación un estado que no puede validar', () => {

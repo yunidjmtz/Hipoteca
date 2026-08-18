@@ -24,6 +24,7 @@ import {
   calcularIngresoMensualNormalizado,
   calcularOtrosIngresosMensuales,
   evaluarPrecio,
+  RANGO_BUSQUEDA_CAPACIDAD,
 } from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
 import { Meta } from '@/pages/Meta';
@@ -185,11 +186,11 @@ function TarjetaResumen({
           ? 'border-acento/40 bg-acento-tenue'
           : positivo
             ? 'border-comodo/40 bg-comodo-tenue'
-          : negativo
-            ? 'border-no-viable/40 bg-no-viable/10'
-          : alerta
-            ? 'border-revisar/40 bg-revisar-tenue'
-            : 'border-linea bg-superficie-2',
+            : negativo
+              ? 'border-no-viable/40 bg-no-viable/10'
+              : alerta
+                ? 'border-revisar/40 bg-revisar-tenue'
+                : 'border-linea bg-superficie-2',
       ].join(' ')}
     >
       <div className="pr-4">
@@ -209,17 +210,19 @@ function TarjetaResumen({
             ? 'text-acento'
             : positivo
               ? 'text-comodo'
-            : negativo
-              ? 'text-no-viable'
-              : alerta
-                ? 'text-revisar'
-                : 'text-tinta',
+              : negativo
+                ? 'text-no-viable'
+                : alerta
+                  ? 'text-revisar'
+                  : 'text-tinta',
         ].join(' ')}
       >
         {valor}
       </p>
       {pie && (
-        <p className="mt-1 whitespace-pre-line font-cifra text-xs font-medium text-tinta-media">{pie}</p>
+        <p className="mt-1 whitespace-pre-line font-cifra text-xs font-medium text-tinta-media">
+          {pie}
+        </p>
       )}
     </div>
   );
@@ -239,17 +242,12 @@ function BalanceMensualCircular({
   const disponible = maxCents(ZERO, ahorro);
   const superaIngresos = gastos + deudas > ingresos;
   const total = superaIngresos ? addCents(gastos, deudas) : maxCents(ingresos, ZERO);
+  const deudasYGastos = addCents(gastos, deudas);
   const porcentaje = (importe: Cents) => (total > ZERO ? (importe / total) * 100 : 0);
   const segmentos = [
     {
-      etiqueta: 'Gastos',
-      importe: gastos,
-      color: 'color-mix(in srgb, var(--c-ajustado) 78%, var(--c-superficie))',
-      claseTexto: 'text-ajustado',
-    },
-    {
-      etiqueta: 'Deudas',
-      importe: deudas,
+      etiqueta: 'Deudas y gastos',
+      importe: deudasYGastos,
       color: 'color-mix(in srgb, var(--c-no-viable) 78%, var(--c-superficie))',
       claseTexto: 'text-no-viable',
     },
@@ -315,7 +313,9 @@ function BalanceMensualCircular({
               />
               <span className="text-tinta-media">{segmento.etiqueta}</span>
             </div>
-            <span className={`shrink-0 font-cifra font-semibold tabular-nums ${segmento.claseTexto}`}>
+            <span
+              className={`shrink-0 font-cifra font-semibold tabular-nums ${segmento.claseTexto}`}
+            >
               {formatEuros(segmento.importe)} · {Math.round(segmento.porcentaje)} %
             </span>
           </div>
@@ -349,8 +349,7 @@ export function RepartoMensual({
   const porcentaje = (importe: Cents) => Math.round((importe / ingresos) * 100);
   const ancho = (importe: Cents) => `${Math.min(100, (importe / ingresos) * 100)}%`;
   const segmentos = [
-    { etiqueta: 'Deudas', importe: deudas, color: 'bg-no-viable' },
-    { etiqueta: 'Gastos', importe: gastos, color: 'bg-ajustado' },
+    { etiqueta: 'Deudas y gastos', importe: addCents(deudas, gastos), color: 'bg-no-viable' },
     { etiqueta: 'Cuota objetivo', importe: cuotaObjetivo, color: 'bg-acento' },
     { etiqueta: 'Libre', importe: libre, color: 'bg-comodo' },
   ].filter((segmento) => segmento.importe > 0);
@@ -428,17 +427,14 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
   );
   const capacidadAhorroActual = calcularCapacidadAhorroActual(perfil);
 
-  const rango = useMemo(() => ({ min: toCents(50_000), max: toCents(2_000_000) }), []);
-  const rangoIngresos = useMemo(() => ({ min: toCents(50_000), max: toCents(10_000_000) }), []);
-
   const ctxFactory = useMemo(
     () => (p: ReturnType<typeof toCents>) => construirContexto(estado, p),
     [estado],
   );
 
   const porAhorro = useMemo(
-    () => buscarPrecioMaximo((e) => e.faltante === 0, ctxFactory, rango),
-    [ctxFactory, rango],
+    () => buscarPrecioMaximo((e) => e.faltante === 0, ctxFactory, RANGO_BUSQUEDA_CAPACIDAD),
+    [ctxFactory],
   );
 
   const porIngresos = useMemo(
@@ -446,9 +442,9 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
       buscarPrecioMaximo(
         (e) => e.ratioBancario <= ajustes.ratioBancarioMaximo,
         ctxFactory,
-        rangoIngresos,
+        RANGO_BUSQUEDA_CAPACIDAD,
       ),
-    [ctxFactory, rangoIngresos, ajustes.ratioBancarioMaximo],
+    [ctxFactory, ajustes.ratioBancarioMaximo],
   );
 
   const porComodo = useMemo(
@@ -456,9 +452,9 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
       buscarPrecioMaximo(
         (e) => e.ratioPersonal <= ajustes.ratioPersonalObjetivo,
         ctxFactory,
-        rangoIngresos,
+        RANGO_BUSQUEDA_CAPACIDAD,
       ),
-    [ctxFactory, rangoIngresos, ajustes.ratioPersonalObjetivo],
+    [ctxFactory, ajustes.ratioPersonalObjetivo],
   );
   const hipotecaNoViablePorIngresos = evaluacion.ratioBancario > ajustes.ratioBancarioMaximo;
 
@@ -529,7 +525,7 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                 <TarjetaResumen
                   rotulo="Ingresos / mes"
                   valor={ingresosMensuales > 0 ? formatEuros(ingresosMensuales) : '—'}
-                  detalle={perfil.titulares.length === 2 ? '2 titulares' : '1 titular'}
+                  detalle={`${perfil.titulares.length} ${perfil.titulares.length === 1 ? 'titular' : 'titulares'}`}
                   destacado={ingresosMensuales > 0}
                   className="col-span-full"
                   pie={detalleIngresos}
@@ -660,7 +656,9 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                     <thead>
                       <tr className="border-b border-linea text-left text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-tinta-media">
                         <th className="pb-2 pr-4 font-semibold">Precio de la vivienda</th>
-                        <th className="pb-2 pr-4 text-right font-semibold">Cuota hipotecaria aproximada</th>
+                        <th className="pb-2 pr-4 text-right font-semibold">
+                          Cuota hipotecaria aproximada
+                        </th>
                         <th className="pb-2 pr-4 text-right font-semibold">Necesitas reunir</th>
                         <th className="pb-2 pr-4 text-right font-semibold">Faltante</th>
                       </tr>
@@ -737,15 +735,15 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
           <section className="overflow-hidden rounded-grande border border-linea bg-superficie shadow-papel">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-medio bg-acento-tenue text-acento">
-                <Icono nombre="casa" tamano={19} />
-              </span>
-              <div>
-                <p className="rotulo">Precio objetivo</p>
-                <p className="font-display text-xl text-tinta tabular-nums">
-                  {formatEuros(evaluacion.precio)}
-                </p>
-              </div>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-medio bg-acento-tenue text-acento">
+                  <Icono nombre="casa" tamano={19} />
+                </span>
+                <div>
+                  <p className="rotulo">Precio objetivo</p>
+                  <p className="font-display text-xl text-tinta tabular-nums">
+                    {formatEuros(evaluacion.precio)}
+                  </p>
+                </div>
               </div>
               <EstadoBadge estado={evaluacion.estado} />
             </div>
@@ -823,7 +821,8 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
                     className="font-medium text-acento underline decoration-acento/50 underline-offset-4 transition-colors hover:text-acento-oscuro hover:decoration-acento"
                   >
                     Ajustes
-                  </button>.
+                  </button>
+                  .
                 </p>
               </section>
 

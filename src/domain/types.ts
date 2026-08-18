@@ -57,7 +57,13 @@ export interface ConfigFiscalCcaa {
 }
 
 export interface ContextoReduccion {
-  edadMenorTitular: number;
+  /**
+   * Mayor edad entre los compradores. Se usa de forma conservadora: la
+   * bonificación por edad solo se aplica automáticamente si todos cumplen.
+   * El reparto parcial exige porcentajes de titularidad que el modelo todavía
+   * no recoge.
+   */
+  edadMaximaTitular: number;
   discapacidadPorcentaje: number;
   victimaViolenciaGenero: boolean;
   familiaNumerosa: boolean;
@@ -106,7 +112,7 @@ export interface IngresoExtraordinario {
 }
 
 export interface PerfilFinanciero {
-  titulares: [Titular] | [Titular, Titular];
+  titulares: [Titular] | [Titular, Titular] | [Titular, Titular, Titular];
   otrosIngresos: OtroIngreso[];
   otrosIngresosMensuales: Cents; // suma mensualizada de otrosIngresos — mantenida en sync
   deudas: DeudaMensual[];
@@ -462,4 +468,10 @@ export interface InputProyeccion {
   crecimientoAnualPrecio: number; // decimal; 0 por defecto
   rentabilidadAnualAhorro: number; // decimal; 0 por defecto
   mesesMaximos: number; // límite de la proyección
+  /**
+   * Objetivo exacto para cada corte mensual. Permite recalcular entrada,
+   * impuestos y gastos a partir del precio futuro de la vivienda en vez de
+   * incrementar de forma indiscriminada todo el efectivo necesario.
+   */
+  objetivoEnMes?: (mes: number) => Cents;
 }

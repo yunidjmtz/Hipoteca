@@ -219,8 +219,13 @@ begin
   if not public.is_super_admin() then
     raise exception 'No tienes permisos para eliminar inmobiliarias.' using errcode = '42501';
   end if;
-  -- Los favoritos locales se conservan; se elimina el vínculo de los clientes
-  -- para evitar que la restricción `ON DELETE RESTRICT` bloquee la operación.
+  -- La copia de favoritos que usa el producto vive en cada navegador. Las
+  -- referencias remotas sí deben eliminarse antes de las viviendas porque su
+  -- FK usa `ON DELETE RESTRICT`.
+  delete from public.client_favorites favorite
+  using public.agency_properties property
+  where favorite.agency_property_id = property.id
+    and property.agency_id = p_agency_id;
   delete from public.client_agency_links where agency_id = p_agency_id;
   delete from public.real_estate_agencies where id = p_agency_id;
   if not found then raise exception 'La inmobiliaria no existe.' using errcode = 'P0001'; end if;

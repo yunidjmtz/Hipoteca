@@ -51,6 +51,10 @@ describe('parseEuros', () => {
   it('devuelve null para valores negativos', () => {
     expect(parseEuros('-100')).toBeNull();
   });
+
+  it('rechaza importes que desbordan el rango numérico', () => {
+    expect(parseEuros('9'.repeat(400))).toBeNull();
+  });
 });
 
 describe('parseDecimalPorcentaje', () => {
@@ -85,5 +89,9 @@ describe('parseDecimalPorcentaje', () => {
     expect(parseDecimalPorcentaje('')).toBeNull();
     expect(parseDecimalPorcentaje('3,2,1')).toBeNull();
     expect(parseDecimalPorcentaje('3.5abc')).toBeNull();
+  });
+
+  it('rechaza porcentajes que desbordan el rango numérico', () => {
+    expect(parseDecimalPorcentaje('9'.repeat(400))).toBeNull();
   });
 });

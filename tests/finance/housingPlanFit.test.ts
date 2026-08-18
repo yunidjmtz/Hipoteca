@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toCents, ZERO } from '@/core/money';
+import { subtractCents, toCents, ZERO } from '@/core/money';
 import { evaluarEncajePlanVivienda } from '@/finance/housingPlanFit';
 import type { EstadoPersistido, ViviendaGuardada } from '@/domain/types';
 import { ESTADO_INICIAL } from '@/storage/defaults';
@@ -86,6 +86,27 @@ describe('evaluarEncajePlanVivienda', () => {
     );
   });
 
+  it('explica cuando la edad no deja ningún plazo hipotecario disponible', () => {
+    const estado = estadoConPlan({ ingreso: 5_000, ahorro: 300_000 });
+    const titular = estado.perfil.titulares[0];
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(100_000),
+      {
+        ...estado,
+        perfil: {
+          ...estado.perfil,
+          titulares: [{ ...titular, edad: estado.ajustes.edadMaximaAlVencimiento }],
+        },
+      },
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('no_viable');
+    expect(resultado.limitante).toBe('ingresos');
+    expect(resultado.prestamoMaximoPorIngresos).toBe(ZERO);
+    expect(resultado.motivo).toMatch(/edad/i);
+  });
+
   it('incluye la reforma en el ahorro necesario para considerar la compra alcanzable', () => {
     const conGranReforma = {
       ...vivienda(100_000),
@@ -109,5 +130,74 @@ describe('evaluarEncajePlanVivienda', () => {
     );
 
     expect(resultado.estado).toBe('sin_presupuesto');
+  });
+
+  it('distingue correctamente un objetivo alcanzable exactamente en un mes', () => {
+    const base = estadoConPlan({ precioObjetivo: 150_000, ingreso: 5_000, ahorro: 0 });
+    const preliminar = evaluarEncajePlanVivienda(vivienda(150_000), base, '2026-08-08');
+    const objetivo = preliminar.evaluacion?.dineroRecomendado ?? ZERO;
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(150_000),
+      {
+        ...base,
+        perfil: { ...base.perfil, ahorrosActuales: subtractCents(objetivo, toCents(0.01)) },
+      },
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('en_plan');
+    expect(resultado.mesesHastaAlcanzar).toBe(1);
+    expect(resultado.motivo).toMatch(/1 mes\./);
+  });
+
+  it('usa el singular al superar el presupuesto y alcanzarlo exactamente en un mes', () => {
+    const base = estadoConPlan({ precioObjetivo: 100_000, ingreso: 5_000, ahorro: 0 });
+    const preliminar = evaluarEncajePlanVivienda(vivienda(150_000), base, '2026-08-08');
+    const objetivo = preliminar.evaluacion?.dineroRecomendado ?? ZERO;
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(150_000),
+      {
+        ...base,
+        perfil: {
+          ...base.perfil,
+          ahorrosActuales: subtractCents(objetivo, toCents(0.01)),
+        },
+      },
+      '2026-08-08',
+    );
+
+    expect(resultado.estado).toBe('alcanzable');
+    expect(resultado.mesesHastaAlcanzar).toBe(1);
+    expect(resultado.motivo).toMatch(/1 mes\./);
+  });
+
+  it('vuelve a comprobar la cuota con el precio futuro al proyectar el ahorro', () => {
+    const base = estadoConPlan({ precioObjetivo: 130_000, ingreso: 1_500, ahorro: 30_000 });
+    const resultado = evaluarEncajePlanVivienda(
+      vivienda(130_000),
+      {
+        ...base,
+        perfil: {
+          ...base.perfil,
+          gastosFijos: [
+            {
+              id: 'gasto-actual',
+              concepto: 'Gasto mensual',
+              importe: toCents(500),
+              periodicidad: 'mensual',
+            },
+          ],
+        },
+        ajustes: { ...base.ajustes, crecimientoAnualPrecioVivienda: 0.1 },
+      },
+      '2026-08-08',
+    );
+
+    expect(resultado.evaluacion?.ratioBancario).toBeLessThanOrEqual(
+      base.ajustes.ratioBancarioMaximo,
+    );
+    expect(resultado.estado).toBe('no_viable');
+    expect(resultado.limitante).toBe('ingresos');
+    expect(resultado.motivo).toMatch(/precio proyectado/i);
   });
 });

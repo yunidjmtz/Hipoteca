@@ -110,7 +110,9 @@ export function compararViviendas(
 
   if (comparables.length === 0) return [];
 
-  const menorCostePorM2 = Math.min(...comparables.map((vivienda) => vivienda.costePorM2));
+  const disponibles = comparables.filter((datos) => datos.vivienda.yaNoDisponible !== true);
+  const referenciasCoste = disponibles.length > 0 ? disponibles : comparables;
+  const menorCostePorM2 = Math.min(...referenciasCoste.map((vivienda) => vivienda.costePorM2));
 
   return comparables
     .map((datos): ResultadoComparacionVivienda => {

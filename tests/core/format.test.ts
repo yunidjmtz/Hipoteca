@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { formatEuros, formatPorcentaje, formatEntero, formatFecha } from '@/core/format';
+import {
+  formatEuros,
+  formatEurosMientrasSeEscribe,
+  formatPorcentaje,
+  formatEntero,
+  formatFecha,
+} from '@/core/format';
 import { toCents } from '@/core/money';
 
 describe('formatEuros', () => {
@@ -23,6 +29,28 @@ describe('formatEuros', () => {
     const r = formatEuros(toCents(1_000));
     // es-ES muestra siempre 2 decimales: "1.000,00 €" o similar
     expect(r).toMatch(/00/);
+  });
+});
+
+describe('formatEurosMientrasSeEscribe', () => {
+  it('normaliza punto decimal a coma sin alterar los céntimos', () => {
+    expect(formatEurosMientrasSeEscribe('1234.5')).toBe('1.234,5');
+    expect(formatEurosMientrasSeEscribe('1234.50')).toBe('1.234,50');
+  });
+
+  it('conserva los puntos de miles y limita la parte decimal a dos cifras', () => {
+    expect(formatEurosMientrasSeEscribe('1.234')).toBe('1.234');
+    expect(formatEurosMientrasSeEscribe('1.234,567')).toBe('1.234,56');
+  });
+
+  it('elimina símbolos, espacios y ceros iniciales durante la edición', () => {
+    expect(formatEurosMientrasSeEscribe('  0001234,5 €')).toBe('1.234,5');
+    expect(formatEurosMientrasSeEscribe('abc')).toBe('');
+  });
+
+  it('permite escribir temporalmente la coma decimal sin cifras posteriores', () => {
+    expect(formatEurosMientrasSeEscribe('12,')).toBe('12,');
+    expect(formatEurosMientrasSeEscribe('0')).toBe('0');
   });
 });
 

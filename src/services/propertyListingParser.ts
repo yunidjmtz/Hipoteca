@@ -40,6 +40,27 @@ function primeraCoincidencia(texto: string, expresion: RegExp): number | undefin
   return Number.isFinite(resultado) ? resultado : undefined;
 }
 
+function precioVenta(texto: string): number | undefined {
+  const expresion = /(?:^|\s)([\d.]+(?:,\d+)?)\s*€/gm;
+  for (const coincidencia of texto.matchAll(expresion)) {
+    const valor = coincidencia[1];
+    if (valor === undefined || coincidencia.index === undefined) continue;
+    const inicioLinea = texto.lastIndexOf('\n', coincidencia.index) + 1;
+    const finLinea = texto.indexOf('\n', coincidencia.index);
+    const linea = texto.slice(inicioLinea, finLinea === -1 ? undefined : finLinea).toLowerCase();
+    if (
+      /(?:comunidad|ibi|honorarios|reserva|tasación|al mes|mensual)/i.test(linea) ||
+      /€\s*\/?\s*m(?:²|2)\b/i.test(linea)
+    ) {
+      continue;
+    }
+    const resultado = numero(valor);
+    // Evita convertir pequeños gastos aislados en el precio del inmueble.
+    if (Number.isFinite(resultado) && resultado >= 10_000) return resultado;
+  }
+  return undefined;
+}
+
 function caracteristica(texto: string, nombre: string, positivo: RegExp): boolean | undefined {
   const negativa = new RegExp(`(?:sin|no (?:tiene|dispone de)|carece de)\\s+${nombre}`, 'i');
   if (negativa.test(texto)) return false;
@@ -54,13 +75,15 @@ function textoCoincidente(texto: string, expresion: RegExp): string | undefined 
 function limpiarUbicacion(valor: string): string {
   const indiceMapa = valor.toLocaleLowerCase('es').indexOf('ver mapa');
   if (indiceMapa === -1) return valor.trim();
-  return valor
-    .slice(0, indiceMapa)
-    .trim()
-    // El pin puede llegar del OCR como `O)` o como un pictograma.
-    .replace(/\s+[a-z0-9]\)?$/i, '')
-    .replace(/\s+\p{Extended_Pictographic}$/u, '')
-    .trim();
+  return (
+    valor
+      .slice(0, indiceMapa)
+      .trim()
+      // El pin puede llegar del OCR como `O)` o como un pictograma.
+      .replace(/\s+[a-z0-9]\)?$/i, '')
+      .replace(/\s+\p{Extended_Pictographic}$/u, '')
+      .trim()
+  );
 }
 
 function direccionDesdeContexto(texto: string): { title?: string; address?: string } {
@@ -69,18 +92,26 @@ function direccionDesdeContexto(texto: string): { title?: string; address?: stri
     .map((line) => line.trim())
     .filter((line) => line !== '');
   const titleIndex = lines.findIndex((line) =>
-    /\b(?:piso|casa|vivienda|ático|apartamento|chalet|estudio|dúplex)\b.*\b(?:venta|alquiler)\b/i.test(line),
+    /\b(?:piso|casa|vivienda|ático|apartamento|chalet|estudio|dúplex)\b.*\b(?:venta|alquiler)\b/i.test(
+      line,
+    ),
   );
   if (titleIndex === -1) return {};
   const following = lines.slice(titleIndex + 1, titleIndex + 4);
   const addressIndex = following.findIndex((line) => {
     if (/[€]|\b(?:m²|m2|m[?¿*]|habs?(?:itaciones)?|baños?|planta)\b/i.test(line)) return false;
-    return /(?:\b(?:calle|avenida|av\.?|plaza|paseo|pol\.?|barrio|urbanización|capital|ciudad)\b|,)/i.test(line);
+    return /(?:\b(?:calle|avenida|av\.?|plaza|paseo|pol\.?|barrio|urbanización|capital|ciudad)\b|,)/i.test(
+      line,
+    );
   });
   const title = [
     lines[titleIndex],
-    ...following.slice(0, Math.max(addressIndex, 0)).filter((line) => !/[€]|\b\d+\s*(?:m|hab)/i.test(line)),
-  ].filter((line): line is string => line !== undefined).join(' ');
+    ...following
+      .slice(0, Math.max(addressIndex, 0))
+      .filter((line) => !/[€]|\b\d+\s*(?:m|hab)/i.test(line)),
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join(' ');
   const address = addressIndex === -1 ? undefined : following[addressIndex];
   return {
     ...(title === undefined ? {} : { title }),
@@ -102,22 +133,37 @@ export function parsePropertyListing(
     .replace(/\r/g, '\n')
     .replace(/(\d)\s*m[?¿]/gi, '$1 m2');
   const normalized = text.toLowerCase();
-  const result: { -readonly [K in keyof DatosAnuncioNormalizados]?: DatosAnuncioNormalizados[K] } = {};
+  const result: { -readonly [K in keyof DatosAnuncioNormalizados]?: DatosAnuncioNormalizados[K] } =
+    {};
   if (sourcePortal !== undefined) result.sourcePortal = sourcePortal;
 
-  const price = primeraCoincidencia(text, /(?:^|\s)([\d.]+(?:,\d+)?)\s*€(?:\s|$)/m);
+  const price = precioVenta(text);
   if (price !== undefined) result.price = price;
-  const builtArea = primeraCoincidencia(normalized, /(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m[?¿*]|m\b|metros cuadrados)(?:\s+construidos?)?/i);
-  if (builtArea !== undefined) result.builtArea = builtArea;
-  const usableArea = primeraCoincidencia(normalized, /(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m[?¿*]|m\b|metros cuadrados)\s+útiles?/i);
+  const usableArea = primeraCoincidencia(
+    normalized,
+    /(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m[?¿*]|m\b|metros cuadrados)\s+útiles?/i,
+  );
   if (usableArea !== undefined) result.usableArea = usableArea;
+  const builtAreaExplicit = primeraCoincidencia(
+    normalized,
+    /(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m[?¿*]|m\b|metros cuadrados)\s+construidos?/i,
+  );
+  const areaGenerica = primeraCoincidencia(
+    normalized,
+    /(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m[?¿*]|m\b|metros cuadrados)/i,
+  );
+  const builtArea =
+    builtAreaExplicit ??
+    (areaGenerica !== usableArea || usableArea === undefined ? areaGenerica : undefined);
+  if (builtArea !== undefined) result.builtArea = builtArea;
   const rooms = primeraCoincidencia(normalized, /(\d+)\s*(?:habs?\.?|habitaciones|dormitorios)/i);
   if (rooms !== undefined) result.rooms = rooms;
   const bathrooms = primeraCoincidencia(normalized, /(\d+)\s*baños?/i);
   if (bathrooms !== undefined) result.bathrooms = bathrooms;
-  const floor = primeraCoincidencia(normalized, /planta\s*(\d+)(?:ª|º|a|o)?/i)
-    ?? primeraCoincidencia(normalized, /(\d+)(?:ª|º)\s*planta/i)
-    ?? primeraCoincidencia(normalized, /^\s*(\d+)(?:ª|º)\s*(?:planta)?\s*$/im);
+  const floor =
+    primeraCoincidencia(normalized, /planta\s*(\d+)(?:ª|º|a|o)?/i) ??
+    primeraCoincidencia(normalized, /(\d+)(?:ª|º)\s*planta/i) ??
+    primeraCoincidencia(normalized, /^\s*(\d+)(?:ª|º)\s*(?:planta)?\s*$/im);
   if (floor !== undefined) result.floor = floor;
 
   const exterior = /\binterior\b/i.test(normalized)
@@ -130,7 +176,11 @@ export function parsePropertyListing(
   if (terrace !== undefined) result.terrace = terrace;
   const balcony = caracteristica(normalized, 'balcón', /\bbalc[oó]n\b/i);
   if (balcony !== undefined) result.balcony = balcony;
-  const garage = caracteristica(normalized, '(?:garaje|plaza de garaje)', /(?:garaje incluido|plaza de garaje|\bgaraje\b)/i);
+  const garage = caracteristica(
+    normalized,
+    '(?:garaje|plaza de garaje)',
+    /(?:garaje incluido|plaza de garaje|\bgaraje\b)/i,
+  );
   if (garage !== undefined) result.garage = garage;
   const storageRoom = caracteristica(normalized, 'trastero', /\btrastero\b/i);
   if (storageRoom !== undefined) result.storageRoom = storageRoom;
@@ -143,9 +193,15 @@ export function parsePropertyListing(
   if (orientation !== undefined) result.orientation = orientation;
   const condition = textoCoincidente(normalized, /(?:estado|conservación)\s*[:-]?\s*([^\n,.;]+)/i);
   if (condition !== undefined) result.condition = condition;
-  const constructionYear = primeraCoincidencia(normalized, /(?:año de construcción|construido en)\s*[:-]?\s*(\d{4})/i);
+  const constructionYear = primeraCoincidencia(
+    normalized,
+    /(?:año de construcción|construido en)\s*[:-]?\s*(\d{4})/i,
+  );
   if (constructionYear !== undefined) result.constructionYear = constructionYear;
-  const communityFees = primeraCoincidencia(normalized, /(?:gastos? de comunidad|comunidad)\s*[:-]?\s*([\d.]+(?:,\d+)?)\s*€/i);
+  const communityFees = primeraCoincidencia(
+    normalized,
+    /(?:gastos? de comunidad|comunidad)\s*[:-]?\s*([\d.]+(?:,\d+)?)\s*€/i,
+  );
   if (communityFees !== undefined) result.communityFees = communityFees;
   const pricePerM2 = primeraCoincidencia(normalized, /([\d.]+(?:,\d+)?)\s*€\s*\/?\s*m(?:²|2)/i);
   if (pricePerM2 !== undefined) result.pricePerM2 = pricePerM2;

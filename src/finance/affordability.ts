@@ -274,6 +274,12 @@ export function evaluarPrecio(precio: Cents, ctx: ContextoEvaluacion): Evaluacio
 const PASO_GRUESO = toCents(1_000);
 const PASO_FINO = toCents(100);
 
+/** Rango común para que Resumen, Capacidad y Escala no publiquen límites distintos. */
+export const RANGO_BUSQUEDA_CAPACIDAD = {
+  min: toCents(50_000),
+  max: toCents(10_000_000),
+} as const;
+
 export function buscarPrecioMaximo(
   predicado: (e: EvaluacionPrecio) => boolean,
   ctxFactory: ContextoEvaluacion | ((precio: Cents) => ContextoEvaluacion),
@@ -284,19 +290,34 @@ export function buscarPrecioMaximo(
   type Intervalo = { desde: Cents; hasta: Cents };
   const intervalosViables: Intervalo[] = [];
   let inicioIntervalo: Cents | null = null;
+  let ultimoPuntoEvaluado: Cents | null = null;
+
+  if (rango.min > rango.max) {
+    return { precioMaximo: null, intervalosViables: [], hayDiscontinuidad: false };
+  }
+
+  const puntosGruesos: Cents[] = [];
+  for (let p: Cents = rango.min; p <= rango.max; p = addCents(p, PASO_GRUESO)) {
+    puntosGruesos.push(p);
+  }
+  if (puntosGruesos.at(-1) !== rango.max) puntosGruesos.push(rango.max);
 
   // Barrido grueso de 1.000 € en 1.000 €
-  for (let p: Cents = rango.min; p <= rango.max; p = addCents(p, PASO_GRUESO)) {
+  for (const p of puntosGruesos) {
     const viable = predicado(evaluarPrecio(p, resolverCtx(p)));
     if (viable && inicioIntervalo === null) {
       inicioIntervalo = p;
     } else if (!viable && inicioIntervalo !== null) {
-      intervalosViables.push({ desde: inicioIntervalo, hasta: subtractCents(p, PASO_GRUESO) });
+      intervalosViables.push({
+        desde: inicioIntervalo,
+        hasta: ultimoPuntoEvaluado ?? inicioIntervalo,
+      });
       inicioIntervalo = null;
     }
+    ultimoPuntoEvaluado = p;
   }
-  if (inicioIntervalo !== null) {
-    intervalosViables.push({ desde: inicioIntervalo, hasta: rango.max });
+  if (inicioIntervalo !== null && ultimoPuntoEvaluado !== null) {
+    intervalosViables.push({ desde: inicioIntervalo, hasta: ultimoPuntoEvaluado });
   }
 
   if (intervalosViables.length === 0) {

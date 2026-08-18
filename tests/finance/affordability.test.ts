@@ -132,7 +132,7 @@ function ctx(opciones?: {
     estadoVivienda: 'usada',
     esVpoEspecial: false,
     reduccion: {
-      edadMenorTitular: opciones?.edad ?? 35,
+      edadMaximaTitular: opciones?.edad ?? 35,
       discapacidadPorcentaje: 0,
       victimaViolenciaGenero: false,
       familiaNumerosa: false,
@@ -163,6 +163,14 @@ describe('calcularIngresoMensualNormalizado — R3', () => {
     const t2 = titular(1_500, 14);
     // 2.000 + 1.500 × 14/12 = 2.000 + 1.750 = 3.750
     expect(calcularIngresoMensualNormalizado([t1, t2])).toBe(toCents(3_750));
+  });
+
+  it('tres titulares: incluye los tres ingresos y sus pagas', () => {
+    const t1 = titular(2_000, 12);
+    const t2 = titular(1_500, 14);
+    const t3 = titular(900, 12);
+    // 2.000 + 1.750 + 900 = 4.650 €/mes
+    expect(calcularIngresoMensualNormalizado([t1, t2, t3])).toBe(toCents(4_650));
   });
 });
 
@@ -238,6 +246,14 @@ describe('calcularPlazoEfectivo — R4', () => {
     const titulares = [titular(2_000, 12, 50), titular(2_000, 12, 35)];
     // Titular más joven = 35 → max plazo = 40 años; solicitado = 30 → 30
     expect(calcularPlazoEfectivo(30, ajustes, titulares)).toBe(30);
+  });
+
+  it('aplica el criterio de edad configurado con tres titulares', () => {
+    const titulares = [titular(2_000, 12, 30), titular(1_500, 14, 40), titular(900, 12, 50)];
+    const criterioMenor: Ajustes = { ...AJUSTES_STD, criterioEdad: 'menor' };
+
+    expect(calcularPlazoEfectivo(30, AJUSTES_STD, titulares)).toBe(25);
+    expect(calcularPlazoEfectivo(30, criterioMenor, titulares)).toBe(30);
   });
 });
 
@@ -431,5 +447,26 @@ describe('buscarPrecioMaximo — R16', () => {
       );
       expect(predicado(evaluacion)).toBe(true);
     }
+  });
+
+  it('evalúa el máximo aunque el rango no esté alineado a pasos de 1.000 €', () => {
+    const limite = toCents(100_020);
+    const resultado = buscarPrecioMaximo(
+      (evaluacion) => evaluacion.precio <= limite,
+      ctx({ precio: 100_000, ingresoNeto: 3_000, ahorro: 120_000 }),
+      { min: toCents(100_000), max: toCents(100_050) },
+    );
+
+    expect(resultado.precioMaximo).not.toBeNull();
+    expect(resultado.precioMaximo).toBeLessThanOrEqual(limite);
+  });
+
+  it('devuelve vacío si el rango está invertido', () => {
+    expect(
+      buscarPrecioMaximo(() => true, ctx({ precio: 100_000 }), {
+        min: toCents(200_000),
+        max: toCents(100_000),
+      }),
+    ).toEqual({ precioMaximo: null, intervalosViables: [], hayDiscontinuidad: false });
   });
 });

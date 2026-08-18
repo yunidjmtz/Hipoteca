@@ -76,6 +76,8 @@ export interface InputAmortizacionAnticipada {
   opcion: OpcionAmortizacion;
   /** Decimal; de EscenarioHipoteca.comisiones.amortizacionParcial. */
   comisionParcial: number;
+  /** Decimal; se aplica si la aportación cancela todo el capital pendiente. */
+  comisionTotal?: number;
 }
 
 export interface ResultadoAmortizacion {
@@ -84,7 +86,10 @@ export interface ResultadoAmortizacion {
   interesesOriginales: Cents;
   interesesAmortizados: Cents;
   ahorroIntereses: Cents;
-  /** ahorroIntereses − comision */
+  costesVinculadosOriginales: Cents;
+  costesVinculadosAmortizados: Cents;
+  ahorroCostesVinculados: Cents;
+  /** ahorroIntereses + ahorroCostesVinculados − comision */
   ahorroNeto: Cents;
   nuevaCuota: Cents | null;
   nuevoNumCuotas: number | null;
@@ -187,8 +192,12 @@ export function simularAmortizacionAnticipada(
     let amortizacionExtraordinaria = ZERO;
     if (aportacion > ZERO) {
       const importeEfectivo = minCents(aportacion, pendiente);
+      const cancelaTotalmente = importeEfectivo >= pendiente;
       amortizacionExtraordinaria = importeEfectivo;
-      comisionMes = centsRoundHalfUp(importeEfectivo * amort.comisionParcial);
+      const tipoComision = cancelaTotalmente
+        ? (amort.comisionTotal ?? amort.comisionParcial)
+        : amort.comisionParcial;
+      comisionMes = centsRoundHalfUp(importeEfectivo * tipoComision);
       comision = addCents(comision, comisionMes);
       pendiente = subtractCents(pendiente, importeEfectivo);
 
@@ -252,7 +261,17 @@ export function simularAmortizacionAnticipada(
 
   const interesesAmortizados = sumCents(lineas.slice(1).map((l) => l.intereses));
   const ahorroIntereses = subtractCents(interesesOriginales, interesesAmortizados);
-  const ahorroNeto = subtractCents(ahorroIntereses, comision);
+  const costesVinculadosOriginales = sumCents(
+    flujoOriginal.slice(1).map((linea) => linea.costesVinculados),
+  );
+  const costesVinculadosAmortizados = sumCents(
+    lineas.slice(1).map((linea) => linea.costesVinculados),
+  );
+  const ahorroCostesVinculados = subtractCents(
+    costesVinculadosOriginales,
+    costesVinculadosAmortizados,
+  );
+  const ahorroNeto = subtractCents(addCents(ahorroIntereses, ahorroCostesVinculados), comision);
 
   return {
     flujoAmortizado: lineas,
@@ -260,6 +279,9 @@ export function simularAmortizacionAnticipada(
     interesesOriginales,
     interesesAmortizados,
     ahorroIntereses,
+    costesVinculadosOriginales,
+    costesVinculadosAmortizados,
+    ahorroCostesVinculados,
     ahorroNeto,
     nuevaCuota: amort.opcion === 'cuota' ? nuevaCuota : null,
     nuevoNumCuotas: amort.opcion === 'plazo' ? plazoEfectivo : null,

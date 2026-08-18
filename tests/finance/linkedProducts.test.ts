@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { analizarVinculacion, tinEfectivoConVinculaciones } from '@/finance/linkedProducts';
+import { calcularCosteVinculacionMes, construirFlujoDeCaja } from '@/finance/mortgage';
 import { toCents, ZERO } from '@/core/money';
 import type { FlujoInput, ProductoVinculado } from '@/domain/types';
 
@@ -148,6 +149,38 @@ describe('analizarVinculacion', () => {
 
     // Coste total máximo = 5 años * 600 €/año = 3.000 €
     expect(analisis.costeTotalCents).toBeLessThanOrEqual(toCents(3_000) + 1);
+  });
+
+  it('calcula el punto de equilibrio con el ahorro real de cuotas', () => {
+    const v = vinculacionBase({
+      bonificacionTin: 0.005,
+      costeInicial: toCents(100),
+      costeAnual: toCents(200),
+    });
+    const input: FlujoInput = {
+      ...flujoFijoBase(150_000, 0.04, 25),
+      vinculaciones: [v],
+    };
+    const analisis = analizarVinculacion(v, input);
+    expect(analisis.puntoEquilibrioMeses).not.toBeNull();
+
+    const flujoCon = construirFlujoDeCaja(input);
+    const flujoSin = construirFlujoDeCaja({
+      ...input,
+      vinculaciones: [{ ...v, activo: false }],
+    });
+    const saldoHasta = (mes: number) => {
+      let saldo: number = 0 - v.costeInicial;
+      for (let k = 1; k <= mes; k++) {
+        saldo += (flujoSin[k]?.cuota ?? ZERO) - (flujoCon[k]?.cuota ?? ZERO);
+        saldo -= calcularCosteVinculacionMes(v, k);
+      }
+      return saldo;
+    };
+    const equilibrio = analisis.puntoEquilibrioMeses ?? 0;
+
+    expect(saldoHasta(equilibrio)).toBeGreaterThanOrEqual(0);
+    if (equilibrio > 1) expect(saldoHasta(equilibrio - 1)).toBeLessThan(0);
   });
 
   it('tinEfectivoConVinculaciones aplica bonificaciones correctamente', () => {

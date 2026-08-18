@@ -42,7 +42,7 @@ const APARTADOS: readonly ApartadoManual[] = [
       'Es la base de todos los cálculos. Los cambios se reflejan automáticamente en el resto de secciones.',
     pasos: [
       'En Vivienda, indica el precio objetivo, comunidad autónoma, si es nueva o usada y el destino. Añade el valor de referencia si lo conoces: puede afectar a los impuestos.',
-      'En Titulares, introduce el neto de cada paga, 12 o 14 pagas, edad y situación laboral. Añade un segundo titular solo si compra contigo.',
+      'En Titulares, introduce el neto de cada paga, 12 o 14 pagas, edad y situación laboral. Añade hasta dos titulares más si compran contigo.',
       'En Otros ingresos, incorpora importes periódicos como alquileres o pensiones con su periodicidad.',
       'En Deudas y gastos, registra cuotas de préstamos, tarjetas y gastos fijos. Marca el alquiler actual para excluirlo al estimar la vida tras la compra.',
       'Guarda al terminar cada pestaña. Puedes volver a modificar cualquier dato.',

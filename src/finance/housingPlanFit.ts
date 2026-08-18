@@ -18,7 +18,7 @@ import {
 } from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
 import { capitalDesdeCuota } from '@/finance/mortgage';
-import { mesesHastaObjetivo } from '@/finance/savingsGoal';
+import { proyectarAhorro } from '@/finance/savingsGoal';
 import type { EstadoPersistido, EvaluacionPrecio, ViviendaGuardada } from '@/domain/types';
 
 /** El mismo horizonte que se muestra en el plan de ahorro. */
@@ -106,7 +106,18 @@ export function evaluarEncajePlanVivienda(
     };
   }
 
-  const mesesHastaAlcanzar = mesesHastaObjetivo({
+  const evaluacionesPorMes = new Map<number, EvaluacionPrecio>([[0, evaluacion]]);
+  const evaluacionEnMes = (mes: number): EvaluacionPrecio => {
+    const existente = evaluacionesPorMes.get(mes);
+    if (existente !== undefined) return existente;
+
+    const factorPrecio = Math.pow(1 + estado.ajustes.crecimientoAnualPrecioVivienda, mes / 12);
+    const precioFuturo = multiplyCents(vivienda.precioVenta, factorPrecio);
+    const futura = evaluarPrecio(precioFuturo, construirContexto(estadoConReforma, precioFuturo));
+    evaluacionesPorMes.set(mes, futura);
+    return futura;
+  };
+  const proyeccion = proyectarAhorro({
     ahorroInicial: estado.perfil.ahorrosActuales,
     ahorroMensual: calcularCapacidadAhorroActual(estado.perfil),
     extraordinarios: estado.perfil.ingresosExtraordinarios,
@@ -115,17 +126,28 @@ export function evaluarEncajePlanVivienda(
     crecimientoAnualPrecio: estado.ajustes.crecimientoAnualPrecioVivienda,
     rentabilidadAnualAhorro: estado.ajustes.rentabilidadAnualAhorro,
     mesesMaximos: HORIZONTE_PLAN_MESES,
+    objetivoEnMes: (mes) => evaluacionEnMes(mes).dineroRecomendado,
   });
+  const primerMesConAhorro = proyeccion.find((punto) => punto.diferencia >= ZERO);
+  const primerMesViable = proyeccion.find(
+    (punto) =>
+      punto.diferencia >= ZERO &&
+      evaluacionEnMes(punto.mes).ratioBancario <= estado.ajustes.ratioBancarioMaximo,
+  );
+  const mesesHastaAlcanzar = primerMesViable?.mes ?? null;
 
   if (mesesHastaAlcanzar === null) {
+    const precioFuturoLimitaIngresos = primerMesConAhorro !== undefined;
     return {
       estado: 'no_viable',
-      limitante: 'ahorro',
+      limitante: precioFuturoLimitaIngresos ? 'ingresos' : 'ahorro',
       presupuestoPlanificado,
       diferenciaPresupuesto,
       mesesHastaAlcanzar,
       prestamoMaximoPorIngresos,
-      motivo: `No se reúne el desembolso recomendado en los próximos ${HORIZONTE_PLAN_MESES / 12} años con tu capacidad de ahorro actual.`,
+      motivo: precioFuturoLimitaIngresos
+        ? 'El ahorro alcanzaría el desembolso, pero el precio proyectado elevaría la cuota por encima del límite bancario.'
+        : `No se reúne el desembolso recomendado en los próximos ${HORIZONTE_PLAN_MESES / 12} años con tu capacidad de ahorro actual.`,
       evaluacion,
     };
   }

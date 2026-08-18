@@ -19,6 +19,7 @@ import {
   exportarJSON,
   guardarEstadoAhora,
   guardarEstadoConDebounce,
+  guardarEstadoPendienteAhora,
   importarJSON,
   limpiarDatosConservandoConfiguracion,
   obtenerDatosRecuperacion,
@@ -42,7 +43,9 @@ interface AccionesEstado {
   actualizarAjustes: (cambios: Partial<Ajustes>) => void;
   actualizarEscenarioSimulador: (cambios: Partial<EscenarioHipoteca>) => void;
   actualizarOfertas: (ofertas: OfertaBancaria[]) => void;
-  actualizarViviendas: (viviendas: ViviendaGuardada[]) => void;
+  actualizarViviendas: (
+    viviendas: ViviendaGuardada[] | ((viviendasActuales: ViviendaGuardada[]) => ViviendaGuardada[]),
+  ) => void;
   actualizarInmobiliariaActivaDemo: (inmobiliaria: InmobiliariaActivaDemo | null) => void;
   exportarDatos: () => string;
   confirmarCopiaDescargada: () => void;
@@ -81,6 +84,7 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
   const copiaSeguridadPendiente = hayCopiaSeguridadPendiente();
 
   const registrarCambioSinCopia = useCallback(() => {
+    setEstadoPersistencia('guardando');
     marcarCopiaSeguridadPendiente();
     actualizarRevisionCopiaSeguridad();
   }, []);
@@ -116,6 +120,25 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
       setEstadoPersistencia(guardado ? 'guardado' : 'error'),
     );
   }, [estado]);
+
+  // Los navegadores pueden cancelar temporizadores al ocultar, recargar o
+  // cerrar la página. Fuerza el último estado pendiente antes de suspenderla.
+  useEffect(() => {
+    function guardarAntesDeSalir() {
+      guardarEstadoPendienteAhora();
+    }
+
+    function guardarAlOcultar() {
+      if (document.visibilityState === 'hidden') guardarAntesDeSalir();
+    }
+
+    window.addEventListener('pagehide', guardarAntesDeSalir);
+    document.addEventListener('visibilitychange', guardarAlOcultar);
+    return () => {
+      window.removeEventListener('pagehide', guardarAntesDeSalir);
+      document.removeEventListener('visibilitychange', guardarAlOcultar);
+    };
+  }, []);
 
   useEffect(() => {
     if (estado.ajustes.tinFuente !== 'ine') return;
@@ -225,8 +248,14 @@ export function EstadoProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const actualizarViviendas = useCallback(
-    (viviendas: ViviendaGuardada[]) => {
-      setEstado((prev) => ({ ...prev, viviendas }));
+    (
+      viviendas:
+        ViviendaGuardada[] | ((viviendasActuales: ViviendaGuardada[]) => ViviendaGuardada[]),
+    ) => {
+      setEstado((prev) => ({
+        ...prev,
+        viviendas: typeof viviendas === 'function' ? viviendas(prev.viviendas) : viviendas,
+      }));
       registrarCambioSinCopia();
     },
     [registrarCambioSinCopia],

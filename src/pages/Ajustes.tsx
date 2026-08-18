@@ -279,7 +279,7 @@ export function Ajustes() {
         nombre: inmobiliaria.nombre,
         marca: inmobiliaria.marca,
       });
-      if (apiHipotecasConfigurada()) guardarCodigoInmobiliariaApi(codigoInmobiliaria);
+      if (apiHipotecasConfigurada()) guardarCodigoInmobiliariaApi(null);
       setMostrarVinculoInmobiliaria(false);
     } catch (error) {
       setErrorCodigoInmobiliaria(

@@ -50,6 +50,8 @@ npx.cmd --yes supabase functions deploy hipotecas-api --project-ref imkkagpmacwq
 - URL base de la API:
   `https://imkkagpmacwqzymmjvai.supabase.co/functions/v1/hipotecas-api`
 - Rutas actuales:
+  - `POST /v1/auth/anonymous`
+  - `POST /v1/auth/refresh`
   - `POST /v1/auth/sign-up`
   - `POST /v1/auth/sign-in`
   - `POST /v1/agency-links/preview`
@@ -60,10 +62,23 @@ npx.cmd --yes supabase functions deploy hipotecas-api --project-ref imkkagpmacwq
 - La función gestiona rutas públicas y JWT manualmente. Mantener
   `verify_jwt = false` en `supabase/config.toml`; las rutas protegidas deben
   validar el token y operar con un cliente Supabase con el JWT del usuario.
+- El flujo cliente sin cuenta usa una sesión anónima de Supabase. Producción
+  tiene **Allow anonymous sign-ins** activo desde el 18 de agosto de 2026 y el
+  límite nativo explícito de 30 altas anónimas por hora e IP. CAPTCHA/Turnstile
+  sigue siendo una mejora recomendada cuando haya claves del proveedor.
+- No usar `supabase config push` con el `config.toml` mínimo del repositorio:
+  también intenta sincronizar valores locales no declarados y servicios de
+  Storage dependientes del plan. Cambiar Auth de forma dirigida mediante el
+  Dashboard o la Management API y verificar después URL, MFA y correo.
 - El canje de código se realiza de forma atómica mediante la función SQL remota
   `redeem_agency_invitation_code`. Respeta siempre RLS: clientes solo ven el
   catálogo publicado de su inmobiliaria vinculada y agentes solo operan su
   propia inmobiliaria.
+- Las correcciones de `supabase/sql/agency-operations.sql`,
+  `supabase/sql/superadmin-operations.sql` y `supabase/sql/rls-hardening.sql`
+  están aplicadas en producción desde el 18 de agosto de 2026. Las políticas
+  antiguas de vínculos, favoritos y códigos ya no existen; no volver a aplicar
+  los ficheros salvo que un cambio concreto lo requiera y se haya revisado.
 
 ## Frontend y variables de entorno
 

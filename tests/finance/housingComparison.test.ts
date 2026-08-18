@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toCents, ZERO } from '@/core/money';
 import { compararViviendas, PESOS_VIVIENDA } from '@/finance/housingComparison';
-import type { ViviendaGuardada } from '@/domain/types';
+import type { EstadoPersistido, ViviendaGuardada } from '@/domain/types';
 import { ESTADO_INICIAL } from '@/storage/defaults';
 
 function crearVivienda(
@@ -80,6 +80,10 @@ describe('compararViviendas', () => {
     expect(resultados[0]?.vivienda.id).toBe('completa');
   });
 
+  it('devuelve una lista vacía si ninguna vivienda tiene precio y superficie válidos', () => {
+    expect(compararViviendas([crearVivienda('sin-datos', 0, 0)])).toEqual([]);
+  });
+
   it('desempata a favor del menor coste total', () => {
     const pequena = crearVivienda('pequena', 100_000, 50);
     const grande = crearVivienda('grande', 200_000, 100);
@@ -121,12 +125,83 @@ describe('compararViviendas', () => {
     expect(resultado?.esRecomendable).toBe(false);
   });
 
+  it('evalúa conjuntamente habitaciones, baños y extras solicitados', () => {
+    const piso = {
+      ...crearVivienda('parcial', 150_000, 80, { esExterior: true, tieneGaraje: false }),
+      habitaciones: 3,
+      banos: 2,
+    };
+    const estado = {
+      ...ESTADO_INICIAL,
+      preferencias: {
+        ...ESTADO_INICIAL.preferencias,
+        habitacionesMinimas: 3,
+        banosMinimos: 2,
+        exterior: true,
+        garaje: true,
+        trastero: false,
+      },
+    };
+
+    const resultado = compararViviendas([piso], estado)[0];
+    expect(resultado?.criteriosNecesidadesCumplidos).toBe(3);
+    expect(resultado?.criteriosNecesidadesTotales).toBe(4);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades * 0.75);
+    expect(resultado?.esRecomendable).toBe(false);
+  });
+
+  it('otorga todos los puntos de necesidades si no se ha exigido ninguna', () => {
+    const estado = {
+      ...ESTADO_INICIAL,
+      preferencias: {
+        ...ESTADO_INICIAL.preferencias,
+        habitacionesMinimas: 0,
+        banosMinimos: 0,
+        exterior: false,
+        garaje: false,
+        trastero: false,
+      },
+    };
+    const resultado = compararViviendas([crearVivienda('neutral', 150_000, 80)], estado)[0];
+
+    expect(resultado?.criteriosNecesidadesTotales).toBe(0);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
+  });
+
+  it('reduce el encaje financiero cuando falta definir el presupuesto del plan', () => {
+    const estado: EstadoPersistido = {
+      ...ESTADO_INICIAL,
+      preferencias: { ...ESTADO_INICIAL.preferencias, precioObjetivo: ZERO },
+      perfil: {
+        ...ESTADO_INICIAL.perfil,
+        titulares: [{ ...ESTADO_INICIAL.perfil.titulares[0], netoPorPaga: toCents(5_000) }],
+        ahorrosActuales: toCents(500_000),
+      },
+    };
+    const resultado = compararViviendas([crearVivienda('sin-plan', 100_000, 80)], estado)[0];
+
+    expect(resultado?.encajePlan?.estado).toBe('sin_presupuesto');
+    expect(resultado?.desglose.encajeFinanciero).toBe(PESOS_VIVIENDA.encajeFinanciero * 0.5);
+  });
+
   it('prioriza una vivienda disponible frente a otra retirada del mercado', () => {
     const retirada = { ...crearVivienda('retirada', 100_000, 100), yaNoDisponible: true };
     const disponible = crearVivienda('disponible', 180_000, 100);
     const resultados = compararViviendas([retirada, disponible]);
 
     expect(resultados[0]?.vivienda.id).toBe('disponible');
+    expect(resultados[0]?.desglose.costePorM2).toBe(PESOS_VIVIENDA.costePorM2);
     expect(resultados.find((item) => item.vivienda.id === 'retirada')?.esRecomendable).toBe(false);
+  });
+
+  it('mantiene una referencia económica válida si todas están retiradas', () => {
+    const barata = { ...crearVivienda('barata', 100_000, 100), yaNoDisponible: true };
+    const cara = { ...crearVivienda('cara', 200_000, 100), yaNoDisponible: true };
+    const resultados = compararViviendas([cara, barata]);
+
+    expect(resultados.find((item) => item.vivienda.id === 'barata')?.desglose.costePorM2).toBe(
+      PESOS_VIVIENDA.costePorM2,
+    );
+    expect(resultados.every((item) => !item.esRecomendable)).toBe(true);
   });
 });

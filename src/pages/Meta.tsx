@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useEstado } from '@/app/EstadoProvider';
 import { addMonthsAnchored, fechaLocalISO } from '@/core/dates';
 import { formatEuros, formatFecha } from '@/core/format';
-import { maxCents, subtractCents, ZERO } from '@/core/money';
+import { maxCents, multiplyCents, subtractCents, ZERO } from '@/core/money';
 import { calcularCapacidadAhorroActual, evaluarPrecio } from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
 import { mesesHastaObjetivo, proyectarAhorro } from '@/finance/savingsGoal';
@@ -83,8 +83,13 @@ export function Meta() {
       crecimientoAnualPrecio: ajustes.crecimientoAnualPrecioVivienda,
       rentabilidadAnualAhorro: ajustes.rentabilidadAnualAhorro,
       mesesMaximos: 120,
+      objetivoEnMes: (mes: number) => {
+        const factorPrecio = Math.pow(1 + ajustes.crecimientoAnualPrecioVivienda, mes / 12);
+        const precioFuturo = multiplyCents(preferencias.precioObjetivo, factorPrecio);
+        return evaluarPrecio(precioFuturo, construirContexto(estado, precioFuturo)).dineroMinimo;
+      },
     }),
-    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo, hoy],
+    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo, hoy, preferencias, estado],
   );
 
   const meses = useMemo(() => mesesHastaObjetivo(proyeccionInput), [proyeccionInput]);

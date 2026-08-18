@@ -53,11 +53,60 @@ describe('proyectarAhorro', () => {
         mesesMaximos: 6,
       }),
     );
-    // Mes 0: 20.000; mes 1: 20.000; mes 2: 20.000; mes 3 (2024-03): 25.000
-    const mes2 = p[2]; // 2024-03 starts at mes=2 (0=ene, 1=feb, 2=mar)
-    const mes3 = p[3];
-    expect(mes3!.ahorroAcumulado).toBeGreaterThan(mes2!.ahorroAcumulado);
-    expect(mes3!.ahorroAcumulado - mes2!.ahorroAcumulado).toBe(toCents(5_000));
+    // Mes 0: 20.000; mes 1: 20.000; mes 2 (2024-03-01): 25.000.
+    const febrero = p[1];
+    const marzo = p[2];
+    expect(marzo!.ahorroAcumulado).toBeGreaterThan(febrero!.ahorroAcumulado);
+    expect(marzo!.ahorroAcumulado - febrero!.ahorroAcumulado).toBe(toCents(5_000));
+  });
+
+  it('aplica un ingreso intermedio en el primer corte posterior a su fecha', () => {
+    const p = proyectarAhorro(
+      inputBase({
+        ahorroMensual: ZERO,
+        extraordinarios: [
+          { id: '1', concepto: 'Bonus', importe: toCents(1_000), fecha: '2024-02-10' },
+        ],
+        fechaInicio: '2024-01-15',
+        mesesMaximos: 2,
+      }),
+    );
+
+    expect(p[1]?.fecha).toBe('2024-02-15');
+    expect(p[1]?.ahorroAcumulado).toBe(toCents(21_000));
+  });
+
+  it('no vuelve a sumar ingresos anteriores o iguales al inicio de la proyección', () => {
+    const p = proyectarAhorro(
+      inputBase({
+        ahorroMensual: ZERO,
+        extraordinarios: [
+          { id: 'pasado', concepto: 'Ya cobrado', importe: toCents(3_000), fecha: '2024-01-10' },
+          { id: 'hoy', concepto: 'Incluido hoy', importe: toCents(2_000), fecha: '2024-01-15' },
+        ],
+        fechaInicio: '2024-01-15',
+        mesesMaximos: 2,
+      }),
+    );
+
+    expect(p.every((punto) => punto.ahorroAcumulado === toCents(20_000))).toBe(true);
+  });
+
+  it('permite recalcular un objetivo desglosado en cada mes', () => {
+    const p = proyectarAhorro(
+      inputBase({
+        precioObjetivo: toCents(40_000),
+        crecimientoAnualPrecio: 0.25,
+        mesesMaximos: 2,
+        objetivoEnMes: (mes) => toCents(40_000 + mes * 1_500),
+      }),
+    );
+
+    expect(p.map((punto) => punto.objetivoCreciente)).toEqual([
+      toCents(40_000),
+      toCents(41_500),
+      toCents(43_000),
+    ]);
   });
 });
 

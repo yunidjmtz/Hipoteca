@@ -3,7 +3,8 @@ import { parsePropertyListing } from '@/services/propertyListingParser';
 
 describe('parsePropertyListing', () => {
   it('interpreta un anuncio típico de Idealista sin inventar características', () => {
-    const resultado = parsePropertyListing(`199.900 €
+    const resultado = parsePropertyListing(
+      `199.900 €
 75 m²
 3 hab.
 1 baño
@@ -11,12 +12,23 @@ Planta 1ª exterior con ascensor
 Terraza
 Trastero
 Calefacción central
-Aire acondicionado`, 'idealista');
+Aire acondicionado`,
+      'idealista',
+    );
 
     expect(resultado).toMatchObject({
-      sourcePortal: 'idealista', price: 199900, builtArea: 75, rooms: 3, bathrooms: 1,
-      floor: 1, exterior: true, elevator: true, terrace: true, storageRoom: true,
-      heating: 'central', airConditioning: true,
+      sourcePortal: 'idealista',
+      price: 199900,
+      builtArea: 75,
+      rooms: 3,
+      bathrooms: 1,
+      floor: 1,
+      exterior: true,
+      elevator: true,
+      terrace: true,
+      storageRoom: true,
+      heating: 'central',
+      airConditioning: true,
     });
     expect(resultado.garage).toBeUndefined();
   });
@@ -32,8 +44,14 @@ Balcón
 Calefacción individual de gas natural`);
 
     expect(resultado).toMatchObject({
-      price: 185000, builtArea: 82, rooms: 3, bathrooms: 2, floor: 2,
-      elevator: true, balcony: true, heating: 'individual de gas natural',
+      price: 185000,
+      builtArea: 82,
+      rooms: 3,
+      bathrooms: 2,
+      floor: 2,
+      elevator: true,
+      balcony: true,
+      heating: 'individual de gas natural',
     });
   });
 
@@ -43,12 +61,19 @@ Calefacción individual de gas natural`);
 
     expect(sinDatos.elevator).toBeUndefined();
     expect(sinDatos.garage).toBeUndefined();
-    expect(negativos).toMatchObject({ exterior: false, elevator: false, terrace: false, garage: false });
+    expect(negativos).toMatchObject({
+      exterior: false,
+      elevator: false,
+      terrace: false,
+      garage: false,
+    });
   });
 
   it('reconoce garaje, trastero, exterior e interior', () => {
     expect(parsePropertyListing('Exterior · plaza de garaje · trastero')).toMatchObject({
-      exterior: true, garage: true, storageRoom: true,
+      exterior: true,
+      garage: true,
+      storageRoom: true,
     });
     expect(parsePropertyListing('Interior')).toMatchObject({ exterior: false });
   });
@@ -96,5 +121,26 @@ Pol Universidad Romareda, Zaragoza O) Ver mapa
 319.000 €`);
 
     expect(resultado.address).toBe('Pol Universidad Romareda, Zaragoza');
+  });
+
+  it('no confunde comunidad ni precio por metro cuadrado con el precio de venta', () => {
+    const resultado = parsePropertyListing(`Comunidad: 120 € al mes
+2.500 € / m²
+Precio de venta
+200.000 €`);
+
+    expect(resultado.price).toBe(200_000);
+    expect(resultado.communityFees).toBe(120);
+    expect(resultado.pricePerM2).toBe(2_500);
+  });
+
+  it('prioriza la superficie construida cuando también aparece la útil', () => {
+    const resultado = parsePropertyListing(`Piso en venta
+65 m² útiles
+80 m² construidos
+200.000 €`);
+
+    expect(resultado.usableArea).toBe(65);
+    expect(resultado.builtArea).toBe(80);
   });
 });

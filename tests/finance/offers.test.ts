@@ -127,6 +127,17 @@ describe('compararOfertas', () => {
     expect(marcada?.oferta.id).toBe('b');
   });
 
+  it('ignora una TAE oficial cero heredada de datos antiguos', () => {
+    const sinTae: OfertaBancaria = { ...crearOferta('sin-tae', 0.025, 150_000, 25), taeOficial: 0 };
+    const conTae: OfertaBancaria = {
+      ...crearOferta('con-tae', 0.03, 150_000, 25),
+      taeOficial: 0.034,
+    };
+    const resultados = compararOfertas([sinTae, conTae]);
+
+    expect(resultados.find((r) => r.esLaMenorTaeOficial)?.oferta.id).toBe('con-tae');
+  });
+
   it('puntúa la flexibilidad y las vinculaciones obligatorias activas', () => {
     const flexible = crearOferta('flexible', 0.03, 150_000, 25);
     const rigidaBase = crearOferta('rigida', 0.03, 150_000, 25);
@@ -180,6 +191,23 @@ describe('compararOfertas', () => {
     );
 
     expect(resultados.every((resultado) => resultado.puntuacion <= 100)).toBe(true);
+  });
+
+  it('usa los pesos por defecto si todos los pesos configurados son cero', () => {
+    const ofertas = [crearOferta('a', 0.025, 150_000, 25), crearOferta('b', 0.045, 150_000, 25)];
+    const conPesosCero = compararOfertas(ofertas, {
+      costeReal: 0,
+      cuota: 0,
+      desembolsoInicial: 0,
+      resiliencia: 0,
+      flexibilidad: 0,
+      vinculaciones: 0,
+    });
+    const porDefecto = compararOfertas(ofertas);
+
+    expect(conPesosCero.map((resultado) => resultado.puntuacion)).toEqual(
+      porDefecto.map((resultado) => resultado.puntuacion),
+    );
   });
 
   it('no convierte una diferencia mínima de coste en una puntuación de cero', () => {
@@ -247,7 +275,18 @@ describe('compararOfertas', () => {
     const resultados = compararOfertas([rechazada, vigente]);
 
     expect(resultados[0]?.oferta.id).toBe('vigente');
+    expect(resultados[0]?.puntuacion).toBeCloseTo(100, 1);
     expect(resultados.find((item) => item.oferta.id === 'rechazada')?.esMejorGlobal).toBe(false);
+  });
+
+  it('mantiene una comparación informativa cuando todas las ofertas están rechazadas', () => {
+    const primera = { ...crearOferta('r1', 0.025, 150_000, 25), estado: 'rechazada' as const };
+    const segunda = { ...crearOferta('r2', 0.035, 150_000, 25), estado: 'rechazada' as const };
+    const resultados = compararOfertas([primera, segunda]);
+
+    expect(resultados).toHaveLength(2);
+    expect(resultados.every((resultado) => !resultado.esAptaParaRecomendacion)).toBe(true);
+    expect(resultados.every((resultado) => !resultado.esMejorGlobal)).toBe(true);
   });
 
   it('no recomienda una oferta que incumple el esfuerzo en el escenario adverso', () => {

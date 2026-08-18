@@ -268,23 +268,7 @@ export function compararOfertas(
     metricas: calcularMetricasOferta(o, contexto),
   }));
 
-  const minCuota = Math.min(...todos.map((m) => m.metricas.cuotaInicial));
-  const minCoste = Math.min(...todos.map((m) => m.metricas.costeRealTotal));
-  const minDesemb = Math.min(...todos.map((m) => m.metricas.desembolsoInicial));
-
-  const resultados: ResultadoComparacion[] = todos.map(({ oferta, metricas }) => {
-    const puntuaciones: Record<keyof PesosComparacion, number> = {
-      costeReal: puntuarRespectoAlMejor(metricas.costeRealTotal, minCoste, toCents(10_000)),
-      cuota: puntuarRespectoAlMejor(metricas.cuotaInicial, minCuota, toCents(100)),
-      desembolsoInicial: puntuarRespectoAlMejor(
-        metricas.desembolsoInicial,
-        minDesemb,
-        toCents(5_000),
-      ),
-      resiliencia: metricas.indiceResiliencia,
-      flexibilidad: metricas.indiceFlexibilidad,
-      vinculaciones: Math.max(0, 100 - metricas.numVinculacionesObligatorias * 20),
-    };
+  const todosConAptitud = todos.map(({ oferta, metricas }) => {
     const ratioTensionado = metricas.ratioBancarioTensionado;
     const esAptaParaRecomendacion =
       oferta.estado !== 'rechazada' &&
@@ -292,22 +276,48 @@ export function compararOfertas(
       (ratioTensionado === null ||
         contexto === undefined ||
         ratioTensionado <= contexto.ratioBancarioMaximo);
-
-    return {
-      oferta,
-      metricas,
-      puntuacion: mediaPonderada(puntuaciones, pesos),
-      desglosePuntuacion: puntuaciones,
-      esLaMenorCuota: false,
-      esLaMenorTaeOficial: false,
-      esLaMenorTaeEstimada: false,
-      esLaMenorCosteReal: false,
-      esMenorDesembolso: false,
-      esMenosVinculaciones: false,
-      esAptaParaRecomendacion,
-      esMejorGlobal: false,
-    };
+    return { oferta, metricas, esAptaParaRecomendacion };
   });
+
+  // Una oferta rechazada o inviable no debe alterar la escala con la que se
+  // decide entre las candidatas válidas. Si no existe ninguna apta se mantiene
+  // la comparación informativa entre todas.
+  const referenciasAptas = todosConAptitud.filter((item) => item.esAptaParaRecomendacion);
+  const referencias = referenciasAptas.length > 0 ? referenciasAptas : todosConAptitud;
+  const minCuota = Math.min(...referencias.map((m) => m.metricas.cuotaInicial));
+  const minCoste = Math.min(...referencias.map((m) => m.metricas.costeRealTotal));
+  const minDesemb = Math.min(...referencias.map((m) => m.metricas.desembolsoInicial));
+
+  const resultados: ResultadoComparacion[] = todosConAptitud.map(
+    ({ oferta, metricas, esAptaParaRecomendacion }) => {
+      const puntuaciones: Record<keyof PesosComparacion, number> = {
+        costeReal: puntuarRespectoAlMejor(metricas.costeRealTotal, minCoste, toCents(10_000)),
+        cuota: puntuarRespectoAlMejor(metricas.cuotaInicial, minCuota, toCents(100)),
+        desembolsoInicial: puntuarRespectoAlMejor(
+          metricas.desembolsoInicial,
+          minDesemb,
+          toCents(5_000),
+        ),
+        resiliencia: metricas.indiceResiliencia,
+        flexibilidad: metricas.indiceFlexibilidad,
+        vinculaciones: Math.max(0, 100 - metricas.numVinculacionesObligatorias * 20),
+      };
+      return {
+        oferta,
+        metricas,
+        puntuacion: mediaPonderada(puntuaciones, pesos),
+        desglosePuntuacion: puntuaciones,
+        esLaMenorCuota: false,
+        esLaMenorTaeOficial: false,
+        esLaMenorTaeEstimada: false,
+        esLaMenorCosteReal: false,
+        esMenorDesembolso: false,
+        esMenosVinculaciones: false,
+        esAptaParaRecomendacion,
+        esMejorGlobal: false,
+      };
+    },
+  );
 
   // Marcar los mejores de cada dimensión
   const candidatas = sonOfertasComparables(ofertas)
@@ -320,7 +330,12 @@ export function compararOfertas(
   const menorDesemb = Math.min(...resultados.map((r) => r.metricas.desembolsoInicial));
   const menosVinc = Math.min(...resultados.map((r) => r.metricas.numVinculacionesObligatorias));
   const menorTaeEstimada = Math.min(...resultados.map((r) => r.metricas.taeEstimada));
-  const ofertasConTae = resultados.filter((r) => r.oferta.taeOficial !== undefined);
+  const ofertasConTae = resultados.filter(
+    (r) =>
+      r.oferta.taeOficial !== undefined &&
+      Number.isFinite(r.oferta.taeOficial) &&
+      r.oferta.taeOficial > 0,
+  );
   const menorTaeOficial =
     ofertasConTae.length > 0
       ? Math.min(...ofertasConTae.map((r) => r.oferta.taeOficial as number))

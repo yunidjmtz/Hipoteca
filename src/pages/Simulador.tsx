@@ -92,7 +92,7 @@ function FilaVinculacion({
             Editar
           </button>
         </div>
-        <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
           <div>
             <dt className="text-tinta-suave">Descuento</dt>
             <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
@@ -100,9 +100,21 @@ function FilaVinculacion({
             </dd>
           </div>
           <div>
+            <dt className="text-tinta-suave">Coste inicial</dt>
+            <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
+              {formatEuros(v.costeInicial)}
+            </dd>
+          </div>
+          <div>
             <dt className="text-tinta-suave">Coste anual</dt>
             <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
               {formatEuros(v.costeAnual)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-tinta-suave">Subida anual</dt>
+            <dd className="mt-0.5 font-cifra text-sm font-medium tabular-nums text-tinta">
+              {formatPorcentaje(v.incrementoAnual)}
             </dd>
           </div>
           <div>
@@ -126,33 +138,33 @@ function FilaVinculacion({
       </article>
       {editando && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4">
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={`titulo-editar-vinculacion-${v.id}`}
-                className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
-              >
-                <div className="mb-4 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="rotulo mb-1">Producto vinculado</p>
-                    <h2
-                      id={`titulo-editar-vinculacion-${v.id}`}
-                      className="font-display text-xl text-tinta"
-                    >
-                      {v.nombre}
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onCancelarEdicion}
-                    aria-label="Cerrar edición"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-medio border border-linea text-lg text-tinta-media hover:bg-superficie-2"
-                  >
-                    ×
-                  </button>
-                </div>
-                <EditarVinculacion vinculacion={v} onEliminar={onEliminar} onGuardar={onGuardar} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`titulo-editar-vinculacion-${v.id}`}
+            className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="rotulo mb-1">Producto vinculado</p>
+                <h2
+                  id={`titulo-editar-vinculacion-${v.id}`}
+                  className="font-display text-xl text-tinta"
+                >
+                  {v.nombre}
+                </h2>
               </div>
+              <button
+                type="button"
+                onClick={onCancelarEdicion}
+                aria-label="Cerrar edición"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-medio border border-linea text-lg text-tinta-media hover:bg-superficie-2"
+              >
+                ×
+              </button>
+            </div>
+            <EditarVinculacion vinculacion={v} onEliminar={onEliminar} onGuardar={onGuardar} />
+          </div>
         </div>
       )}
     </>
@@ -340,11 +352,7 @@ export function Simulador() {
   // Derivados financieros
   // ---------------------------------------------------------------------------
 
-  const flujoInput = useMemo(
-    // El suelo se desactiva aquí: no se muestra ni afecta al simulador independiente.
-    () => flujoInputDesdeEscenario({ ...esc, sueloTin: 0 }),
-    [esc],
-  );
+  const flujoInput = useMemo(() => flujoInputDesdeEscenario(esc), [esc]);
   const flujo = useMemo(() => construirFlujoDeCaja(flujoInput), [flujoInput]);
 
   const aniosFijos = esc.mixtaAniosFijos ?? ANIOS_FIJOS_MIXTO_POR_DEFECTO;
@@ -381,7 +389,7 @@ export function Simulador() {
 
   const plazosDisponibles = useMemo(() => {
     const todos = [10, 15, 20, 25, 30, 35, 40, esc.plazoAnios];
-    return [...new Set(todos.filter((p) => p <= esc.plazoAnios))].sort((a, b) => a - b);
+    return [...new Set(todos)].sort((a, b) => a - b);
   }, [esc.plazoAnios]);
 
   // ---------------------------------------------------------------------------
@@ -592,7 +600,7 @@ export function Simulador() {
                 valor={esc.taeOficial ?? 0}
                 mostrarVacioSiCero
                 onChange={(v) => act('taeOficial', v)}
-                onVaciar={() => act('taeOficial', 0)}
+                onVaciar={() => act('taeOficial', undefined)}
                 ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
               />
             </div>
@@ -651,6 +659,15 @@ export function Simulador() {
                   valor={esc.diferencial ?? 0.01}
                   onChange={(v) => act('diferencial', v)}
                 />
+                <InputPorcentaje
+                  id="sim-suelo-tin"
+                  etiqueta="Suelo TIN"
+                  valor={esc.sueloTin}
+                  mostrarVacioSiCero
+                  onChange={(v) => act('sueloTin', v)}
+                  onVaciar={() => act('sueloTin', 0)}
+                  ayuda="TIN mínimo aplicable aunque el índice y el diferencial den un resultado inferior. Déjalo vacío si la oferta no tiene suelo."
+                />
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-tinta">Cada cuánto se revisa</span>
                   <div className="flex gap-2">
@@ -683,7 +700,7 @@ export function Simulador() {
                 valor={esc.taeOficial ?? 0}
                 mostrarVacioSiCero
                 onChange={(v) => act('taeOficial', v)}
-                onVaciar={() => act('taeOficial', 0)}
+                onVaciar={() => act('taeOficial', undefined)}
                 ayuda="Copia la TAE que indica el banco. Sirve para compararla con la estimación y no modifica la cuota."
               />
             </div>
@@ -706,7 +723,7 @@ export function Simulador() {
 
           {esc.vinculaciones.length > 0 && (
             <div className="flex flex-col gap-3">
-            {/*
+              {/*
               Sin productos vinculados. Añade seguros, tarjetas o planes de pensiones para ver su
               impacto en el TIN y el coste real.
             */}
@@ -1034,7 +1051,9 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState('');
   const [bonificacion, setBonificacion] = useState(0.003);
+  const [costeInicial, setCosteInicial] = useState<Cents>(ZERO);
   const [costeAnual, setCosteAnual] = useState<Cents>(toCents(300));
+  const [incrementoAnual, setIncrementoAnual] = useState(0);
   const [obligatorio, setObligatorio] = useState(true);
   const [activo, setActivo] = useState(true);
   const [aniosExigidos, setAniosExigidos] = useState<number | null>(null);
@@ -1060,17 +1079,21 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
       nombre: nombre.trim(),
       activo,
       bonificacionTin: bonificacion,
-      costeInicial: ZERO,
+      costeInicial,
       costeAnual,
-      incrementoAnual: 0,
+      incrementoAnual,
       aniosExigidos,
       obligatorio,
       observaciones: '',
     });
     setNombre('');
     setBonificacion(0.003);
+    setCosteInicial(ZERO);
     setCosteAnual(toCents(300));
+    setIncrementoAnual(0);
+    setObligatorio(true);
     setActivo(true);
+    setAniosExigidos(null);
     setAbierto(false);
   }
 
@@ -1125,10 +1148,25 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
                 ayuda="Reducción del TIN por tener este producto."
               />
               <InputMoneda
+                id="vinc-coste-inicial"
+                etiqueta="Coste inicial"
+                valor={costeInicial}
+                onChange={setCosteInicial}
+                ayuda="Pago único al contratar el producto."
+              />
+              <InputMoneda
                 id="vinc-coste"
                 etiqueta="Coste anual"
                 valor={costeAnual}
                 onChange={setCosteAnual}
+              />
+              <InputPorcentaje
+                id="vinc-incremento"
+                etiqueta="Subida anual del coste"
+                valor={incrementoAnual}
+                mostrarVacioSiCero
+                onChange={setIncrementoAnual}
+                onVaciar={() => setIncrementoAnual(0)}
               />
               <div className="flex flex-col gap-1">
                 <label htmlFor="vinc-anios" className="text-sm font-medium text-tinta">
@@ -1150,7 +1188,10 @@ function NuevaVinculacion({ onAnadir }: { onAnadir: (v: ProductoVinculado) => vo
               </div>
             </div>
             <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-tinta">
-              <Interruptor activado={obligatorio} alCambiar={(e) => setObligatorio(e.target.checked)} />
+              <Interruptor
+                activado={obligatorio}
+                alCambiar={(e) => setObligatorio(e.target.checked)}
+              />
               El banco lo exige para obtener las condiciones del préstamo
             </label>
             <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-tinta">
@@ -1196,7 +1237,9 @@ function EditarVinculacion({
 }) {
   const [nombre, setNombre] = useState(vinculacion.nombre);
   const [bonificacion, setBonificacion] = useState(vinculacion.bonificacionTin);
+  const [costeInicial, setCosteInicial] = useState<Cents>(vinculacion.costeInicial);
   const [costeAnual, setCosteAnual] = useState<Cents>(vinculacion.costeAnual);
+  const [incrementoAnual, setIncrementoAnual] = useState(vinculacion.incrementoAnual);
   const [obligatorio, setObligatorio] = useState(vinculacion.obligatorio);
   const [activo, setActivo] = useState(vinculacion.activo);
   const [aniosExigidos, setAniosExigidos] = useState<number | null>(vinculacion.aniosExigidos);
@@ -1208,7 +1251,9 @@ function EditarVinculacion({
       ...vinculacion,
       nombre: nombre.trim(),
       bonificacionTin: bonificacion,
+      costeInicial,
       costeAnual,
+      incrementoAnual,
       aniosExigidos,
       obligatorio,
       activo,
@@ -1240,10 +1285,25 @@ function EditarVinculacion({
           ayuda="Reducción del TIN por tener este producto."
         />
         <InputMoneda
+          id={`${idBase}-coste-inicial`}
+          etiqueta="Coste inicial"
+          valor={costeInicial}
+          onChange={setCosteInicial}
+          ayuda="Pago único al contratar el producto."
+        />
+        <InputMoneda
           id={`${idBase}-coste`}
           etiqueta="Coste anual"
           valor={costeAnual}
           onChange={setCosteAnual}
+        />
+        <InputPorcentaje
+          id={`${idBase}-incremento`}
+          etiqueta="Subida anual del coste"
+          valor={incrementoAnual}
+          mostrarVacioSiCero
+          onChange={setIncrementoAnual}
+          onVaciar={() => setIncrementoAnual(0)}
         />
         <div className="flex flex-col gap-1">
           <label htmlFor={`${idBase}-anios`} className="text-sm font-medium text-tinta">
@@ -1303,7 +1363,13 @@ function ComparadorEntrada({
   flujoInput: FlujoInput;
   esc: EscenarioHipoteca;
 }) {
-  const extras: Cents[] = [toCents(5_000), toCents(10_000), toCents(20_000)];
+  const extras: Cents[] = [
+    ...new Set(
+      [toCents(5_000), toCents(10_000), toCents(20_000)]
+        .map((extra) => minCents(extra, esc.importeSolicitado))
+        .filter((extra) => extra > ZERO),
+    ),
+  ];
 
   const interesesBase = sumCents(
     construirFlujoDeCaja(flujoInput)

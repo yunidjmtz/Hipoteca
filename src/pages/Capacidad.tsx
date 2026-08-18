@@ -4,8 +4,13 @@ import { EstadoBadge } from '@/components/EstadoBadge';
 import { Explicacion } from '@/components/Explicacion';
 import { Panel } from '@/components/Panel';
 import { formatEuros } from '@/core/format';
-import { toCents } from '@/core/money';
-import { buscarPrecioMaximo, evaluarPrecio, factorLimitante } from '@/finance/affordability';
+import type { Cents } from '@/core/money';
+import {
+  buscarPrecioMaximo,
+  evaluarPrecio,
+  factorLimitante,
+  RANGO_BUSQUEDA_CAPACIDAD,
+} from '@/finance/affordability';
 import { construirContexto } from '@/finance/contexto';
 import type { ResultadoBusqueda } from '@/domain/types';
 
@@ -36,23 +41,12 @@ export function Capacidad() {
   const { estado } = useEstado();
   const { preferencias, ajustes } = estado;
 
-  const rango = useMemo(
-    () => ({
-      min: toCents(50_000),
-      max: toCents(2_000_000),
-    }),
-    [],
-  );
-
   const ctx = useMemo(
     () => construirContexto(estado, preferencias.precioObjetivo),
     [estado, preferencias.precioObjetivo],
   );
 
-  const ctxFactory = useMemo(
-    () => (p: ReturnType<typeof toCents>) => construirContexto(estado, p),
-    [estado],
-  );
+  const ctxFactory = useMemo(() => (p: Cents) => construirContexto(estado, p), [estado]);
 
   const evaluacionObjetivo = useMemo(
     () => evaluarPrecio(preferencias.precioObjetivo, ctx),
@@ -60,14 +54,18 @@ export function Capacidad() {
   );
 
   const porAhorro = useMemo(
-    () => buscarPrecioMaximo((e) => e.faltante === 0, ctxFactory, rango),
-    [ctxFactory, rango],
+    () => buscarPrecioMaximo((e) => e.faltante === 0, ctxFactory, RANGO_BUSQUEDA_CAPACIDAD),
+    [ctxFactory],
   );
 
   const porIngresos = useMemo(
     () =>
-      buscarPrecioMaximo((e) => e.ratioBancario <= ajustes.ratioBancarioMaximo, ctxFactory, rango),
-    [ctxFactory, rango, ajustes.ratioBancarioMaximo],
+      buscarPrecioMaximo(
+        (e) => e.ratioBancario <= ajustes.ratioBancarioMaximo,
+        ctxFactory,
+        RANGO_BUSQUEDA_CAPACIDAD,
+      ),
+    [ctxFactory, ajustes.ratioBancarioMaximo],
   );
 
   const porComodo = useMemo(
@@ -75,9 +73,9 @@ export function Capacidad() {
       buscarPrecioMaximo(
         (e) => e.ratioPersonal <= ajustes.ratioPersonalObjetivo,
         ctxFactory,
-        rango,
+        RANGO_BUSQUEDA_CAPACIDAD,
       ),
-    [ctxFactory, rango, ajustes.ratioPersonalObjetivo],
+    [ctxFactory, ajustes.ratioPersonalObjetivo],
   );
 
   const porViable = useMemo(
@@ -85,9 +83,9 @@ export function Capacidad() {
       buscarPrecioMaximo(
         (e) => e.estado === 'viable' || e.estado === 'comodo' || e.estado === 'ajustado',
         ctxFactory,
-        rango,
+        RANGO_BUSQUEDA_CAPACIDAD,
       ),
-    [ctxFactory, rango],
+    [ctxFactory],
   );
 
   const porAjustado = useMemo(
@@ -95,9 +93,9 @@ export function Capacidad() {
       buscarPrecioMaximo(
         (e) => e.faltante === 0 && e.ratioBancario <= ajustes.ratioBancarioMaximo + 0.05,
         ctxFactory,
-        rango,
+        RANGO_BUSQUEDA_CAPACIDAD,
       ),
-    [ctxFactory, rango, ajustes.ratioBancarioMaximo],
+    [ctxFactory, ajustes.ratioBancarioMaximo],
   );
 
   const factor = factorLimitante(evaluacionObjetivo, ajustes.ratioBancarioMaximo);
@@ -116,7 +114,7 @@ export function Capacidad() {
     },
     {
       etiqueta: 'Cómodo',
-      descripcion: `Precio máximo con desembolso cubierto y coste de vivienda más deudas por debajo del ${(ajustes.ratioPersonalObjetivo * 100).toFixed(0)} % de los ingresos.`,
+      descripcion: `Precio máximo con coste de vivienda más deudas por debajo del ${(ajustes.ratioPersonalObjetivo * 100).toFixed(0)} % de los ingresos.`,
       resultado: porComodo,
     },
     {

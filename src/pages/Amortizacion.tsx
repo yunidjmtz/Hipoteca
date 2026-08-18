@@ -8,6 +8,7 @@ import { InputMoneda } from '@/components/InputMoneda';
 import { formatEuros, formatPorcentaje } from '@/core/format';
 import { type Cents, ZERO, sumCents } from '@/core/money';
 import { simulacionDesdeOferta } from '@/domain/mortgageOffer';
+import { agruparAmortizacionPorAnio } from '@/finance/amortizationSummary';
 import { construirFlujoDeCaja } from '@/finance/mortgage';
 import { flujoInputDesdeEscenario } from '@/finance/scenario';
 import { simularAmortizacionAnticipada, type OpcionAmortizacion } from '@/finance/prepayment';
@@ -22,17 +23,6 @@ interface PropsTabla {
   readonly lineas: readonly LineaMensual[];
   readonly esSimulacion: boolean;
   readonly accionEncabezado?: ReactNode;
-}
-
-interface ResumenAnual {
-  readonly numero: number;
-  readonly desde: string;
-  readonly hasta: string;
-  readonly pagoTotal: Cents;
-  readonly intereses: Cents;
-  readonly deudaReducida: Cents;
-  readonly extras: Cents;
-  readonly pendiente: Cents;
 }
 
 function fechaLocal(fecha: string): Date {
@@ -88,44 +78,6 @@ function formatDuracionMeses(meses: number): string {
   return `${textoAnios} y ${mesesSueltos} mes${mesesSueltos === 1 ? '' : 'es'}`;
 }
 
-function sumarLinea(linea: LineaMensual): Cents {
-  return sumCents([linea.cuota, linea.amortizacionExtraordinaria, linea.comisiones]);
-}
-
-function deudaReducidaEnLinea(linea: LineaMensual): Cents {
-  return sumCents([linea.principal, linea.amortizacionExtraordinaria]);
-}
-
-function agruparPorAnio(lineas: readonly LineaMensual[]): ResumenAnual[] {
-  const grupos = new Map<number, LineaMensual[]>();
-
-  for (const linea of lineas) {
-    const numeroAnio = Math.floor((linea.numero - 1) / 12) + 1;
-    const grupo = grupos.get(numeroAnio) ?? [];
-    grupo.push(linea);
-    grupos.set(numeroAnio, grupo);
-  }
-
-  return [...grupos.entries()].map(([numero, cuotas]) => {
-    const primera = cuotas[0];
-    const ultima = cuotas.at(-1);
-    if (primera === undefined || ultima === undefined) {
-      throw new Error('Un año del cuadro de amortización no puede estar vacío.');
-    }
-
-    return {
-      numero,
-      desde: primera.fecha,
-      hasta: ultima.fecha,
-      pagoTotal: sumCents(cuotas.map(sumarLinea)),
-      intereses: sumCents(cuotas.map((linea) => linea.intereses)),
-      deudaReducida: sumCents(cuotas.map(deudaReducidaEnLinea)),
-      extras: sumCents(cuotas.map((linea) => linea.amortizacionExtraordinaria)),
-      pendiente: ultima.pendiente,
-    };
-  });
-}
-
 function porcentaje(parte: Cents, total: Cents): number {
   if (total <= ZERO) return 0;
   return Math.min(100, Math.max(0, (parte / total) * 100));
@@ -133,12 +85,13 @@ function porcentaje(parte: Cents, total: Cents): number {
 
 function TablaAmortizacion({ lineas, esSimulacion, accionEncabezado }: PropsTabla) {
   const lineasCuotas = useMemo(() => lineas.filter((linea) => linea.numero > 0), [lineas]);
-  const resumenesAnuales = useMemo(() => agruparPorAnio(lineasCuotas), [lineasCuotas]);
+  const resumenesAnuales = useMemo(() => agruparAmortizacionPorAnio(lineasCuotas), [lineasCuotas]);
   const primeraCuota = lineasCuotas[0] ?? null;
   const cierrePrimerAnio = resumenesAnuales[0] ?? null;
   const ultimaCuota = lineasCuotas.at(-1) ?? null;
   const capitalPrimeraCuota = primeraCuota?.principal ?? ZERO;
   const interesesPrimeraCuota = primeraCuota?.intereses ?? ZERO;
+  const costesVinculadosPrimeraCuota = primeraCuota?.costesVinculados ?? ZERO;
   const porcentajeCapital = porcentaje(capitalPrimeraCuota, primeraCuota?.cuota ?? ZERO);
   const porcentajeIntereses = porcentaje(interesesPrimeraCuota, primeraCuota?.cuota ?? ZERO);
 
@@ -175,6 +128,12 @@ function TablaAmortizacion({ lineas, esSimulacion, accionEncabezado }: PropsTabl
                 <strong className="text-tinta">{formatEuros(interesesPrimeraCuota)}</strong> son el
                 coste que cobra el banco ese mes.
               </p>
+              {costesVinculadosPrimeraCuota > ZERO && (
+                <p className="mt-2 max-w-xl text-xs leading-relaxed text-tinta-media">
+                  Además pagarás {formatEuros(costesVinculadosPrimeraCuota)} ese mes por los
+                  productos vinculados activos.
+                </p>
+              )}
 
               <div
                 className="mt-4 flex h-3 w-full max-w-xl overflow-hidden rounded-full bg-superficie"
@@ -291,6 +250,11 @@ function TablaAmortizacion({ lineas, esSimulacion, accionEncabezado }: PropsTabl
                       Incluye {formatEuros(resumen.extras)} de pagos extra.
                     </p>
                   )}
+                  {resumen.costesVinculados > ZERO && (
+                    <p className="mt-1 text-xs text-tinta-media">
+                      Incluye {formatEuros(resumen.costesVinculados)} de productos vinculados.
+                    </p>
+                  )}
                 </article>
               ))}
             </div>
@@ -323,6 +287,11 @@ function TablaAmortizacion({ lineas, esSimulacion, accionEncabezado }: PropsTabl
                         {resumen.extras > ZERO && (
                           <span className="mt-0.5 block text-xs text-acento">
                             Incluye {formatEuros(resumen.extras)} extra
+                          </span>
+                        )}
+                        {resumen.costesVinculados > ZERO && (
+                          <span className="mt-0.5 block text-xs text-tinta-media">
+                            Incluye {formatEuros(resumen.costesVinculados)} de vinculaciones
                           </span>
                         )}
                       </td>
@@ -368,8 +337,8 @@ function TablaAmortizacion({ lineas, esSimulacion, accionEncabezado }: PropsTabl
               <div>
                 <dt className="font-semibold text-tinta">Pagas en total</dt>
                 <dd className="mt-0.5 text-xs leading-relaxed">
-                  Suma todas las cuotas del año, los pagos extra y, si existe, la comisión por
-                  amortizar.
+                  Suma todas las cuotas del año, los productos vinculados, los pagos extra y, si
+                  existe, la comisión por amortizar.
                 </dd>
               </div>
             </dl>
@@ -476,6 +445,13 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
   );
 
   const comisionParcial = escenarioBase.comisiones.amortizacionParcial;
+  const comisionTotal = escenarioBase.comisiones.amortizacionTotal;
+  const textoComisiones =
+    comisionParcial <= 0 && comisionTotal <= 0
+      ? null
+      : comisionParcial === comisionTotal
+        ? `Incluiremos la comisión del banco (${formatPorcentaje(comisionParcial)}) en el resultado.`
+        : `Aplicaremos ${formatPorcentaje(comisionParcial)} a los pagos parciales y ${formatPorcentaje(comisionTotal)} si un pago cancela toda la deuda.`;
 
   const resultadoAmort = useMemo(() => {
     if (!mostrarResultado || aportacionesValidas.length === 0) return null;
@@ -483,8 +459,9 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
       aportaciones: aportacionesValidas,
       opcion,
       comisionParcial,
+      comisionTotal,
     });
-  }, [mostrarResultado, aportacionesValidas, opcion, comisionParcial, inputBase]);
+  }, [mostrarResultado, aportacionesValidas, opcion, comisionParcial, comisionTotal, inputBase]);
 
   useEffect(() => {
     if (resultadoAmort === null) return;
@@ -603,7 +580,9 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
               className="rounded-grande bg-superficie-2 px-4 py-4"
             >
               <p className="text-sm leading-relaxed text-tinta-media">
-                Ahora pagas{' '}
+                {ofertaSeleccionada.estado === 'firmada'
+                  ? 'Ahora pagas '
+                  : 'Con esta hipoteca pagarías '}
                 <strong className="font-cifra text-base tabular-nums text-tinta">
                   {formatEuros(cuota)} al mes
                 </strong>{' '}
@@ -865,11 +844,8 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
                     </>
                   )}
                 </p>
-                {comisionParcial > 0 && (
-                  <p className="mt-2 text-xs leading-relaxed text-tinta-media">
-                    Incluiremos la comisión del banco ({formatPorcentaje(comisionParcial)}) en el
-                    resultado.
-                  </p>
+                {textoComisiones !== null && (
+                  <p className="mt-2 text-xs leading-relaxed text-tinta-media">{textoComisiones}</p>
                 )}
               </div>
             )}
@@ -915,8 +891,8 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
               </p>
               <p className="mt-2 text-sm leading-relaxed text-tinta-media">
                 {resultadoAmort.ahorroNeto > ZERO
-                  ? `Es lo que dejarías de pagar al banco después de descontar ${formatEuros(resultadoAmort.comision)} de comisión.`
-                  : 'La comisión es igual o mayor que los intereses que conseguirías evitar.'}
+                  ? `Suma los intereses y productos vinculados que evitarías, después de descontar ${formatEuros(resultadoAmort.comision)} de comisión.`
+                  : 'La comisión es igual o mayor que los intereses y productos vinculados que conseguirías evitar.'}
               </p>
             </div>
 
@@ -989,6 +965,25 @@ export function Amortizacion({ ofertaInicial, integrada = false }: PropsAmortiza
                   </dd>
                 </div>
               </dl>
+              {resultadoAmort.ahorroCostesVinculados > ZERO && (
+                <dl className="grid grid-cols-2 border-t border-linea text-center">
+                  <div className="border-r border-linea px-3 py-4">
+                    <dt className="text-xs text-tinta-suave">Productos vinculados</dt>
+                    <dd className="mt-1 font-cifra font-semibold tabular-nums text-tinta">
+                      {formatEuros(resultadoAmort.costesVinculadosOriginales)}
+                    </dd>
+                  </div>
+                  <div className="px-3 py-4">
+                    <dt className="text-xs text-tinta-suave">Nuevo coste vinculado</dt>
+                    <dd className="mt-1 font-cifra font-semibold tabular-nums text-comodo">
+                      {formatEuros(resultadoAmort.costesVinculadosAmortizados)}
+                    </dd>
+                    <dd className="mt-1 text-xs font-semibold text-comodo">
+                      Evitas {formatEuros(resultadoAmort.ahorroCostesVinculados)}
+                    </dd>
+                  </div>
+                </dl>
+              )}
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-tinta-media">
