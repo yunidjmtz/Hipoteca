@@ -220,6 +220,39 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
       })),
     };
   }
+  if (versionInicial < 14) {
+    data = {
+      ...data,
+      schemaVersion: 14,
+      perfil: {
+        ...data.perfil,
+        gastoGeneralMensual:
+          data.perfil.gastoGeneralMensual ?? ESTADO_INICIAL.perfil.gastoGeneralMensual,
+      },
+    };
+  }
+  if (versionInicial < 15) {
+    data = {
+      ...data,
+      schemaVersion: 15,
+      perfil: {
+        ...data.perfil,
+        // Los datos anteriores sumaban ambos valores. Conservamos el detalle
+        // cuando existe para no ocultar gastos que el usuario ya había registrado.
+        modoGastosMensuales: data.perfil.gastosFijos.length > 0 ? 'desglosado' : 'general',
+      },
+    };
+  }
+  if (versionInicial < 16) {
+    data = {
+      ...data,
+      schemaVersion: 16,
+      perfil: {
+        ...data.perfil,
+        modoOtrosIngresos: data.perfil.otrosIngresos.length > 0 ? 'desglosado' : 'general',
+      },
+    };
+  }
   return data;
 }
 

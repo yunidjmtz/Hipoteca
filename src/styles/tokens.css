@@ -1,5 +1,5 @@
 /* ============================================================================
-   Paleta «App financiera»: superficies agrupadas, azul nítido y alto contraste.
+   Paleta «Fintech mediterránea»: azul noche, azul eléctrico y estados vivos.
 
    El tema se resuelve con `light-dark()`. Cambiar de tema = cambiar
    `color-scheme` en :root. Por defecto sigue la preferencia del sistema.
@@ -12,41 +12,48 @@
   color-scheme: light dark;
 
   /* --- Superficies ------------------------------------------------------- */
-  --c-lienzo: light-dark(#f2f2f7, #000000);
-  --c-superficie: light-dark(#ffffff, #1c1c1e);
-  --c-superficie-2: light-dark(#e9e9ef, #2c2c2e);
+  --c-lienzo: light-dark(#eef4f8, #06101c);
+  --c-superficie: light-dark(#ffffff, #0d1b2a);
+  --c-superficie-2: light-dark(#e6eef6, #14263a);
 
-  --c-linea: light-dark(#d1d1d6, #38383a);
-  --c-linea-fuerte: light-dark(#8e8e93, #8e8e93);
+  --c-linea: light-dark(#c8d5e3, #294057);
+  --c-linea-fuerte: light-dark(#71849a, #7890a5);
 
   /* --- Tinta ------------------------------------------------------------- */
-  --c-tinta: light-dark(#1c1c1e, #f5f5f7);
-  --c-tinta-media: light-dark(#48484a, #c7c7cc);
-  --c-tinta-suave: light-dark(#636366, #aeaeb2);
+  --c-tinta: light-dark(#102033, #f3f8fc);
+  --c-tinta-media: light-dark(#42566e, #c3d0dc);
+  --c-tinta-suave: light-dark(#596b7f, #a8b8c7);
 
-  /* --- Acento: azul de aplicación --------------------------------------- */
-  --c-acento: light-dark(#0066cc, #69a8ff);
-  --c-acento-tenue: light-dark(#e6f0ff, #102a43);
-  --c-sobre-acento: light-dark(#ffffff, #06182b);
+  /* --- Identidad: azul eléctrico, violeta y turquesa -------------------- */
+  --c-acento: light-dark(#2458d8, #8aaeff);
+  --c-acento-tenue: light-dark(#dde7ff, #172e58);
+  --c-sobre-acento: light-dark(#ffffff, #07192e);
+  --c-acento-secundario: light-dark(#6d4bd8, #b9a8ff);
+  --c-acento-energetico: light-dark(#007f70, #43dfc0);
+
+  /* --- Chrome de la aplicación ------------------------------------------ */
+  --c-navegacion: light-dark(#081d34, #030b14);
+  --c-navegacion-2: light-dark(#12304f, #10283f);
+  --c-sobre-navegacion: light-dark(#f6fbff, #f6fbff);
 
   /* --- Estados de viabilidad (§6.5) -------------------------------------
      El color nunca va solo: cada estado se acompaña siempre de su texto. */
-  --c-comodo: light-dark(#047857, #5ee0a0);
-  --c-comodo-tenue: light-dark(#dff7ed, #123929);
-  --c-ajustado: light-dark(#8a5b00, #f0bd5a);
-  --c-ajustado-tenue: light-dark(#fff1c2, #3c2d0f);
-  --c-revisar: light-dark(#a63d08, #ff9a62);
-  --c-revisar-tenue: light-dark(#ffead5, #442416);
-  --c-no-viable: light-dark(#b42318, #ff8a83);
-  --c-no-viable-tenue: light-dark(#fee4e2, #421d22);
+  --c-comodo: light-dark(#006f5b, #63e2bd);
+  --c-comodo-tenue: light-dark(#d4f6ed, #103b35);
+  --c-ajustado: light-dark(#875000, #ffc765);
+  --c-ajustado-tenue: light-dark(#fff0c8, #463314);
+  --c-revisar: light-dark(#aa350d, #ff9567);
+  --c-revisar-tenue: light-dark(#ffe7d7, #4a2518);
+  --c-no-viable: light-dark(#bf2f4a, #ff8295);
+  --c-no-viable-tenue: light-dark(#ffe0e7, #481d29);
 
   /* --- Sombras ----------------------------------------------------------- */
   --s-papel:
-    0 1px 2px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.5)),
-    0 8px 24px -20px light-dark(rgb(0 0 0 / 0.28), rgb(0 0 0 / 0.9));
+    0 1px 2px light-dark(rgb(14 43 69 / 0.07), rgb(0 0 0 / 0.55)),
+    0 14px 34px -22px light-dark(rgb(18 61 98 / 0.34), rgb(0 0 0 / 0.92));
   --s-elevado:
-    0 4px 10px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.48)),
-    0 22px 48px -20px light-dark(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.92));
+    0 5px 14px light-dark(rgb(14 43 69 / 0.12), rgb(0 0 0 / 0.5)),
+    0 28px 58px -22px light-dark(rgb(18 61 98 / 0.38), rgb(0 0 0 / 0.94));
 
   /* --- Tipografía --------------------------------------------------------
      En dispositivos Apple usa San Francisco mediante `-apple-system`; el

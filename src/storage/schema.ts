@@ -1,5 +1,5 @@
 ﻿import { z } from 'zod';
-import type { Cents } from '@/core/money';
+import { ZERO, type Cents } from '@/core/money';
 import type { EscenarioHipoteca } from '@/domain/types';
 import { normalizarEscenarioHipoteca } from '@/domain/mortgageScenario';
 
@@ -190,9 +190,12 @@ export const zPerfilFinanciero = z.object({
     .optional()
     .default([]),
   otrosIngresosMensuales: zCents,
+  modoOtrosIngresos: z.enum(['general', 'desglosado']).optional(),
   deudas: z
     .array(zDeudaMensual)
     .refine(idsNoVaciosYUnicos, 'Las deudas deben tener identificadores únicos'),
+  gastoGeneralMensual: zCents.optional().default(ZERO),
+  modoGastosMensuales: z.enum(['general', 'desglosado']).optional(),
   gastosFijos: z
     .array(zGastoFijo)
     .refine(idsNoVaciosYUnicos, 'Los gastos deben tener identificadores únicos')

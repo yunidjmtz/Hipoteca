@@ -114,8 +114,15 @@ export interface IngresoExtraordinario {
 export interface PerfilFinanciero {
   titulares: [Titular] | [Titular, Titular] | [Titular, Titular, Titular];
   otrosIngresos: OtroIngreso[];
-  otrosIngresosMensuales: Cents; // suma mensualizada de otrosIngresos — mantenida en sync
+  /** Importe rápido mensual cuando se usa el modo general. */
+  otrosIngresosMensuales: Cents;
+  /** Permite alternar entre una estimación rápida y el detalle de ingresos. */
+  modoOtrosIngresos?: 'general' | 'desglosado';
   deudas: DeudaMensual[];
+  /** Importe rápido mensual cuando se usa el modo general. */
+  gastoGeneralMensual: Cents;
+  /** Permite alternar entre una estimación rápida y el detalle de gastos. */
+  modoGastosMensuales?: 'general' | 'desglosado';
   gastosFijos: GastoFijo[];
   ahorrosActuales: Cents;
   ahorroMensualPrevisto: Cents;

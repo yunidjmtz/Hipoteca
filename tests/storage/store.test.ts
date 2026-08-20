@@ -66,7 +66,7 @@ describe('limpieza de datos', () => {
   });
 
   it('parte sin importes personales ni ejemplos precargados', () => {
-    expect(ESTADO_INICIAL.schemaVersion).toBe(13);
+    expect(ESTADO_INICIAL.schemaVersion).toBe(16);
     expect(ESTADO_INICIAL.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(ESTADO_INICIAL.perfil.ahorrosActuales).toBe(ZERO);
     expect(ESTADO_INICIAL.preferencias.precioObjetivo).toBe(ZERO);
@@ -101,7 +101,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.schemaVersion).toBe(16);
     expect(cargado.perfil.titulares[0].netoPorPaga).toBe(ZERO);
     expect(cargado.preferencias.precioObjetivo).toBe(ZERO);
     expect(cargado.escenarioSimulador.importeSolicitado).toBe(ZERO);
@@ -124,7 +124,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.schemaVersion).toBe(16);
     expect(cargado.ajustes.tinFuente).toBe('ine');
     expect(cargado.ajustes.tinPorDefecto).toBe(0.0298);
     expect(cargado.ajustes.tinReferenciaPeriodo).toBe('2026-05');
@@ -140,7 +140,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.schemaVersion).toBe(16);
     expect(cargado.viviendas).toEqual([]);
   });
 
@@ -172,7 +172,7 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.schemaVersion).toBe(16);
     expect(cargado.viviendas[0]?.anuncioUrl).toBe('');
     expect(cargado.viviendas[0]?.telefono).toBe('');
     expect(cargado.viviendas[0]?.habitaciones).toBe(0);
@@ -209,8 +209,50 @@ describe('limpieza de datos', () => {
 
     const cargado = cargarEstado();
 
-    expect(cargado.schemaVersion).toBe(13);
+    expect(cargado.schemaVersion).toBe(16);
     expect(cargado.viviendas[0]?.telefono).toBe('600 123 123');
+  });
+
+  it('conserva el desglose al migrar los gastos guardados', () => {
+    const perfilSinModo = { ...ESTADO_INICIAL.perfil };
+    delete perfilSinModo.modoGastosMensuales;
+    const previo: EstadoPersistido = {
+      ...ESTADO_INICIAL,
+      schemaVersion: 14,
+      perfil: {
+        ...perfilSinModo,
+        gastosFijos: [
+          { id: 'luz', concepto: 'Luz', importe: toCents(120), periodicidad: 'mensual' },
+        ],
+      },
+    };
+    localStorage.setItem('hipotecas-v1', JSON.stringify(previo));
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(16);
+    expect(cargado.perfil.modoGastosMensuales).toBe('desglosado');
+  });
+
+  it('conserva el desglose al migrar los ingresos guardados', () => {
+    const perfilSinModo = { ...ESTADO_INICIAL.perfil };
+    delete perfilSinModo.modoOtrosIngresos;
+    const previo: EstadoPersistido = {
+      ...ESTADO_INICIAL,
+      schemaVersion: 15,
+      perfil: {
+        ...perfilSinModo,
+        otrosIngresos: [
+          { id: 'extra', concepto: 'Alquiler', importe: toCents(300), periodicidad: 'mensual' },
+        ],
+      },
+    };
+    localStorage.setItem('hipotecas-v1', JSON.stringify(previo));
+
+    const cargado = cargarEstado();
+
+    expect(cargado.schemaVersion).toBe(16);
+    expect(cargado.perfil.modoOtrosIngresos).toBe('desglosado');
   });
 
   it('rechaza versiones futuras sin eliminar el original recuperable', () => {
@@ -261,7 +303,7 @@ describe('limpieza de datos', () => {
 
     expect(guardarEstadoPendienteAhora()).toBe(true);
     expect(JSON.parse(localStorage.getItem('hipotecas-v1') ?? '{}')).toMatchObject({
-      schemaVersion: 13,
+      schemaVersion: 16,
       preferencias: { precioObjetivo: toCents(240_000) },
     });
     expect(onResultado).toHaveBeenCalledWith(true);

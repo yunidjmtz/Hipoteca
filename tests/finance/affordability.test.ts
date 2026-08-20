@@ -82,6 +82,7 @@ function perfil(opciones?: {
   ingresoNeto?: number;
   numeroPagas?: 12 | 14;
   deuda?: number;
+  gastoGeneral?: number;
   edad?: number;
 }): PerfilFinanciero {
   return {
@@ -100,6 +101,7 @@ function perfil(opciones?: {
           },
         ]
       : [],
+    gastoGeneralMensual: toCents(opciones?.gastoGeneral ?? 0),
     gastosFijos: [],
     ahorrosActuales: toCents(opciones?.ahorro ?? 40_000),
     ahorroMensualPrevisto: toCents(500),
@@ -192,6 +194,7 @@ describe('calcularCapacidadAhorroActual', () => {
         periodicidad: 'mensual',
       },
     ];
+    perfilConAlquiler.modoGastosMensuales = 'desglosado';
 
     // 2.500 € de ingresos − 300 € de deuda − 900 € de alquiler − 200 € de gastos.
     expect(calcularCapacidadAhorroActual(perfilConAlquiler)).toBe(toCents(1_100));
@@ -203,6 +206,25 @@ describe('calcularCapacidadAhorroActual', () => {
 
     expect(calcularCapacidadAhorroActual(perfilConDatoAntiguo)).toBe(toCents(1_600));
   });
+
+  it('resta el gasto mensual general sin exigir gastos detallados', () => {
+    const perfilConGastoGeneral = perfil({ ingresoNeto: 2_500, gastoGeneral: 650 });
+
+    expect(calcularCapacidadAhorroActual(perfilConGastoGeneral)).toBe(toCents(1_850));
+  });
+
+  it('usa solo el metodo de gastos seleccionado', () => {
+    const perfilConAmbos = perfil({ ingresoNeto: 2_500, gastoGeneral: 650 });
+    perfilConAmbos.gastosFijos = [
+      { id: 'luz', concepto: 'Suministros', importe: toCents(200), periodicidad: 'mensual' },
+    ];
+
+    perfilConAmbos.modoGastosMensuales = 'general';
+    expect(calcularCapacidadAhorroActual(perfilConAmbos)).toBe(toCents(1_850));
+
+    perfilConAmbos.modoGastosMensuales = 'desglosado';
+    expect(calcularCapacidadAhorroActual(perfilConAmbos)).toBe(toCents(2_300));
+  });
 });
 
 describe('calcularOtrosIngresosMensuales', () => {
@@ -210,6 +232,7 @@ describe('calcularOtrosIngresosMensuales', () => {
     const perfilConIngresos = {
       ...perfil(),
       otrosIngresosMensuales: ZERO,
+      modoOtrosIngresos: 'desglosado' as const,
       otrosIngresos: [
         {
           id: 'extra',
@@ -220,6 +243,24 @@ describe('calcularOtrosIngresosMensuales', () => {
       ],
     };
     expect(calcularOtrosIngresosMensuales(perfilConIngresos)).toBe(toCents(300));
+  });
+
+  it('usa la estimación general sin sumar el desglose', () => {
+    const perfilConAmbos = {
+      ...perfil(),
+      otrosIngresosMensuales: toCents(500),
+      modoOtrosIngresos: 'general' as const,
+      otrosIngresos: [
+        {
+          id: 'extra',
+          concepto: 'Alquiler',
+          importe: toCents(300),
+          periodicidad: 'mensual' as const,
+        },
+      ],
+    };
+
+    expect(calcularOtrosIngresosMensuales(perfilConAmbos)).toBe(toCents(500));
   });
 });
 

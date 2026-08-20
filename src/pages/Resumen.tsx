@@ -415,7 +415,11 @@ export function Resumen({ modo = 'resumen' }: { readonly modo?: 'resumen' | 'pla
   const deudasMensuales = calcularDeudasMensuales(perfil.deudas);
   const alquilerMarcado = calcularAlquilerActualMensual(perfil.gastosFijos);
   const gastosDelMes = addCents(
-    calcularGastosFijosActualesMensuales(perfil.gastosFijos),
+    calcularGastosFijosActualesMensuales(
+      perfil.gastosFijos,
+      perfil.gastoGeneralMensual,
+      perfil.modoGastosMensuales,
+    ),
     alquilerMarcado > ZERO ? ZERO : perfil.alquilerActual,
   );
   const cuotaMaximaBancaria = maxCents(

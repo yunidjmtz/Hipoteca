@@ -59,15 +59,21 @@ function calcularImportesMensuales(
 
 export function calcularGastosFijosMensuales(
   gastos: ContextoEvaluacion['perfil']['gastosFijos'],
+  gastoGeneralMensual: Cents = ZERO,
+  modo: 'general' | 'desglosado' = 'general',
 ): Cents {
-  return calcularImportesMensuales(gastos.filter((gasto) => !gasto.esAlquilerActual));
+  return modo === 'general'
+    ? gastoGeneralMensual
+    : calcularImportesMensuales(gastos.filter((gasto) => !gasto.esAlquilerActual));
 }
 
 /** Gastos mensuales actuales, incluido el alquiler que se paga hoy. */
 export function calcularGastosFijosActualesMensuales(
   gastos: ContextoEvaluacion['perfil']['gastosFijos'],
+  gastoGeneralMensual: Cents = ZERO,
+  modo: 'general' | 'desglosado' = 'general',
 ): Cents {
-  return calcularImportesMensuales(gastos);
+  return modo === 'general' ? gastoGeneralMensual : calcularImportesMensuales(gastos);
 }
 
 /** Alquiler que se deja de pagar después de comprar la vivienda. */
@@ -81,12 +87,9 @@ export function calcularDeudasMensuales(deudas: ContextoEvaluacion['perfil']['de
   return calcularImportesMensuales(deudas);
 }
 
-/**
- * Calcula los otros ingresos desde su lista normalizada. El escalar antiguo
- * solo se conserva como respaldo para datos migrados que todavía no tengan lista.
- */
+/** Calcula otros ingresos según el método que haya elegido el usuario. */
 export function calcularOtrosIngresosMensuales(perfil: ContextoEvaluacion['perfil']): Cents {
-  return perfil.otrosIngresos.length > 0
+  return perfil.modoOtrosIngresos === 'desglosado'
     ? calcularImportesMensuales(perfil.otrosIngresos)
     : perfil.otrosIngresosMensuales;
 }
@@ -101,7 +104,11 @@ export function calcularCapacidadAhorroActual(perfil: ContextoEvaluacion['perfil
     calcularOtrosIngresosMensuales(perfil),
   );
   const deudas = calcularDeudasMensuales(perfil.deudas);
-  const gastos = calcularGastosFijosActualesMensuales(perfil.gastosFijos);
+  const gastos = calcularGastosFijosActualesMensuales(
+    perfil.gastosFijos,
+    perfil.gastoGeneralMensual,
+    perfil.modoGastosMensuales,
+  );
   // Algunos datos importados antiguos aún guardan el alquiler fuera de la lista
   // de gastos. Solo se usa como respaldo si no hay un gasto marcado como alquiler.
   const alquilerMarcado = calcularAlquilerActualMensual(perfil.gastosFijos);
@@ -186,7 +193,11 @@ export function evaluarPrecio(precio: Cents, ctx: ContextoEvaluacion): Evaluacio
 
   // Otras deudas mensuales
   const otrasDeudas = calcularDeudasMensuales(perfil.deudas);
-  const gastosFijosMensuales = calcularGastosFijosMensuales(perfil.gastosFijos);
+  const gastosFijosMensuales = calcularGastosFijosMensuales(
+    perfil.gastosFijos,
+    perfil.gastoGeneralMensual,
+    perfil.modoGastosMensuales,
+  );
 
   // R11: ratio bancario
   const ratioBancario = ingresoMensual > 0 ? (cuota + otrasDeudas) / ingresoMensual : Infinity;

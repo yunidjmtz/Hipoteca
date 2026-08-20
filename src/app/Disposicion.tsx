@@ -61,16 +61,18 @@ function elementosEnfocables(contenedor: HTMLElement): HTMLElement[] {
 
 function Marca({
   compacta = false,
+  invertida = false,
   titulo = 'Mi Hipoteca',
 }: {
   readonly compacta?: boolean;
+  readonly invertida?: boolean;
   readonly titulo?: string;
 }) {
   return (
     <div className={compacta ? 'flex items-center gap-3' : 'block'}>
       <div
         className={[
-          'flex shrink-0 items-center justify-center rounded-medio bg-acento text-sobre-acento font-display font-semibold shadow-papel',
+          'marca-app flex shrink-0 items-center justify-center rounded-medio text-sobre-acento font-display font-semibold',
           compacta ? 'h-8 w-8 text-sm' : 'h-10 w-10 text-base',
         ].join(' ')}
         aria-hidden="true"
@@ -79,7 +81,7 @@ function Marca({
       </div>
       <div className={compacta ? '' : 'mt-3'}>
         <p
-          className={`font-display font-semibold tracking-tight leading-tight text-tinta ${compacta ? 'text-base' : 'text-xl'}`}
+          className={`font-display font-semibold tracking-tight leading-tight ${invertida ? 'text-sobre-navegacion' : 'text-tinta'} ${compacta ? 'text-base' : 'text-xl'}`}
         >
           {titulo}
         </p>
@@ -196,10 +198,10 @@ export function Disposicion() {
       {/* Raíl lateral: tableta horizontal y escritorio */}
       <aside
         inert={hayDialogoInicialAbierto}
-        className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex"
+        className="rail-principal sticky top-0 hidden h-dvh flex-col border-r px-5 py-7 lg:flex"
       >
         <div className="px-1">
-          <Marca titulo={tituloSeccionActual} />
+          <Marca invertida titulo={tituloSeccionActual} />
         </div>
 
         <nav aria-label="Secciones" className="mt-8 flex-1 overflow-y-auto">
@@ -213,8 +215,8 @@ export function Disposicion() {
                     [
                       'group flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm transition-all duration-150',
                       isActive
-                        ? 'bg-acento-tenue font-semibold text-acento'
-                        : 'text-tinta-media hover:bg-superficie-2 hover:text-tinta',
+                        ? 'navegacion-lateral-activa font-semibold text-sobre-navegacion'
+                        : 'text-sobre-navegacion/70 hover:bg-navegacion-2 hover:text-sobre-navegacion',
                     ].join(' ')
                   }
                 >
@@ -224,8 +226,8 @@ export function Disposicion() {
                         className={[
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-chico text-[0.625rem] font-semibold font-cifra tabular-nums',
                           isActive
-                            ? 'bg-acento text-sobre-acento'
-                            : 'bg-superficie-2 text-tinta-suave group-hover:bg-linea',
+                            ? 'bg-superficie text-acento'
+                            : 'bg-navegacion-2 text-sobre-navegacion/65 group-hover:bg-acento/35',
                         ].join(' ')}
                       >
                         {String(i + 1).padStart(2, '0')}
@@ -236,8 +238,8 @@ export function Disposicion() {
                         tamano={15}
                         className={
                           isActive
-                            ? 'text-acento'
-                            : 'text-tinta-suave opacity-60 group-hover:opacity-100'
+                            ? 'text-sobre-navegacion'
+                            : 'text-sobre-navegacion opacity-55 group-hover:opacity-100'
                         }
                       />
                     </>
@@ -252,9 +254,9 @@ export function Disposicion() {
           <button
             type="button"
             onClick={abrirAyuda}
-            className="flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+            className="flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm text-sobre-navegacion/70 transition-colors hover:bg-navegacion-2 hover:text-sobre-navegacion"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chico bg-superficie-2 text-tinta-suave">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chico bg-navegacion-2 text-sobre-navegacion/70">
               <Icono nombre="ayuda" tamano={16} />
             </span>
             <span className="flex-1 leading-tight">Ayuda</span>
@@ -263,9 +265,9 @@ export function Disposicion() {
           <button
             type="button"
             onClick={abrirAjustes}
-            className="flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+            className="flex min-h-toque items-center gap-3 rounded-medio px-3 text-sm text-sobre-navegacion/70 transition-colors hover:bg-navegacion-2 hover:text-sobre-navegacion"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chico bg-superficie-2 text-[0.625rem] font-semibold font-cifra tabular-nums text-tinta-suave">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-chico bg-navegacion-2 text-[0.625rem] font-semibold font-cifra tabular-nums text-sobre-navegacion/70">
               ⚙
             </span>
             <span className="flex-1 leading-tight">Ajustes</span>
@@ -276,17 +278,17 @@ export function Disposicion() {
       {/* Cabecera compacta: tableta vertical y móvil */}
       <header
         inert={hayDialogoInicialAbierto}
-        className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/80 px-4 backdrop-blur-xl lg:hidden"
+        className="cabecera-movil cabecera-movil-vibrante sticky top-0 z-20 border-b px-4 backdrop-blur-xl lg:hidden"
       >
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <Marca compacta titulo={tituloSeccionActual} />
+            <Marca compacta invertida titulo={tituloSeccionActual} />
           </div>
           <button
             type="button"
             onClick={abrirAyuda}
             aria-label="Abrir ayuda"
-            className="flex h-9 w-9 items-center justify-center rounded-medio border border-linea text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+            className="flex h-9 w-9 items-center justify-center rounded-medio border border-sobre-navegacion/20 text-sobre-navegacion/75 transition-colors hover:bg-navegacion-2 hover:text-sobre-navegacion"
           >
             <Icono nombre="ayuda" tamano={18} />
           </button>
@@ -294,7 +296,7 @@ export function Disposicion() {
             type="button"
             onClick={abrirAjustes}
             aria-label="Abrir ajustes"
-            className="flex h-9 w-9 items-center justify-center rounded-medio border border-linea text-tinta-media transition-colors hover:bg-superficie-2 hover:text-tinta"
+            className="flex h-9 w-9 items-center justify-center rounded-medio border border-sobre-navegacion/20 text-sobre-navegacion/75 transition-colors hover:bg-navegacion-2 hover:text-sobre-navegacion"
           >
             <Icono nombre="controles" tamano={18} />
           </button>

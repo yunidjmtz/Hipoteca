@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Cents } from '@/core/money';
+import { toCents, type Cents } from '@/core/money';
 import { formatEuros, formatEurosMientrasSeEscribe } from '@/core/format';
 import { parseEuros } from '@/core/parseNumber';
 import { InfoTooltip } from '@/components/InfoTooltip';
@@ -16,6 +16,9 @@ interface PropsInputMoneda {
   readonly deshabilitado?: boolean;
   readonly minimo?: Cents;
   readonly icono?: NombreIcono;
+  readonly comoDeslizador?: boolean;
+  readonly maximoDeslizador?: Cents;
+  readonly pasoDeslizador?: Cents;
 }
 
 export function InputMoneda({
@@ -28,9 +31,13 @@ export function InputMoneda({
   deshabilitado = false,
   minimo,
   icono,
+  comoDeslizador = false,
+  maximoDeslizador = toCents(3_000),
+  pasoDeslizador = toCents(25),
 }: PropsInputMoneda) {
   const [texto, setTexto] = useState<string>(() => formatEuros(valor));
   const [editando, setEditando] = useState(false);
+  const maximoEfectivo = Math.max(maximoDeslizador, valor) as Cents;
 
   function handleFocus() {
     // En móviles la selección de texto puede perderse al abrir el teclado.
@@ -61,17 +68,29 @@ export function InputMoneda({
       </div>
       <input
         id={id}
-        type="text"
-        inputMode="decimal"
-        value={editando ? texto : formatEuros(valor)}
+        type={comoDeslizador ? 'range' : 'text'}
+        inputMode={comoDeslizador ? undefined : 'decimal'}
+        min={comoDeslizador ? 0 : undefined}
+        max={comoDeslizador ? maximoEfectivo / 100 : undefined}
+        step={comoDeslizador ? pasoDeslizador / 100 : undefined}
+        value={comoDeslizador ? valor / 100 : editando ? texto : formatEuros(valor)}
         disabled={deshabilitado}
-        onChange={(e) => setTexto(formatEurosMientrasSeEscribe(e.target.value))}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
+        onChange={(e) => {
+          if (comoDeslizador) {
+            onChange(toCents(Number(e.target.value)));
+            return;
+          }
+          setTexto(formatEurosMientrasSeEscribe(e.target.value));
+        }}
+        onFocus={comoDeslizador ? undefined : handleFocus}
+        onBlur={comoDeslizador ? undefined : handleBlur}
         aria-describedby={hayError ? `${id}-desc` : undefined}
         aria-invalid={hayError || undefined}
+        aria-valuetext={comoDeslizador ? `${formatEuros(valor)} al mes` : undefined}
         className={[
-          'rounded-medio border px-3 py-2 text-sm text-tinta bg-superficie',
+          comoDeslizador
+            ? 'mt-2 h-2 w-full cursor-pointer accent-acento'
+            : 'rounded-medio border px-3 py-2 text-sm text-tinta bg-superficie',
           'focus:outline-none focus:ring-2 focus:ring-acento/50',
           hayError ? 'border-no-viable text-no-viable' : 'border-linea',
           deshabilitado ? 'opacity-50 cursor-not-allowed' : '',
@@ -79,6 +98,18 @@ export function InputMoneda({
           .filter(Boolean)
           .join(' ')}
       />
+      {comoDeslizador && (
+        <div className="flex items-center justify-between text-xs text-tinta-suave">
+          <span>0 €</span>
+          <output
+            htmlFor={id}
+            className="font-cifra text-sm font-semibold tabular-nums text-acento"
+          >
+            {formatEuros(valor)}/mes
+          </output>
+          <span>{formatEuros(maximoEfectivo)}</span>
+        </div>
+      )}
       {hayError && (
         <p id={`${id}-desc`} className="text-xs text-no-viable">
           {error}

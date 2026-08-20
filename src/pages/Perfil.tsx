@@ -193,9 +193,7 @@ function TarjetaItem({
     <div
       className={[
         'flex items-center gap-3 rounded-medio border px-4 py-3',
-        esAlquilerActual
-          ? 'border-acento/40 bg-acento-tenue'
-          : 'border-linea bg-superficie-2/40',
+        esAlquilerActual ? 'border-acento/40 bg-acento-tenue' : 'border-linea bg-superficie-2/40',
       ].join(' ')}
     >
       <div className="min-w-0 flex-1">
@@ -347,7 +345,7 @@ const TABS: readonly { id: TabId; etiqueta: string; icono: NombreIcono }[] = [
   { id: 'vivienda', etiqueta: 'Vivienda', icono: 'casa' },
   { id: 'titulares', etiqueta: 'Titulares', icono: 'perfil' },
   { id: 'otros-ingresos', etiqueta: 'Ingresos', icono: 'resumen' },
-  { id: 'deudas-gastos', etiqueta: 'Deudas y gastos', icono: 'escala' },
+  { id: 'deudas-gastos', etiqueta: 'Gastos', icono: 'escala' },
 ];
 
 // ─── Página principal ────────────────────────────────────────────────────────
@@ -380,7 +378,9 @@ export function Perfil() {
 
   // ── Handlers titulares ──
   function handleTitular(indice: number, t: Titular) {
-    const titulares = perfil.titulares.map((titular, posicion) => (posicion === indice ? t : titular));
+    const titulares = perfil.titulares.map((titular, posicion) =>
+      posicion === indice ? t : titular,
+    );
     actualizarPerfil({ titulares: titulares as PerfilFinanciero['titulares'] });
   }
 
@@ -569,7 +569,7 @@ export function Perfil() {
     ZERO,
   );
 
-  const totalGastosFijos: Cents = perfil.gastosFijos.reduce(
+  const totalGastosDetallados: Cents = perfil.gastosFijos.reduce(
     (acc, g) => (acc + mensualizar(g.importe, g.periodicidad)) as Cents,
     ZERO,
   );
@@ -757,7 +757,10 @@ export function Perfil() {
                       ['garaje', 'Garaje'],
                     ] as const
                   ).map(([campo, etiqueta]) => (
-                    <label key={campo} className="flex cursor-pointer items-center gap-2 text-sm text-tinta">
+                    <label
+                      key={campo}
+                      className="flex cursor-pointer items-center gap-2 text-sm text-tinta"
+                    >
                       <Interruptor
                         activado={preferencias[campo]}
                         alCambiar={(e) => actualizarPreferencias({ [campo]: e.target.checked })}
@@ -805,14 +808,16 @@ export function Perfil() {
                   </button>
                 </div>
               )}
-
             </div>
           )}
 
           {/* ── TAB: Otros ingresos ────────────────────────────────── */}
           {tabActiva === 'otros-ingresos' && (
             <div className="flex flex-col gap-4">
-              <div className="max-w-xs">
+              <section
+                aria-label="Ahorros actuales"
+                className="rounded-grande border border-linea bg-superficie-2/40 p-4"
+              >
                 <InputMoneda
                   id="ahorros-actuales"
                   etiqueta="Ahorros actuales"
@@ -821,119 +826,265 @@ export function Perfil() {
                   ayuda={AYUDAS.ahorrosActuales}
                   icono="capacidad"
                 />
-              </div>
+              </section>
 
-              <div className="filete flex flex-col gap-4 pt-5">
-                <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => abrirNuevo('ingreso')}
-                  className="flex items-center gap-2 rounded-medio border border-acento px-4 py-2 text-sm text-acento transition-colors hover:bg-acento-tenue"
+              <section
+                aria-labelledby="ingresos-adicionales-titulo"
+                className="rounded-grande border border-linea bg-superficie-2/40 p-4"
+              >
+                <h2 id="ingresos-adicionales-titulo" className="text-base font-semibold text-tinta">
+                  Ingresos adicionales
+                </h2>
+                <fieldset
+                  className="mt-4 flex flex-col gap-2"
+                  aria-describedby="modo-ingresos-ayuda"
                 >
-                  <span aria-hidden="true">+</span>
-                  Añadir ingreso
-                </button>
-                {totalOtrosIngresos > 0 && (
-                  <span className="font-cifra tabular-nums text-sm text-tinta-media">
-                    Total{' '}
-                    <span className="font-semibold text-tinta">
-                      {formatEuros(totalOtrosIngresos)}/mes
-                    </span>
-                  </span>
-                )}
-              </div>
+                  <legend className="text-sm font-medium text-tinta">
+                    ¿Cómo quieres indicar tus ingresos adicionales?
+                  </legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ['general', 'General'],
+                        ['desglosado', 'Desglosado'],
+                      ] as const
+                    ).map(([modo, etiqueta]) => (
+                      <label key={modo} className="cursor-pointer">
+                        <input
+                          type="radio"
+                          name="modo-otros-ingresos"
+                          value={modo}
+                          checked={(perfil.modoOtrosIngresos ?? 'general') === modo}
+                          onChange={() => actualizarPerfil({ modoOtrosIngresos: modo })}
+                          className="peer sr-only"
+                        />
+                        <span className="flex min-h-toque items-center justify-center rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors peer-checked:border-acento peer-checked:bg-acento-tenue peer-checked:text-acento peer-focus-visible:ring-2 peer-focus-visible:ring-acento/40">
+                          {etiqueta}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p id="modo-ingresos-ayuda" className="text-xs leading-relaxed text-tinta-suave">
+                    Elige una sola forma de cálculo. La otra se conserva para que puedas cambiar
+                    cuando quieras.
+                  </p>
+                </fieldset>
 
-              {perfil.otrosIngresos.length === 0 ? (
-                <p className="text-sm text-tinta-suave">Sin ingresos adicionales registrados.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {perfil.otrosIngresos.map((ingreso) => (
-                    <TarjetaItem
-                      key={ingreso.id}
-                      concepto={ingreso.concepto}
-                      importe={ingreso.importe}
-                      periodicidad={ingreso.periodicidad}
-                      onEditar={() => abrirEditar('ingreso', ingreso)}
-                      onEliminar={() => eliminarIngreso(ingreso.id)}
+                {(perfil.modoOtrosIngresos ?? 'general') === 'general' ? (
+                  <section aria-label="Ingresos adicionales generales" className="mt-4">
+                    <InputMoneda
+                      id="otros-ingresos-mensuales"
+                      etiqueta="Ingresos adicionales al mes"
+                      ayuda="Una estimación mensual de ingresos aparte de las nóminas de los titulares."
+                      valor={perfil.otrosIngresosMensuales}
+                      onChange={(otrosIngresosMensuales) =>
+                        actualizarPerfil({ otrosIngresosMensuales })
+                      }
                     />
-                  ))}
-                </div>
-              )}
-            </div>
+                    <p className="mt-2 text-xs leading-relaxed text-tinta-suave">
+                      Ajusta una estimación mensual rápida con la barra.
+                    </p>
+                  </section>
+                ) : null}
+
+                {(perfil.modoOtrosIngresos ?? 'general') === 'desglosado' ? (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => abrirNuevo('ingreso')}
+                        className="flex items-center gap-2 rounded-medio border border-acento px-4 py-2 text-sm text-acento transition-colors hover:bg-acento-tenue"
+                      >
+                        <span aria-hidden="true">+</span>
+                        Añadir ingreso
+                      </button>
+                      {totalOtrosIngresos > 0 && (
+                        <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                          Total{' '}
+                          <span className="font-semibold text-tinta">
+                            {formatEuros(totalOtrosIngresos)}/mes
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {perfil.otrosIngresos.length === 0 ? (
+                      <p className="text-sm text-tinta-suave">
+                        Sin ingresos adicionales registrados.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {perfil.otrosIngresos.map((ingreso) => (
+                          <TarjetaItem
+                            key={ingreso.id}
+                            concepto={ingreso.concepto}
+                            importe={ingreso.importe}
+                            periodicidad={ingreso.periodicidad}
+                            onEditar={() => abrirEditar('ingreso', ingreso)}
+                            onEliminar={() => eliminarIngreso(ingreso.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </section>
             </div>
           )}
 
           {/* ── TAB: Deudas y gastos ───────────────────────────────── */}
           {tabActiva === 'deudas-gastos' && (
             <div className="flex flex-col gap-4">
-              {/* Deudas mensuales */}
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => abrirNuevo('gasto')}
-                    className="flex items-center gap-2 rounded-medio border border-acento px-4 py-2 text-sm text-acento transition-colors hover:bg-acento-tenue"
-                  >
-                    <span aria-hidden="true">+</span>
-                    Añadir gasto
-                  </button>
+              <fieldset className="flex flex-col gap-2" aria-describedby="modo-gastos-ayuda">
+                <legend className="text-sm font-medium text-tinta">
+                  ¿Cómo quieres indicar tus gastos?
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ['general', 'General'],
+                      ['desglosado', 'Desglosado'],
+                    ] as const
+                  ).map(([modo, etiqueta]) => (
+                    <label key={modo} className="cursor-pointer">
+                      <input
+                        type="radio"
+                        name="modo-gastos-mensuales"
+                        value={modo}
+                        checked={(perfil.modoGastosMensuales ?? 'general') === modo}
+                        onChange={() => actualizarPerfil({ modoGastosMensuales: modo })}
+                        className="peer sr-only"
+                      />
+                      <span className="flex min-h-toque items-center justify-center rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-medium text-tinta transition-colors peer-checked:border-acento peer-checked:bg-acento-tenue peer-checked:text-acento peer-focus-visible:ring-2 peer-focus-visible:ring-acento/40">
+                        {etiqueta}
+                      </span>
+                    </label>
+                  ))}
                 </div>
+                <p id="modo-gastos-ayuda" className="text-xs leading-relaxed text-tinta-suave">
+                  Elige una sola forma de cálculo. La otra se conserva para que puedas cambiar
+                  cuando quieras.
+                </p>
+              </fieldset>
 
-                {(perfil.deudas.length > 0 || perfil.gastosFijos.length > 0) && (
-                  <div className="flex flex-col gap-4">
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      {perfil.deudas.length > 0 && (
-                      <section aria-label="Deudas" className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <h2 className="text-sm font-medium text-tinta">Deudas</h2>
-                          <span className="font-cifra tabular-nums text-sm text-tinta-media">
-                            Total{' '}
-                            <span className="font-semibold text-tinta">{formatEuros(totalDeudas)}/mes</span>
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {perfil.deudas.map((deuda) => (
-                            <TarjetaItem
-                              key={deuda.id}
-                              concepto={deuda.concepto}
-                              importe={deuda.importe}
-                              periodicidad={deuda.periodicidad}
-                              onEditar={() => abrirEditar('deuda', deuda)}
-                              onEliminar={() => eliminarDeuda(deuda.id)}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                      )}
-                      {perfil.gastosFijos.length > 0 && (
-                      <section aria-label="Gastos" className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <h2 className="text-sm font-medium text-tinta">Gastos</h2>
-                          <span className="font-cifra tabular-nums text-sm text-tinta-media">
-                            Total{' '}
-                            <span className="font-semibold text-tinta">{formatEuros(totalGastosFijos)}/mes</span>
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {perfil.gastosFijos.map((gasto) => (
-                            <TarjetaItem
-                              key={gasto.id}
-                              concepto={gasto.concepto}
-                              importe={gasto.importe}
-                              periodicidad={gasto.periodicidad}
-                              esAlquilerActual={gasto.esAlquilerActual ?? false}
-                              onEditar={() => abrirEditar('gasto', gasto)}
-                              onEliminar={() => eliminarGasto(gasto.id)}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                      )}
+              {(perfil.modoGastosMensuales ?? 'general') === 'general' ? (
+                <section
+                  aria-label="Gasto mensual general"
+                  className="rounded-grande border border-linea bg-superficie-2/40 p-4"
+                >
+                  <InputMoneda
+                    id="gasto-general-mensual"
+                    comoDeslizador
+                    etiqueta="Gasto mensual general"
+                    ayuda="Una estimación mensual para tus gastos habituales."
+                    valor={perfil.gastoGeneralMensual}
+                    onChange={(gastoGeneralMensual) => actualizarPerfil({ gastoGeneralMensual })}
+                  />
+                  <p className="mt-2 text-xs leading-relaxed text-tinta-suave">
+                    Introduce una estimación mensual, sin límite de importe.
+                  </p>
+                </section>
+              ) : null}
+
+              {(perfil.modoGastosMensuales ?? 'general') === 'general' &&
+                perfil.deudas.length > 0 && (
+                  <section aria-label="Deudas" className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-sm font-medium text-tinta">Deudas</h2>
+                      <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                        Total{' '}
+                        <span className="font-semibold text-tinta">
+                          {formatEuros(totalDeudas)}/mes
+                        </span>
+                      </span>
                     </div>
-                  </div>
+                    <div className="flex flex-col gap-2">
+                      {perfil.deudas.map((deuda) => (
+                        <TarjetaItem
+                          key={deuda.id}
+                          concepto={deuda.concepto}
+                          importe={deuda.importe}
+                          periodicidad={deuda.periodicidad}
+                          onEditar={() => abrirEditar('deuda', deuda)}
+                          onEliminar={() => eliminarDeuda(deuda.id)}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 )}
-              </div>
 
+              {(perfil.modoGastosMensuales ?? 'general') === 'desglosado' ? (
+                <div className="mt-4 flex flex-col gap-4">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => abrirNuevo('gasto')}
+                      className="flex items-center gap-2 rounded-medio border border-acento px-4 py-2 text-sm text-acento transition-colors hover:bg-acento-tenue"
+                    >
+                      <span aria-hidden="true">+</span>
+                      Añadir gasto
+                    </button>
+                  </div>
+
+                  {(perfil.deudas.length > 0 || perfil.gastosFijos.length > 0) && (
+                    <div className="flex flex-col gap-4">
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        {perfil.deudas.length > 0 && (
+                          <section aria-label="Deudas" className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <h2 className="text-sm font-medium text-tinta">Deudas</h2>
+                              <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                                Total{' '}
+                                <span className="font-semibold text-tinta">
+                                  {formatEuros(totalDeudas)}/mes
+                                </span>
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              {perfil.deudas.map((deuda) => (
+                                <TarjetaItem
+                                  key={deuda.id}
+                                  concepto={deuda.concepto}
+                                  importe={deuda.importe}
+                                  periodicidad={deuda.periodicidad}
+                                  onEditar={() => abrirEditar('deuda', deuda)}
+                                  onEliminar={() => eliminarDeuda(deuda.id)}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                        {perfil.gastosFijos.length > 0 && (
+                          <section aria-label="Gastos" className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <h2 className="text-sm font-medium text-tinta">Gastos detallados</h2>
+                              <span className="font-cifra tabular-nums text-sm text-tinta-media">
+                                Total{' '}
+                                <span className="font-semibold text-tinta">
+                                  {formatEuros(totalGastosDetallados)}/mes
+                                </span>
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              {perfil.gastosFijos.map((gasto) => (
+                                <TarjetaItem
+                                  key={gasto.id}
+                                  concepto={gasto.concepto}
+                                  importe={gasto.importe}
+                                  periodicidad={gasto.periodicidad}
+                                  esAlquilerActual={gasto.esAlquilerActual ?? false}
+                                  onEditar={() => abrirEditar('gasto', gasto)}
+                                  onEliminar={() => eliminarGasto(gasto.id)}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -1073,21 +1224,21 @@ export function Perfil() {
 
               {modalAbierto.tipo === 'gasto' &&
                 (modalAbierto.esAlquilerActual || !hayOtroAlquilerActual) && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-medio border border-linea bg-superficie-2/40 p-3 text-sm text-tinta">
-                  <Interruptor
-                    activado={modalAbierto.esAlquilerActual}
-                    alCambiar={(e) =>
-                      setModalAbierto({ ...modalAbierto, esAlquilerActual: e.target.checked })
-                    }
-                  />
-                  <span>
-                    <span className="block font-medium">Es mi alquiler actual</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-tinta-suave">
-                      Se elimina de los gastos al calcular la compra de tu vivienda.
+                  <label className="flex cursor-pointer items-start gap-3 rounded-medio border border-linea bg-superficie-2/40 p-3 text-sm text-tinta">
+                    <Interruptor
+                      activado={modalAbierto.esAlquilerActual}
+                      alCambiar={(e) =>
+                        setModalAbierto({ ...modalAbierto, esAlquilerActual: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="block font-medium">Es mi alquiler actual</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-tinta-suave">
+                        Se elimina de los gastos al calcular la compra de tu vivienda.
+                      </span>
                     </span>
-                  </span>
-                </label>
-              )}
+                  </label>
+                )}
 
               {/* Equivalente mensual */}
               {modalAbierto.importe > 0 && modalAbierto.periodicidad !== 'mensual' && (
