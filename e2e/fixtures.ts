@@ -13,6 +13,12 @@ export const test = base.extend<Fixtures>({
       await dialogo.getByLabel('Comunidad autónoma').selectOption('Aragón');
       await dialogo.getByRole('button', { name: 'Continuar' }).click();
       await expect(dialogo).toBeHidden();
+      const tutorial = page.getByRole('dialog', {
+        name: 'Añade Mi Hipoteca a tu pantalla de inicio',
+      });
+      await expect(tutorial).toBeVisible();
+      await tutorial.getByRole('button', { name: 'Entendido, empezar a usarla' }).click();
+      await expect(tutorial).toBeHidden();
       await expect
         .poll(() =>
           page.evaluate(() => {

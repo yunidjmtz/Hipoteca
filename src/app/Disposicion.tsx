@@ -36,6 +36,17 @@ const COMUNIDADES_AUTONOMAS = [
   'Melilla',
 ] as const;
 
+const CLAVE_TUTORIAL_INSTALACION = 'hipotecas-tutorial-instalacion-v1';
+
+function tutorialInstalacionPendiente(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_TUTORIAL_INSTALACION) !== 'completado';
+  } catch {
+    // Si el navegador bloquea el almacenamiento, no impedimos usar la aplicación.
+    return false;
+  }
+}
+
 function rutaDe(ruta: string): string {
   return ruta === '' ? '/' : `/${ruta}`;
 }
@@ -83,11 +94,17 @@ export function Disposicion() {
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
   const [ccaaInicial, setCcaaInicial] = useState('');
+  const [mostrarTutorialInstalacion, setMostrarTutorialInstalacion] = useState(
+    tutorialInstalacionPendiente,
+  );
   const ajustesRef = useRef<HTMLElement>(null);
   const ayudaRef = useRef<HTMLElement>(null);
   const dialogoCcaaRef = useRef<HTMLDivElement>(null);
+  const dialogoTutorialRef = useRef<HTMLDivElement>(null);
   const focoAnteriorRef = useRef<HTMLElement | null>(null);
   const necesitaElegirCcaa = estado.preferencias.ccaa === '';
+  const tutorialInstalacionVisible = !necesitaElegirCcaa && mostrarTutorialInstalacion;
+  const hayDialogoInicialAbierto = necesitaElegirCcaa || tutorialInstalacionVisible;
   const tituloSeccionActual =
     SECCIONES.find(
       (seccion) =>
@@ -114,10 +131,20 @@ export function Disposicion() {
     setAyudaAbierta(false);
     window.requestAnimationFrame(() => focoAnteriorRef.current?.focus());
   }
+  function cerrarTutorialInstalacion() {
+    try {
+      localStorage.setItem(CLAVE_TUTORIAL_INSTALACION, 'completado');
+    } catch {
+      // El tutorial ya puede cerrarse aunque el navegador no permita persistirlo.
+    }
+    setMostrarTutorialInstalacion(false);
+  }
 
   useEffect(() => {
     const contenedor = necesitaElegirCcaa
       ? dialogoCcaaRef.current
+      : tutorialInstalacionVisible
+        ? dialogoTutorialRef.current
       : ajustesAbiertos
         ? ajustesRef.current
         : ayudaAbierta
@@ -131,7 +158,7 @@ export function Disposicion() {
     });
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !necesitaElegirCcaa) {
+      if (e.key === 'Escape' && !hayDialogoInicialAbierto) {
         setAjustesAbiertos(false);
         setAyudaAbierta(false);
         window.requestAnimationFrame(() => focoAnteriorRef.current?.focus());
@@ -156,13 +183,19 @@ export function Disposicion() {
       window.cancelAnimationFrame(frame);
       document.removeEventListener('keydown', onKey);
     };
-  }, [ajustesAbiertos, ayudaAbierta, necesitaElegirCcaa]);
+  }, [
+    ajustesAbiertos,
+    ayudaAbierta,
+    hayDialogoInicialAbierto,
+    necesitaElegirCcaa,
+    tutorialInstalacionVisible,
+  ]);
 
   return (
     <div className="relative z-10 min-h-svh lg:grid lg:min-h-dvh lg:grid-cols-[17rem_1fr]">
       {/* Raíl lateral: tableta horizontal y escritorio */}
       <aside
-        inert={necesitaElegirCcaa}
+        inert={hayDialogoInicialAbierto}
         className="sticky top-0 hidden h-dvh flex-col border-r border-linea bg-superficie px-5 py-7 lg:flex"
       >
         <div className="px-1">
@@ -242,7 +275,7 @@ export function Disposicion() {
 
       {/* Cabecera compacta: tableta vertical y móvil */}
       <header
-        inert={necesitaElegirCcaa}
+        inert={hayDialogoInicialAbierto}
         className="cabecera-movil sticky top-0 z-20 border-b border-linea bg-superficie/80 px-4 backdrop-blur-xl lg:hidden"
       >
         <div className="flex items-center gap-3">
@@ -269,7 +302,7 @@ export function Disposicion() {
       </header>
 
       <main
-        inert={necesitaElegirCcaa}
+        inert={hayDialogoInicialAbierto}
         className={[
           'mx-auto w-full max-w-5xl px-2 sm:px-3 lg:px-5',
           pathname === '/escala'
@@ -291,7 +324,7 @@ export function Disposicion() {
 
       {/* Navegación inferior: móvil y tableta vertical */}
       <nav
-        inert={necesitaElegirCcaa}
+        inert={hayDialogoInicialAbierto}
         aria-label="Secciones"
         className="navegacion-movil fixed inset-x-0 bottom-0 z-20 overflow-x-auto border-t border-linea bg-superficie/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
       >
@@ -349,7 +382,7 @@ export function Disposicion() {
         aria-hidden={!ajustesAbiertos}
         aria-modal={ajustesAbiertos}
         role="dialog"
-        inert={!ajustesAbiertos || necesitaElegirCcaa}
+        inert={!ajustesAbiertos || hayDialogoInicialAbierto}
       >
         {/* Header del drawer */}
         <div className="flex items-center justify-between border-b border-linea bg-superficie px-6 py-4 shrink-0">
@@ -390,7 +423,7 @@ export function Disposicion() {
         aria-hidden={!ayudaAbierta}
         aria-modal={ayudaAbierta}
         role="dialog"
-        inert={!ayudaAbierta || necesitaElegirCcaa}
+        inert={!ayudaAbierta || hayDialogoInicialAbierto}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-linea bg-superficie px-6 py-4">
           <div className="flex items-center gap-3">
@@ -471,6 +504,84 @@ export function Disposicion() {
               {ccaaInicial !== '' && ccaaInicial !== 'Aragón'
                 ? 'Continuar con estimación genérica'
                 : 'Continuar'}
+            </button>
+          </section>
+        </div>
+      )}
+
+      {tutorialInstalacionVisible && (
+        <div
+          ref={dialogoTutorialRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-tutorial-instalacion"
+          className="fixed inset-0 z-[60] flex items-end bg-tinta/30 p-4 backdrop-blur-sm sm:items-center sm:justify-center"
+        >
+          <section
+            data-autofocus
+            tabIndex={-1}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-grande border border-linea bg-superficie p-6 shadow-elevado"
+          >
+            <h2 id="titulo-tutorial-instalacion" className="text-center font-display text-2xl text-tinta">
+              Añade Mi Hipoteca a tu pantalla de inicio
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-tinta-media">
+              Ábrela desde su propio icono, como una aplicación.
+            </p>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <section className="rounded-medio border border-linea bg-superficie-2 p-4">
+                <h3 className="font-display text-lg text-tinta">Android</h3>
+                <p className="mt-1 text-xs text-tinta-suave">En Chrome</p>
+                <img
+                  src={`${import.meta.env.BASE_URL}tutorial-instalar-android.png`}
+                  alt="Ilustración de un móvil Android: abre el menú de tres puntos y añade la aplicación a la pantalla de inicio."
+                  className="mx-auto mt-3 h-48 w-full max-w-48 rounded-chico object-contain shadow-papel"
+                />
+                <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-tinta-media">
+                  <li>
+                    Toca el menú <strong className="font-semibold text-tinta">⋮</strong> de la
+                    esquina superior derecha.
+                  </li>
+                  <li>
+                    Elige <strong className="font-semibold text-tinta">Instalar aplicación</strong>{' '}
+                    o <strong className="font-semibold text-tinta">Añadir a pantalla de inicio</strong>.
+                  </li>
+                  <li>Confirma con “Instalar” o “Añadir”.</li>
+                </ol>
+              </section>
+
+              <section className="rounded-medio border border-linea bg-superficie-2 p-4">
+                <h3 className="font-display text-lg text-tinta">iPhone y iPad</h3>
+                <p className="mt-1 text-xs text-tinta-suave">En Safari</p>
+                <img
+                  src={`${import.meta.env.BASE_URL}tutorial-instalar-ios.png`}
+                  alt="Ilustración de un iPhone: usa Compartir y añade la aplicación a la pantalla de inicio."
+                  className="mx-auto mt-3 h-48 w-full max-w-48 rounded-chico object-contain shadow-papel"
+                />
+                <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-tinta-media">
+                  <li>
+                    Toca <strong className="font-semibold text-tinta">Compartir</strong> (el icono
+                    del cuadrado con una flecha hacia arriba).
+                  </li>
+                  <li>
+                    Desplázate y pulsa{' '}
+                    <strong className="font-semibold text-tinta">Añadir a pantalla de inicio</strong>.
+                  </li>
+                  <li>Confirma con “Añadir”.</li>
+                </ol>
+              </section>
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-tinta-suave">
+              Si no ves esa opción, abre esta web desde Chrome en Android o Safari en iPhone y iPad.
+            </p>
+            <button
+              type="button"
+              onClick={cerrarTutorialInstalacion}
+              className="mt-5 w-full rounded-medio bg-acento px-4 py-2.5 text-sm font-medium text-sobre-acento hover:bg-acento/90"
+            >
+              Entendido, empezar a usarla
             </button>
           </section>
         </div>

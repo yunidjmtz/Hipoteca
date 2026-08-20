@@ -2989,7 +2989,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                       ) : (
                         <section className="mt-3 overflow-hidden rounded-medio border border-acento/25 bg-acento-tenue">
                           <div className="flex items-center justify-between gap-3 px-3 py-2">
-                            <p className="rotulo text-acento">Menor coste real</p>
+                            <p className="rotulo text-acento">Mejor Hipoteca</p>
                             <span className="text-xs font-medium text-tinta-media">
                               {hipotecasAplicables.length === 0
                                 ? 'Pendiente'
