@@ -20,7 +20,7 @@ export function calcularCosteVivienda(
   estado: EstadoPersistido,
 ): ResultadoCosteVivienda {
   const costeReforma = sumCents(vivienda.reformas.map((reforma) => reforma.costeEstimado));
-  const contexto = construirContexto(estado, vivienda.precioVenta);
+  const contexto = construirContexto(estado, vivienda.precioVenta, undefined, vivienda);
   const gastosCompra = calcularGastosCompra(
     vivienda.precioVenta,
     contexto.configFiscal,

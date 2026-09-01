@@ -15,8 +15,8 @@ const APARTADOS: readonly ApartadoManual[] = [
     titulo: 'Primeros pasos',
     descripcion: 'La aplicación calcula en tu dispositivo y guarda los datos en este navegador.',
     pasos: [
-      'Empieza por Tus datos: completa vivienda, titulares, ahorro, deudas y gastos.',
-      'Consulta Mi plan hipotecario para saber qué precio es razonable y cuánto te falta.',
+      'Empieza por Mis finanzas: completa titulares, ingresos, ahorro, deudas y gastos.',
+      'Consulta el Resumen para conocer el máximo que puedes permitirte con comodidad.',
       'Cuando tengas propuestas, añádelas en Hipoteca y compáralas.',
       'Guarda una oferta para revisar su cuadro en Amortización.',
     ],
@@ -36,12 +36,11 @@ const APARTADOS: readonly ApartadoManual[] = [
     nota: 'No subas documentación sensible a la aplicación: sirve para calcular y comparar, no para tramitar solicitudes.',
   },
   {
-    id: 'datos',
-    titulo: 'Tus datos',
+    id: 'finanzas',
+    titulo: 'Mis finanzas',
     descripcion:
       'Es la base de todos los cálculos. Los cambios se reflejan automáticamente en el resto de secciones.',
     pasos: [
-      'En Vivienda, indica el precio objetivo, comunidad autónoma, si es nueva o usada y el destino. Añade el valor de referencia si lo conoces: puede afectar a los impuestos.',
       'En Titulares, introduce el neto de cada paga, 12 o 14 pagas, edad y situación laboral. Añade hasta dos titulares más si compran contigo.',
       'En Otros ingresos, incorpora importes periódicos como alquileres o pensiones con su periodicidad.',
       'En Deudas y gastos, registra cuotas de préstamos, tarjetas y gastos fijos. Marca el alquiler actual para excluirlo al estimar la vida tras la compra.',
@@ -51,14 +50,14 @@ const APARTADOS: readonly ApartadoManual[] = [
   },
   {
     id: 'resumen',
-    titulo: 'Resumen y Mi plan hipotecario',
+    titulo: 'Resumen y capacidad de compra',
     descripcion:
-      'Muestran una fotografía de tu capacidad de compra, tu ahorro y el siguiente paso recomendado.',
+      'Muestra una fotografía de tu capacidad de compra, tu ahorro y el siguiente paso recomendado.',
     pasos: [
       'Abre Resumen para ver ingresos, ahorro, cuota máxima, gastos actuales y el factor que más limita tu compra.',
-      'Abre Mi plan hipotecario para contrastar el precio objetivo con el desembolso inicial, la cuota estimada y la meta de ahorro.',
-      'Compara el precio cómodo con el máximo bancario: el primero busca proteger tu presupuesto y el segundo refleja el límite de endeudamiento configurado.',
-      'Si hay dinero pendiente, ajusta el ahorro mensual para ver una fecha orientativa de compra.',
+      'En Capacidad de compra estimada, compara el precio máximo cómodo con el límite bancario.',
+      'El precio cómodo busca proteger tu presupuesto; el límite bancario refleja el máximo endeudamiento configurado.',
+      'Cuando añadas un inmueble, se calcularán sus impuestos, desembolso y encaje exacto con sus propios datos.',
     ],
     ruta: '/resumen',
   },
@@ -68,7 +67,7 @@ const APARTADOS: readonly ApartadoManual[] = [
     descripcion:
       'Ofertas sirve para comparar viviendas; Hipoteca sirve para guardar y comparar las propuestas de los bancos.',
     pasos: [
-      'En Ofertas puedes registrar inmuebles, sus características, reformas y costes aproximados antes de elegir.',
+      'En Inmuebles registra el estado, destino, valor de referencia si lo conoces, comunidad, IBI, características y reformas de cada vivienda.',
       'En Hipoteca, pulsa Añadir hipoteca y completa banco, precio, entrada, financiación, plazo y tipo de interés.',
       'Para tipo fijo, informa el TIN. Para variable, revisa Euríbor y diferencial; para mixto, añade el TIN y periodo fijo.',
       'Añade comisión de apertura, TAE oficial de la FEIN si la tienes y las vinculaciones. Una bonificación puede bajar el TIN pero tener un coste anual.',
@@ -106,17 +105,6 @@ const APARTADOS: readonly ApartadoManual[] = [
     ruta: '/hipoteca',
   },
   {
-    id: 'escala',
-    titulo: 'Escala de precios',
-    descripcion: 'Explora rápidamente qué ocurre al cambiar el precio de compra.',
-    pasos: [
-      'Consulta las filas de precio para ver entrada, mínimo necesario, dinero faltante y cuota estimada.',
-      'Usa esta vista para identificar un intervalo realista, no como sustituto de la valoración del banco.',
-      'Cambia precio mínimo, máximo y paso desde Ajustes si quieres explorar otro rango.',
-    ],
-    ruta: '/escala',
-  },
-  {
     id: 'glosario',
     titulo: 'Glosario esencial',
     descripcion:
@@ -147,10 +135,10 @@ const APARTADOS: readonly ApartadoManual[] = [
     titulo: 'Dudas frecuentes',
     descripcion: 'Soluciones rápidas para los casos más habituales.',
     pasos: [
-      '¿Veo importes a cero o no aparece una estimación? Revisa Tus datos: suelen faltar el precio objetivo, ingresos, ahorro o comunidad autónoma.',
+      '¿Veo importes a cero o no aparece una estimación? Revisa Mis finanzas: suelen faltar ingresos o gastos. La comunidad autónoma se solicita al inicio.',
       '¿La cuota parece baja pero el coste es alto? Compara el coste total, la TAE y las vinculaciones, además de la cuota inicial.',
       '¿Por qué una oferta no coincide con el banco? Comprueba capital, plazo, tipo, cuota de productos vinculados, comisión y tasación; una diferencia pequeña puede cambiar el resultado.',
-      '¿Puedo probar alternativas? Sí. Modifica cualquier dato, guarda varias ofertas y usa la Escala de precios. Exporta antes si quieres conservar una versión concreta.',
+      '¿Puedo probar alternativas? Sí. Modifica cualquier dato, guarda varias ofertas y revisa cómo cambia tu capacidad de compra. Exporta antes si quieres conservar una versión concreta.',
       '¿Debo restablecer los datos? Solo si quieres empezar de nuevo. Primero exporta una copia; el restablecimiento elimina perfil, ofertas y simulaciones.',
     ],
   },
@@ -162,7 +150,7 @@ const APARTADOS: readonly ApartadoManual[] = [
       'En Gastos de compra, ajusta inmobiliaria, notaría, registro, gestoría, tasación y nota simple a tu caso.',
       'En Parámetros de hipoteca, usa la referencia INE para una estimación media o Manual para introducir tu propio TIN; revisa plazo y porcentaje financiado.',
       'En Ratios y plazos, define el límite bancario, tu objetivo personal y la edad máxima de vencimiento. Un objetivo personal más bajo suele dejar más margen mensual.',
-      'En Rango de exploración configura los precios y el salto que verá la Escala de precios. En Fiscalidad por CCAA corrige los tipos si conoces los aplicables.',
+      'En Fiscalidad por CCAA corrige los tipos si conoces los aplicables.',
       'En Datos y privacidad, exporta un JSON como copia, impórtalo en este navegador o restablece los datos. El restablecimiento conserva la configuración de cálculo.',
     ],
     nota: 'Actualizar ahora consulta el INE y no representa una oferta bancaria vigente.',

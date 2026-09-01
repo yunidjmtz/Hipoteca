@@ -37,7 +37,9 @@ export function InputMoneda({
 }: PropsInputMoneda) {
   const [texto, setTexto] = useState<string>(() => formatEuros(valor));
   const [editando, setEditando] = useState(false);
-  const maximoEfectivo = Math.max(maximoDeslizador, valor) as Cents;
+  const [textoDeslizador, setTextoDeslizador] = useState<string>(() => formatEuros(valor));
+  const [editandoDeslizador, setEditandoDeslizador] = useState(false);
+  const maximoEfectivo = maximoDeslizador;
 
   function handleFocus() {
     // En móviles la selección de texto puede perderse al abrir el teclado.
@@ -53,6 +55,14 @@ export function InputMoneda({
       onChange(efectivo);
     }
     setEditando(false);
+  }
+
+  function handleBlurDeslizador() {
+    const cents = parseEuros(textoDeslizador);
+    if (cents !== null) {
+      onChange(Math.min(cents, maximoEfectivo) as Cents);
+    }
+    setEditandoDeslizador(false);
   }
 
   const hayError = error !== undefined;
@@ -101,12 +111,26 @@ export function InputMoneda({
       {comoDeslizador && (
         <div className="flex items-center justify-between text-xs text-tinta-suave">
           <span>0 €</span>
-          <output
-            htmlFor={id}
-            className="font-cifra text-sm font-semibold tabular-nums text-acento"
-          >
-            {formatEuros(valor)}/mes
-          </output>
+          <div className="flex items-center gap-0.5 font-cifra text-sm font-semibold tabular-nums text-acento">
+            <input
+              aria-label={`${etiqueta}: importe mensual`}
+              type="text"
+              inputMode="decimal"
+              value={editandoDeslizador ? textoDeslizador : formatEuros(valor)}
+              onFocus={(e) => {
+                setTextoDeslizador(formatEuros(valor));
+                setEditandoDeslizador(true);
+                e.currentTarget.select();
+              }}
+              onChange={(e) => setTextoDeslizador(formatEurosMientrasSeEscribe(e.target.value))}
+              onBlur={handleBlurDeslizador}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
+              className="w-20 rounded-medio border border-linea bg-superficie px-1 py-0.5 text-center text-sm font-semibold text-acento focus:outline-none focus:ring-2 focus:ring-acento/50"
+            />
+            <span>/mes</span>
+          </div>
           <span>{formatEuros(maximoEfectivo)}</span>
         </div>
       )}

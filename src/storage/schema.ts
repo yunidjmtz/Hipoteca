@@ -421,6 +421,14 @@ export const zViviendaGuardada = z.object({
   superficieM2: z.number().int().min(0).default(0),
   habitaciones: z.number().int().min(0).default(0),
   banos: z.number().int().min(0).default(0),
+  ibiAnual: zCents.default(ZERO),
+  comunidadMensual: zCents.default(ZERO),
+  // Estos datos pertenecen a cada inmueble; los valores por defecto
+  // mantienen compatibles las viviendas guardadas antes de este cambio.
+  estadoVivienda: zEstadoVivienda.default('usada'),
+  destino: zDestinoCompra.default('habitual'),
+  esVpoEspecial: z.boolean().default(false),
+  valorReferenciaFiscal: zCents.optional(),
   esExterior: z.boolean().default(false),
   tieneTrastero: z.boolean().default(false),
   tieneGaraje: z.boolean().default(false),

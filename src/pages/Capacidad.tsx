@@ -4,14 +4,15 @@ import { EstadoBadge } from '@/components/EstadoBadge';
 import { Explicacion } from '@/components/Explicacion';
 import { Panel } from '@/components/Panel';
 import { formatEuros } from '@/core/format';
-import type { Cents } from '@/core/money';
+import { ZERO, type Cents } from '@/core/money';
 import {
   buscarPrecioMaximo,
+  esCompraComoda,
   evaluarPrecio,
   factorLimitante,
   RANGO_BUSQUEDA_CAPACIDAD,
 } from '@/finance/affordability';
-import { construirContexto } from '@/finance/contexto';
+import { construirContexto, CONTEXTO_VIVIENDA_PLAN } from '@/finance/contexto';
 import type { ResultadoBusqueda } from '@/domain/types';
 
 interface FilaPrecio {
@@ -33,24 +34,17 @@ function textoFactor(factor: ReturnType<typeof factorLimitante>): string {
     case 'edad':
       return 'La edad de los titulares acorta el plazo máximo, lo que eleva la cuota.';
     case 'ninguno':
-      return 'No hay factores limitantes para el precio objetivo actual.';
+      return 'No hay factores limitantes para tu compra máxima cómoda.';
   }
 }
 
 export function Capacidad() {
   const { estado } = useEstado();
-  const { preferencias, ajustes } = estado;
+  const { ajustes } = estado;
 
-  const ctx = useMemo(
-    () => construirContexto(estado, preferencias.precioObjetivo),
-    [estado, preferencias.precioObjetivo],
-  );
-
-  const ctxFactory = useMemo(() => (p: Cents) => construirContexto(estado, p), [estado]);
-
-  const evaluacionObjetivo = useMemo(
-    () => evaluarPrecio(preferencias.precioObjetivo, ctx),
-    [preferencias.precioObjetivo, ctx],
+  const ctxFactory = useMemo(
+    () => (p: Cents) => construirContexto(estado, p, undefined, CONTEXTO_VIVIENDA_PLAN),
+    [estado],
   );
 
   const porAhorro = useMemo(
@@ -71,11 +65,20 @@ export function Capacidad() {
   const porComodo = useMemo(
     () =>
       buscarPrecioMaximo(
-        (e) => e.ratioPersonal <= ajustes.ratioPersonalObjetivo,
+        (evaluacion) => esCompraComoda(evaluacion, ajustes.ratioPersonalObjetivo),
         ctxFactory,
         RANGO_BUSQUEDA_CAPACIDAD,
       ),
     [ctxFactory, ajustes.ratioPersonalObjetivo],
+  );
+  const precioComodo = porComodo.precioMaximo ?? ZERO;
+  const evaluacionComoda = useMemo(
+    () =>
+      evaluarPrecio(
+        precioComodo,
+        construirContexto(estado, precioComodo, undefined, CONTEXTO_VIVIENDA_PLAN),
+      ),
+    [estado, precioComodo],
   );
 
   const porViable = useMemo(
@@ -98,7 +101,7 @@ export function Capacidad() {
     [ctxFactory, ajustes.ratioBancarioMaximo],
   );
 
-  const factor = factorLimitante(evaluacionObjetivo, ajustes.ratioBancarioMaximo);
+  const factor = factorLimitante(evaluacionComoda, ajustes.ratioBancarioMaximo);
 
   const filas: readonly FilaPrecio[] = [
     {
@@ -160,9 +163,9 @@ export function Capacidad() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3 border-b border-linea pb-3">
             <span className="text-sm text-tinta-media">
-              Objetivo de {formatEuros(preferencias.precioObjetivo)}
+              Compra cómoda de {formatEuros(precioComodo)}
             </span>
-            <EstadoBadge estado={evaluacionObjetivo.estado} />
+            <EstadoBadge estado={evaluacionComoda.estado} />
           </div>
           <p>{textoFactor(factor)}</p>
         </div>

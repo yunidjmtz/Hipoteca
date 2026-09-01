@@ -14,12 +14,19 @@ function zodADominio(data: ZodEstado): EstadoPersistido {
   const escenarioSimulador: EscenarioHipoteca =
     data.escenarioSimulador ?? ESTADO_INICIAL.escenarioSimulador;
   const viviendas = (data.viviendas ?? []).map((vivienda) => {
-    const { origenInmobiliaria, catalogoViviendaId, yaNoDisponible, ...viviendaBase } = vivienda;
+    const {
+      origenInmobiliaria,
+      catalogoViviendaId,
+      yaNoDisponible,
+      valorReferenciaFiscal,
+      ...viviendaBase
+    } = vivienda;
     return {
       ...viviendaBase,
       ...(origenInmobiliaria === undefined ? {} : { origenInmobiliaria }),
       ...(catalogoViviendaId === undefined ? {} : { catalogoViviendaId }),
       ...(yaNoDisponible === undefined ? {} : { yaNoDisponible }),
+      ...(valorReferenciaFiscal === undefined ? {} : { valorReferenciaFiscal }),
     };
   });
   return {
@@ -257,8 +264,8 @@ function migrar(data: EstadoPersistido): EstadoPersistido {
 }
 
 /**
- * Quita los datos del usuario sin perder parámetros de cálculo, fiscalidad,
- * gastos configurables ni el rango usado por la escala de precios.
+ * Quita los datos del usuario sin perder parámetros de cálculo, fiscalidad y
+ * gastos configurables.
  */
 export function limpiarDatosConservandoConfiguracion(data: EstadoPersistido): EstadoPersistido {
   return {

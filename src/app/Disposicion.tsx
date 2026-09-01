@@ -307,9 +307,7 @@ export function Disposicion() {
         inert={hayDialogoInicialAbierto}
         className={[
           'mx-auto w-full max-w-5xl px-2 sm:px-3 lg:px-5',
-          pathname === '/escala'
-            ? 'flex h-[calc(100svh-3.75rem)] overflow-hidden pt-4 pb-20 lg:h-dvh lg:pt-8 lg:pb-8'
-            : 'pt-6 pb-32 lg:pt-8 lg:pb-12',
+          'pt-6 pb-32 lg:pt-8 lg:pb-12',
         ].join(' ')}
       >
         {estadoPersistencia === 'error' && (

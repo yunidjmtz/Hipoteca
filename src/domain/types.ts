@@ -138,6 +138,11 @@ export interface PerfilFinanciero {
 export interface PreferenciasCompra {
   ccaa: string;
   provincia: string;
+  /**
+   * Datos heredados de la primera versión del plan. El contexto fiscal y el
+   * destino se guardan ahora en cada inmueble para que cada cálculo refleje
+   * la vivienda que se está valorando.
+   */
   destino: DestinoCompra;
   estadoVivienda: EstadoVivienda;
   esVpoEspecial: boolean;
@@ -416,6 +421,14 @@ export interface ViviendaGuardada {
   habitaciones: number;
   /** Opcional para conservar compatibilidad con viviendas guardadas anteriormente. */
   banos?: number;
+  /** Gastos propios del inmueble; opcionales para conservar viviendas anteriores. */
+  ibiAnual?: Cents;
+  comunidadMensual?: Cents;
+  /** Contexto fiscal y de uso propio del inmueble que se está valorando. */
+  estadoVivienda?: EstadoVivienda;
+  destino?: DestinoCompra;
+  esVpoEspecial?: boolean;
+  valorReferenciaFiscal?: Cents;
   esExterior: boolean;
   tieneTrastero: boolean;
   tieneGaraje: boolean;

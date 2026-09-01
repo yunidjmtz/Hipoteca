@@ -155,6 +155,16 @@ export function factorLimitante(e: EvaluacionPrecio, ratioMaximo: number): Facto
   return 'ninguno';
 }
 
+/**
+ * Una compra cómoda no solo limita el esfuerzo hipotecario: debe dejar saldo
+ * mensual después de las deudas y los gastos fijos declarados.
+ */
+export function esCompraComoda(evaluacion: EvaluacionPrecio, ratioObjetivo: number): boolean {
+  return (
+    evaluacion.ratioPersonal <= ratioObjetivo && evaluacion.dineroLibreMensual >= ZERO
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Evaluación de un precio — §4.2, R5, R11
 // ---------------------------------------------------------------------------

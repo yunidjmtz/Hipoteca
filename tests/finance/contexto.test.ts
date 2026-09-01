@@ -71,6 +71,34 @@ describe('construirContexto', () => {
     expect(contexto.configFiscal.ccaa).toMatch(/editable/i);
   });
 
+  it('prioriza los datos del inmueble sobre las preferencias antiguas', () => {
+    const estado = estadoCon({
+      preferencias: {
+        ...ESTADO_INICIAL.preferencias,
+        estadoVivienda: 'usada',
+        destino: 'habitual',
+        esVpoEspecial: false,
+        valorReferenciaFiscal: toCents(160_000),
+      },
+    });
+
+    const contexto = construirContexto(estado, toCents(150_000), undefined, {
+      estadoVivienda: 'nueva',
+      destino: 'segunda',
+      esVpoEspecial: true,
+      valorReferenciaFiscal: toCents(175_000),
+      ibiAnual: toCents(600),
+      comunidadMensual: toCents(75),
+    });
+
+    expect(contexto.estadoVivienda).toBe('nueva');
+    expect(contexto.esVpoEspecial).toBe(true);
+    expect(contexto.reduccion.esViviendaHabitual).toBe(false);
+    expect(contexto.valorReferenciaFiscal).toBe(toCents(175_000));
+    expect(contexto.costesRecurrentes.ibiAnual).toBe(toCents(600));
+    expect(contexto.costesRecurrentes.comunidadMensual).toBe(toCents(75));
+  });
+
   it('usa la primera configuración si no existe la seleccionada ni la genérica', () => {
     const primera = ESTADO_INICIAL.ajustes.fiscal[0]!;
     const estado = estadoCon({

@@ -101,7 +101,7 @@ describe('compararViviendas', () => {
     expect(resultado?.costePorM2).toBeGreaterThan(2_000);
   });
 
-  it('no recomienda una vivienda que incumple una necesidad mínima', () => {
+  it('no aplica requisitos globales ocultos al comparar viviendas', () => {
     const piso = { ...crearVivienda('pequeno', 150_000, 80), habitaciones: 1 };
     const estado = {
       ...ESTADO_INICIAL,
@@ -109,11 +109,11 @@ describe('compararViviendas', () => {
     };
     const resultado = compararViviendas([piso], estado)[0];
 
-    expect(resultado?.criteriosNecesidadesCumplidos).toBe(0);
-    expect(resultado?.esRecomendable).toBe(false);
+    expect(resultado?.criteriosNecesidadesTotales).toBe(0);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
   });
 
-  it('incluye el mínimo de baños en las necesidades obligatorias', () => {
+  it('no aplica un mínimo global de baños que ya no se solicita', () => {
     const piso = { ...crearVivienda('un-bano', 150_000, 80), habitaciones: 3, banos: 1 };
     const estado = {
       ...ESTADO_INICIAL,
@@ -121,11 +121,11 @@ describe('compararViviendas', () => {
     };
     const resultado = compararViviendas([piso], estado)[0];
 
-    expect(resultado?.criteriosNecesidadesCumplidos).toBe(0);
-    expect(resultado?.esRecomendable).toBe(false);
+    expect(resultado?.criteriosNecesidadesTotales).toBe(0);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
   });
 
-  it('evalúa conjuntamente habitaciones, baños y extras solicitados', () => {
+  it('deja de puntuar requisitos globales de habitaciones, baños y extras', () => {
     const piso = {
       ...crearVivienda('parcial', 150_000, 80, { esExterior: true, tieneGaraje: false }),
       habitaciones: 3,
@@ -144,10 +144,9 @@ describe('compararViviendas', () => {
     };
 
     const resultado = compararViviendas([piso], estado)[0];
-    expect(resultado?.criteriosNecesidadesCumplidos).toBe(3);
-    expect(resultado?.criteriosNecesidadesTotales).toBe(4);
-    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades * 0.75);
-    expect(resultado?.esRecomendable).toBe(false);
+    expect(resultado?.criteriosNecesidadesCumplidos).toBe(0);
+    expect(resultado?.criteriosNecesidadesTotales).toBe(0);
+    expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
   });
 
   it('otorga todos los puntos de necesidades si no se ha exigido ninguna', () => {
@@ -168,7 +167,7 @@ describe('compararViviendas', () => {
     expect(resultado?.desglose.necesidades).toBe(PESOS_VIVIENDA.necesidades);
   });
 
-  it('reduce el encaje financiero cuando falta definir el presupuesto del plan', () => {
+  it('calcula el encaje financiero aunque el precio objetivo antiguo esté vacío', () => {
     const estado: EstadoPersistido = {
       ...ESTADO_INICIAL,
       preferencias: { ...ESTADO_INICIAL.preferencias, precioObjetivo: ZERO },
@@ -180,8 +179,8 @@ describe('compararViviendas', () => {
     };
     const resultado = compararViviendas([crearVivienda('sin-plan', 100_000, 80)], estado)[0];
 
-    expect(resultado?.encajePlan?.estado).toBe('sin_presupuesto');
-    expect(resultado?.desglose.encajeFinanciero).toBe(PESOS_VIVIENDA.encajeFinanciero * 0.5);
+    expect(resultado?.encajePlan?.estado).toBe('en_plan');
+    expect(resultado?.desglose.encajeFinanciero).toBe(PESOS_VIVIENDA.encajeFinanciero);
   });
 
   it('prioriza una vivienda disponible frente a otra retirada del mercado', () => {

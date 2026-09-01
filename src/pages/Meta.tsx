@@ -3,8 +3,14 @@ import { useEstado } from '@/app/EstadoProvider';
 import { addMonthsAnchored, fechaLocalISO } from '@/core/dates';
 import { formatEuros, formatFecha } from '@/core/format';
 import { maxCents, multiplyCents, subtractCents, ZERO } from '@/core/money';
-import { calcularCapacidadAhorroActual, evaluarPrecio } from '@/finance/affordability';
-import { construirContexto } from '@/finance/contexto';
+import {
+  buscarPrecioMaximo,
+  calcularCapacidadAhorroActual,
+  esCompraComoda,
+  evaluarPrecio,
+  RANGO_BUSQUEDA_CAPACIDAD,
+} from '@/finance/affordability';
+import { construirContexto, CONTEXTO_VIVIENDA_PLAN } from '@/finance/contexto';
 import { mesesHastaObjetivo, proyectarAhorro } from '@/finance/savingsGoal';
 import type { PuntoProyeccion } from '@/domain/types';
 
@@ -58,17 +64,26 @@ function ProgresoHitos({
 
 export function Meta() {
   const { estado } = useEstado();
-  const { perfil, preferencias, ajustes } = estado;
+  const { perfil, ajustes } = estado;
   const [tablaAbierta, setTablaAbierta] = useState(false);
 
-  const ctx = useMemo(
-    () => construirContexto(estado, preferencias.precioObjetivo),
-    [estado, preferencias.precioObjetivo],
+  const precioPlan = useMemo(
+    () =>
+      buscarPrecioMaximo(
+        (evaluacion) => esCompraComoda(evaluacion, ajustes.ratioPersonalObjetivo),
+        (precio) => construirContexto(estado, precio, undefined, CONTEXTO_VIVIENDA_PLAN),
+        RANGO_BUSQUEDA_CAPACIDAD,
+      ).precioMaximo ?? ZERO,
+    [estado, ajustes.ratioPersonalObjetivo],
   );
 
   const evaluacion = useMemo(
-    () => evaluarPrecio(preferencias.precioObjetivo, ctx),
-    [preferencias.precioObjetivo, ctx],
+    () =>
+      evaluarPrecio(
+        precioPlan,
+        construirContexto(estado, precioPlan, undefined, CONTEXTO_VIVIENDA_PLAN),
+      ),
+    [estado, precioPlan],
   );
 
   const capacidadAhorroActual = useMemo(() => calcularCapacidadAhorroActual(perfil), [perfil]);
@@ -85,11 +100,14 @@ export function Meta() {
       mesesMaximos: 120,
       objetivoEnMes: (mes: number) => {
         const factorPrecio = Math.pow(1 + ajustes.crecimientoAnualPrecioVivienda, mes / 12);
-        const precioFuturo = multiplyCents(preferencias.precioObjetivo, factorPrecio);
-        return evaluarPrecio(precioFuturo, construirContexto(estado, precioFuturo)).dineroMinimo;
+        const precioFuturo = multiplyCents(precioPlan, factorPrecio);
+        return evaluarPrecio(
+          precioFuturo,
+          construirContexto(estado, precioFuturo, undefined, CONTEXTO_VIVIENDA_PLAN),
+        ).dineroMinimo;
       },
     }),
-    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo, hoy, preferencias, estado],
+    [perfil, capacidadAhorroActual, ajustes, evaluacion.dineroMinimo, hoy, precioPlan, estado],
   );
 
   const meses = useMemo(() => mesesHastaObjetivo(proyeccionInput), [proyeccionInput]);
@@ -118,7 +136,7 @@ export function Meta() {
         <div className="px-3 py-5 sm:px-4">
           {evaluacion.dineroMinimo <= 0 ? (
             <p className="text-sm text-tinta-media">
-              Configura el precio objetivo para ver la proyección.
+              Añade ingresos para calcular tu compra máxima cómoda.
             </p>
           ) : (
             <div>

@@ -131,7 +131,6 @@ export function Ajustes() {
     estado,
     actualizarAjustes,
     actualizarGastos,
-    actualizarPreferencias,
     refrescarTinIne,
     estadoConsultaTinIne,
     exportarDatos,
@@ -144,7 +143,7 @@ export function Ajustes() {
     descartarRecuperacion,
     actualizarInmobiliariaActivaDemo,
   } = useEstado();
-  const { ajustes, gastos, preferencias } = estado;
+  const { ajustes, gastos } = estado;
   const periodoTinIne = formatearPeriodoIne(ajustes.tinReferenciaPeriodo);
 
   // Mensaje de resultado de la importación
@@ -558,47 +557,7 @@ export function Ajustes() {
             </div>
           </section>
 
-          {/* C. Rango de exploración */}
-          <section className="mt-5 flex flex-col gap-4 border-t border-linea pt-5">
-            <h3 className="font-display text-xl text-tinta">Rango de exploración</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <InputMoneda
-                id="precio-min"
-                etiqueta="Precio mínimo"
-                valor={preferencias.precioMinExplorar}
-                onChange={(v) => actualizarPreferencias({ precioMinExplorar: v })}
-                ayuda="El precio más bajo que aparecerá en la tabla de escala. Ajústalo a tu rango real para que las filas sean útiles."
-              />
-              <InputMoneda
-                id="precio-max"
-                etiqueta="Precio máximo"
-                valor={preferencias.precioMaxExplorar}
-                onChange={(v) => actualizarPreferencias({ precioMaxExplorar: v })}
-                ayuda="El precio más alto de la tabla. Puedes fijarlo por encima de tu límite para ver cuánto necesitarías en cada escenario."
-              />
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="paso-escala" className="text-sm font-medium text-tinta">
-                  Paso de escala
-                </label>
-                <select
-                  id="paso-escala"
-                  value={preferencias.pasoEscala}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    const paso = val === 5000 ? 5000 : val === 20000 ? 20000 : 10000;
-                    actualizarPreferencias({ pasoEscala: paso });
-                  }}
-                  className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
-                >
-                  <option value={5000}>5.000 €</option>
-                  <option value={10000}>10.000 €</option>
-                  <option value={20000}>20.000 €</option>
-                </select>
-              </div>
-            </div>
-          </section>
-
-          {/* D. Fiscalidad por CCAA */}
+          {/* C. Fiscalidad por CCAA */}
           <section className="mt-5 flex flex-col gap-5 border-t border-linea pt-5">
             <h3 className="font-display text-xl text-tinta">Fiscalidad por CCAA</h3>
             {ajustes.fiscal

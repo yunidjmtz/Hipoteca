@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { useEstado } from '@/app/EstadoProvider';
 import { InputMoneda } from '@/components/InputMoneda';
 import { InputNumeroEntero } from '@/components/InputNumeroEntero';
@@ -7,8 +8,12 @@ import { Interruptor } from '@/components/Interruptor';
 import { Icono } from '@/components/Icono';
 import type { NombreIcono } from '@/components/Icono';
 import { formatEuros } from '@/core/format';
-import { ZERO } from '@/core/money';
+import { addCents, clampCents, ZERO } from '@/core/money';
 import type { Cents } from '@/core/money';
+import {
+  calcularIngresoMensualNormalizado,
+  calcularOtrosIngresosMensuales,
+} from '@/finance/affordability';
 import type {
   SituacionLaboral,
   DeudaMensual,
@@ -31,41 +36,9 @@ const AYUDAS = {
     'Los bancos valoran la estabilidad laboral de forma distinta. Este dato se guarda como referencia, pero no cambia automáticamente el cálculo.',
   ahorrosActuales:
     'Total de ahorro líquido disponible hoy: cuentas corrientes, depósitos y fondos rescatables. No incluyas planes de pensiones no disponibles.',
-  precioObjetivo:
-    'El precio de la vivienda que tienes en mente. A partir de aquí se calculan impuestos, entrada mínima y cuota estimada.',
-  estadoVivienda:
-    'Usada: tributa ITP (varía por comunidad autónoma, habitualmente 6–10 %). Nueva: IVA 10 % + AJD. La diferencia puede ser de varios miles de euros.',
-  destino:
-    'La vivienda habitual tiene deducciones fiscales autonómicas. Segunda residencia e inversión tributan igual pero sin deducciones adicionales.',
-  ccaa: 'La comunidad autónoma determina el ITP o el AJD. Aragón está configurada específicamente; para las demás usamos una estimación editable.',
-  esVpoEspecial:
-    'Vivienda de Protección Oficial con tipo reducido de IVA (4 % en lugar del 10 %). Solo aplica a VPO de régimen especial.',
 } as const;
 
 // ─── Constantes UI ────────────────────────────────────────────────────────────
-
-const CCAA_ESPANA = [
-  'Andalucía',
-  'Aragón',
-  'Asturias',
-  'Islas Baleares',
-  'Canarias',
-  'Cantabria',
-  'Castilla-La Mancha',
-  'Castilla y León',
-  'Cataluña',
-  'Extremadura',
-  'Galicia',
-  'La Rioja',
-  'Madrid',
-  'Murcia',
-  'Navarra',
-  'País Vasco',
-  'Comunitat Valenciana',
-  'Ceuta',
-  'Melilla',
-  'Genérica (editable)',
-] as const;
 
 const ETIQUETAS_SITUACION: Record<SituacionLaboral, string> = {
   indefinido: 'Indefinido',
@@ -339,10 +312,9 @@ function TitularForm({
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'vivienda' | 'titulares' | 'otros-ingresos' | 'deudas-gastos';
+type TabId = 'titulares' | 'otros-ingresos' | 'deudas-gastos';
 
 const TABS: readonly { id: TabId; etiqueta: string; icono: NombreIcono }[] = [
-  { id: 'vivienda', etiqueta: 'Vivienda', icono: 'casa' },
   { id: 'titulares', etiqueta: 'Titulares', icono: 'perfil' },
   { id: 'otros-ingresos', etiqueta: 'Ingresos', icono: 'resumen' },
   { id: 'deudas-gastos', etiqueta: 'Gastos', icono: 'escala' },
@@ -351,10 +323,10 @@ const TABS: readonly { id: TabId; etiqueta: string; icono: NombreIcono }[] = [
 // ─── Página principal ────────────────────────────────────────────────────────
 
 export function Perfil() {
-  const { estado, actualizarPerfil, actualizarPreferencias } = useEstado();
-  const { perfil, preferencias } = estado;
+  const { estado, actualizarPerfil } = useEstado();
+  const { perfil } = estado;
 
-  const [tabActiva, setTabActiva] = useState<TabId>('vivienda');
+  const [tabActiva, setTabActiva] = useState<TabId>('titulares');
   const [modalAbierto, setModalAbierto] = useState<EstadoModal | null>(null);
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
@@ -574,6 +546,17 @@ export function Perfil() {
     ZERO,
   );
 
+  const totalIngresosMensuales = addCents(
+    calcularIngresoMensualNormalizado(perfil.titulares),
+    calcularOtrosIngresosMensuales(perfil),
+  );
+
+  useEffect(() => {
+    if (perfil.gastoGeneralMensual > totalIngresosMensuales) {
+      actualizarPerfil({ gastoGeneralMensual: totalIngresosMensuales });
+    }
+  }, [actualizarPerfil, perfil.gastoGeneralMensual, totalIngresosMensuales]);
+
   const hayOtroAlquilerActual = perfil.gastosFijos.some(
     (gasto) => gasto.esAlquilerActual && gasto.id !== modalAbierto?.editandoId,
   );
@@ -593,12 +576,12 @@ export function Perfil() {
   return (
     <div className="flex flex-col gap-5 pt-16">
       <header className="sr-only">
-        <h1 className="font-display text-2xl text-tinta">Datos</h1>
+        <h1 className="font-display text-2xl text-tinta">Mi situación financiera</h1>
       </header>
 
       <div
         role="tablist"
-        aria-label="Datos para el cálculo"
+        aria-label="Situación financiera para el cálculo"
         className="fixed inset-x-0 top-[3.75rem] z-[19] flex border-b border-linea bg-superficie/90 backdrop-blur-xl lg:top-0 lg:z-20"
       >
         {TABS.map((tab) => (
@@ -634,156 +617,6 @@ export function Perfil() {
           aria-labelledby={`tab-${tabActiva}`}
           className="px-4 py-6"
         >
-          {/* ── TAB: Vivienda ──────────────────────────────────────── */}
-          {tabActiva === 'vivienda' && (
-            <div className="flex flex-col gap-5">
-              <p className="rotulo">Vivienda que deseas</p>
-              <div className="max-w-sm">
-                <InputMoneda
-                  id="precio-objetivo"
-                  etiqueta="Precio de la vivienda"
-                  valor={preferencias.precioObjetivo}
-                  onChange={(v) => actualizarPreferencias({ precioObjetivo: v })}
-                  ayuda={AYUDAS.precioObjetivo}
-                  icono="meta"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Campo
-                  htmlFor="ccaa"
-                  etiqueta="Comunidad autónoma"
-                  ayuda={AYUDAS.ccaa}
-                  icono="ofertas"
-                >
-                  <select
-                    id="ccaa"
-                    value={preferencias.ccaa}
-                    onChange={(e) => actualizarPreferencias({ ccaa: e.target.value })}
-                    className={claseSelect}
-                  >
-                    {CCAA_ESPANA.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-
-                <Campo
-                  htmlFor="estado-vivienda"
-                  etiqueta="Estado de la vivienda"
-                  ayuda={AYUDAS.estadoVivienda}
-                  icono="casa"
-                >
-                  <select
-                    id="estado-vivienda"
-                    value={preferencias.estadoVivienda}
-                    onChange={(e) =>
-                      actualizarPreferencias({
-                        estadoVivienda: e.target.value as 'usada' | 'nueva',
-                        esVpoEspecial: false,
-                      })
-                    }
-                    className={claseSelect}
-                  >
-                    <option value="usada">Usada (ITP)</option>
-                    <option value="nueva">Nueva (IVA)</option>
-                  </select>
-                </Campo>
-
-                <Campo
-                  htmlFor="destino-compra"
-                  etiqueta="Destino"
-                  ayuda={AYUDAS.destino}
-                  icono="perfil"
-                >
-                  <select
-                    id="destino-compra"
-                    value={preferencias.destino}
-                    onChange={(e) =>
-                      actualizarPreferencias({
-                        destino: e.target.value as 'habitual' | 'segunda' | 'inversion',
-                      })
-                    }
-                    className={claseSelect}
-                  >
-                    <option value="habitual">Vivienda habitual</option>
-                    <option value="segunda">Segunda residencia</option>
-                    <option value="inversion">Inversión</option>
-                  </select>
-                </Campo>
-              </div>
-
-              {preferencias.ccaa !== '' && preferencias.ccaa !== 'Aragón' && (
-                <div className="rounded-medio border border-revisar/40 bg-revisar-tenue px-4 py-3 text-sm text-tinta">
-                  Para {preferencias.ccaa} usamos provisionalmente un ITP del 8 % y un AJD del 1,5
-                  %, sin bonificaciones autonómicas. Confirma los tipos aplicables y corrígelos en
-                  Ajustes antes de decidir.
-                </div>
-              )}
-
-              <div className="filete flex flex-col gap-4 pt-5">
-                <p className="rotulo">Características deseadas</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <Campo htmlFor="habitaciones-minimas" etiqueta="Cuartos">
-                    <InputNumeroEntero
-                      id="habitaciones-minimas"
-                      valor={preferencias.habitacionesMinimas}
-                      minimo={0}
-                      maximo={20}
-                      onChange={(habitacionesMinimas) =>
-                        actualizarPreferencias({ habitacionesMinimas })
-                      }
-                      className={claseInput}
-                    />
-                  </Campo>
-                  <Campo htmlFor="banos-minimos" etiqueta="Baños">
-                    <InputNumeroEntero
-                      id="banos-minimos"
-                      valor={preferencias.banosMinimos}
-                      minimo={0}
-                      maximo={20}
-                      onChange={(banosMinimos) => actualizarPreferencias({ banosMinimos })}
-                      className={claseInput}
-                    />
-                  </Campo>
-                </div>
-                <div className="flex flex-wrap gap-x-5 gap-y-3">
-                  {(
-                    [
-                      ['exterior', 'Exterior'],
-                      ['trastero', 'Trastero'],
-                      ['garaje', 'Garaje'],
-                    ] as const
-                  ).map(([campo, etiqueta]) => (
-                    <label
-                      key={campo}
-                      className="flex cursor-pointer items-center gap-2 text-sm text-tinta"
-                    >
-                      <Interruptor
-                        activado={preferencias[campo]}
-                        alCambiar={(e) => actualizarPreferencias({ [campo]: e.target.checked })}
-                      />
-                      {etiqueta}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {preferencias.estadoVivienda === 'nueva' && (
-                <label className="flex items-center gap-3 cursor-pointer select-none">
-                  <Interruptor
-                    activado={preferencias.esVpoEspecial}
-                    alCambiar={(e) => actualizarPreferencias({ esVpoEspecial: e.target.checked })}
-                  />
-                  <span className="text-sm text-tinta">VPO de régimen especial (IVA 4 %)</span>
-                  <InfoTooltip texto={AYUDAS.esVpoEspecial} />
-                </label>
-              )}
-            </div>
-          )}
-
           {/* ── TAB: Titulares ─────────────────────────────────────── */}
           {tabActiva === 'titulares' && (
             <div className="flex flex-col gap-5">
@@ -939,6 +772,10 @@ export function Perfil() {
                 <legend className="text-sm font-medium text-tinta">
                   ¿Cómo quieres indicar tus gastos?
                 </legend>
+                <p id="modo-gastos-ayuda" className="text-xs leading-relaxed text-tinta-suave">
+                  Elige una sola forma de cálculo. La otra se conserva para que puedas cambiar
+                  cuando quieras.
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   {(
                     [
@@ -961,10 +798,6 @@ export function Perfil() {
                     </label>
                   ))}
                 </div>
-                <p id="modo-gastos-ayuda" className="text-xs leading-relaxed text-tinta-suave">
-                  Elige una sola forma de cálculo. La otra se conserva para que puedas cambiar
-                  cuando quieras.
-                </p>
               </fieldset>
 
               {(perfil.modoGastosMensuales ?? 'general') === 'general' ? (
@@ -976,13 +809,19 @@ export function Perfil() {
                     id="gasto-general-mensual"
                     comoDeslizador
                     etiqueta="Gasto mensual general"
-                    ayuda="Una estimación mensual para tus gastos habituales."
+                    ayuda="Una estimación mensual para tus gastos habituales. No puede superar el total de tus ingresos mensuales."
                     valor={perfil.gastoGeneralMensual}
-                    onChange={(gastoGeneralMensual) => actualizarPerfil({ gastoGeneralMensual })}
+                    maximoDeslizador={totalIngresosMensuales}
+                    onChange={(gastoGeneralMensual) =>
+                      actualizarPerfil({
+                        gastoGeneralMensual: clampCents(
+                          gastoGeneralMensual,
+                          ZERO,
+                          totalIngresosMensuales,
+                        ),
+                      })
+                    }
                   />
-                  <p className="mt-2 text-xs leading-relaxed text-tinta-suave">
-                    Introduce una estimación mensual, sin límite de importe.
-                  </p>
                 </section>
               ) : null}
 
@@ -1090,7 +929,7 @@ export function Perfil() {
         </div>
 
         <div className="flex justify-between border-t border-linea bg-superficie-2/40 px-6 py-4">
-          {tabActiva !== 'vivienda' ? (
+          {tabActiva !== TABS[0]!.id ? (
             <button
               type="button"
               onClick={irATabAnterior}
@@ -1102,7 +941,15 @@ export function Perfil() {
           ) : (
             <span />
           )}
-          {tabActiva !== 'deudas-gastos' && (
+          {tabActiva === 'deudas-gastos' ? (
+            <Link
+              to="/resumen"
+              className="flex min-h-toque items-center gap-2 rounded-medio bg-acento px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-acento/90 focus:outline-none focus:ring-2 focus:ring-acento/40 focus:ring-offset-2"
+            >
+              Ir al resumen
+              <span aria-hidden="true">→</span>
+            </Link>
+          ) : (
             <button
               type="button"
               onClick={irATabSiguiente}

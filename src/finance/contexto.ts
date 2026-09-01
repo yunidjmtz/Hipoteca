@@ -1,5 +1,20 @@
 import type { Cents } from '@/core/money';
-import type { ContextoEvaluacion, ContextoReduccion, EstadoPersistido } from '@/domain/types';
+import type {
+  ContextoEvaluacion,
+  ContextoReduccion,
+  EstadoPersistido,
+  ViviendaGuardada,
+} from '@/domain/types';
+
+/**
+ * Supuesto neutro para conocer la capacidad financiera antes de seleccionar
+ * una vivienda. Los datos fiscales definitivos siempre los aporta el inmueble.
+ */
+export const CONTEXTO_VIVIENDA_PLAN = {
+  estadoVivienda: 'usada',
+  destino: 'habitual',
+  esVpoEspecial: false,
+} as const satisfies Pick<ViviendaGuardada, 'estadoVivienda' | 'destino' | 'esVpoEspecial'>;
 
 /**
  * Construye un ContextoEvaluacion a partir del estado persistido y un precio
@@ -10,6 +25,10 @@ export function construirContexto(
   estado: EstadoPersistido,
   precioRef: Cents,
   tasacionOverride?: Cents,
+  vivienda?: Pick<
+    ViviendaGuardada,
+    'estadoVivienda' | 'destino' | 'esVpoEspecial' | 'valorReferenciaFiscal' | 'ibiAnual' | 'comunidadMensual'
+  >,
 ): ContextoEvaluacion {
   const { perfil, gastos, costesRecurrentes, ajustes, preferencias } = estado;
 
@@ -23,7 +42,7 @@ export function construirContexto(
     discapacidadPorcentaje: 0,
     victimaViolenciaGenero: false,
     familiaNumerosa: false,
-    esViviendaHabitual: preferencias.destino === 'habitual',
+    esViviendaHabitual: (vivienda?.destino ?? preferencias.destino) === 'habitual',
   };
 
   const ccaaName = preferencias.ccaa;
@@ -38,21 +57,29 @@ export function construirContexto(
 
   const valorTasacion =
     tasacionOverride !== undefined && tasacionOverride < precioRef ? tasacionOverride : precioRef;
+  const valorReferenciaFiscal =
+    vivienda === undefined ? preferencias.valorReferenciaFiscal : vivienda.valorReferenciaFiscal;
 
   return {
     valorTasacion,
-    ...(preferencias.valorReferenciaFiscal !== undefined
-      ? { valorReferenciaFiscal: preferencias.valorReferenciaFiscal }
-      : {}),
+    ...(valorReferenciaFiscal === undefined ? {} : { valorReferenciaFiscal }),
     ltv: ajustes.ltvPorDefecto,
     plazoAnios: ajustes.plazoPorDefecto,
     tinAnual: ajustes.tinPorDefecto,
     perfil,
     gastos,
-    costesRecurrentes,
+    costesRecurrentes: {
+      ...costesRecurrentes,
+      ...(vivienda?.ibiAnual === undefined ? {} : { ibiAnual: vivienda.ibiAnual }),
+      ...(vivienda?.comunidadMensual === undefined
+        ? {}
+        : { comunidadMensual: vivienda.comunidadMensual }),
+    },
     ajustes,
-    estadoVivienda: preferencias.estadoVivienda,
-    esVpoEspecial: preferencias.esVpoEspecial,
+    // Las llamadas heredadas sin vivienda conservan sus preferencias antiguas.
+    // El plan usa CONTEXTO_VIVIENDA_PLAN y cada inmueble aporta sus datos reales.
+    estadoVivienda: vivienda?.estadoVivienda ?? preferencias.estadoVivienda,
+    esVpoEspecial: vivienda?.esVpoEspecial ?? preferencias.esVpoEspecial,
     reduccion,
     configFiscal,
   };

@@ -46,7 +46,7 @@ function estadoConPlan({
 }
 
 describe('evaluarEncajePlanVivienda', () => {
-  it('no da por viable una vivienda solo por estar dentro del presupuesto', () => {
+  it('no da por viable una vivienda solo por existir un precio cómodo', () => {
     const resultado = evaluarEncajePlanVivienda(
       vivienda(100_000),
       estadoConPlan({ ingreso: 0, ahorro: 0 }),
@@ -55,7 +55,7 @@ describe('evaluarEncajePlanVivienda', () => {
 
     expect(resultado.estado).toBe('no_viable');
     expect(resultado.limitante).toBe('ingresos');
-    expect(resultado.diferenciaPresupuesto).toBe(ZERO);
+    expect(resultado.diferenciaPresupuesto).toBe(toCents(100_000));
   });
 
   it('marca dentro del plan cuando presupuesto, cuota y ahorro son coherentes', () => {
@@ -65,11 +65,11 @@ describe('evaluarEncajePlanVivienda', () => {
     expect(resultado.evaluacion).not.toBeNull();
   });
 
-  it('indica que una vivienda por encima del plan es alcanzable si cuota y ahorro lo permiten', () => {
+  it('calcula el plan desde la capacidad cómoda, no desde el precio guardado', () => {
     const resultado = evaluarEncajePlanVivienda(vivienda(150_000), estadoConPlan(), '2026-08-08');
 
-    expect(resultado.estado).toBe('alcanzable');
-    expect(resultado.diferenciaPresupuesto).toBe(toCents(50_000));
+    expect(resultado.estado).toBe('en_plan');
+    expect(resultado.diferenciaPresupuesto).toBe(ZERO);
   });
 
   it('marca como no viable una vivienda que supera el plan y cuya cuota no es asumible', () => {
@@ -122,14 +122,14 @@ describe('evaluarEncajePlanVivienda', () => {
     expect(resultado.limitante).toBe('ahorro');
   });
 
-  it('no clasifica viviendas hasta que el plan tenga un presupuesto', () => {
+  it('ignora un antiguo precio objetivo vacío al calcular el plan', () => {
     const resultado = evaluarEncajePlanVivienda(
       vivienda(150_000),
       estadoConPlan({ precioObjetivo: 0 }),
       '2026-08-08',
     );
 
-    expect(resultado.estado).toBe('sin_presupuesto');
+    expect(resultado.estado).toBe('en_plan');
   });
 
   it('distingue correctamente un objetivo alcanzable exactamente en un mes', () => {
@@ -150,7 +150,7 @@ describe('evaluarEncajePlanVivienda', () => {
     expect(resultado.motivo).toMatch(/1 mes\./);
   });
 
-  it('usa el singular al superar el presupuesto y alcanzarlo exactamente en un mes', () => {
+  it('usa el singular al alcanzar exactamente en un mes una vivienda del plan', () => {
     const base = estadoConPlan({ precioObjetivo: 100_000, ingreso: 5_000, ahorro: 0 });
     const preliminar = evaluarEncajePlanVivienda(vivienda(150_000), base, '2026-08-08');
     const objetivo = preliminar.evaluacion?.dineroRecomendado ?? ZERO;
@@ -166,7 +166,7 @@ describe('evaluarEncajePlanVivienda', () => {
       '2026-08-08',
     );
 
-    expect(resultado.estado).toBe('alcanzable');
+    expect(resultado.estado).toBe('en_plan');
     expect(resultado.mesesHastaAlcanzar).toBe(1);
     expect(resultado.motivo).toMatch(/1 mes\./);
   });

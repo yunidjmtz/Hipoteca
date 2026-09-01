@@ -5,6 +5,7 @@ import {
   calcularIngresoMensualNormalizado,
   calcularPlazoEfectivo,
   evaluarPrecio,
+  esCompraComoda,
   factorLimitante,
   buscarPrecioMaximo,
 } from '@/finance/affordability';
@@ -116,6 +117,7 @@ function ctx(opciones?: {
   ingresoNeto?: number;
   numeroPagas?: 12 | 14;
   deuda?: number;
+  gastoGeneral?: number;
   edad?: number;
   ltv?: number;
   tasacion?: number;
@@ -418,11 +420,50 @@ describe('factorLimitante', () => {
   });
 });
 
+describe('esCompraComoda', () => {
+  it('exige que quede margen después de los gastos fijos', () => {
+    const sinGastos = evaluarPrecio(
+      toCents(100_000),
+      ctx({ precio: 100_000, ingresoNeto: 2_000, ahorro: 80_000 }),
+    );
+    const conGastosAltos = evaluarPrecio(
+      toCents(100_000),
+      ctx({ precio: 100_000, ingresoNeto: 2_000, gastoGeneral: 1_800, ahorro: 80_000 }),
+    );
+
+    expect(esCompraComoda(sinGastos, AJUSTES_STD.ratioPersonalObjetivo)).toBe(true);
+    expect(conGastosAltos.ratioPersonal).toBeLessThanOrEqual(
+      AJUSTES_STD.ratioPersonalObjetivo,
+    );
+    expect(conGastosAltos.dineroLibreMensual).toBeLessThan(ZERO);
+    expect(esCompraComoda(conGastosAltos, AJUSTES_STD.ratioPersonalObjetivo)).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // buscarPrecioMaximo — R16
 // ---------------------------------------------------------------------------
 
 describe('buscarPrecioMaximo — R16', () => {
+  it('el máximo cómodo con 4.000 € de ingresos no supera 1.200 € al mes', () => {
+    const contextoBase = ctx({ precio: 100_000, ingresoNeto: 4_000, ahorro: 150_000 });
+    const contextoPorPrecio = (precio: ReturnType<typeof toCents>): ContextoEvaluacion => ({
+      ...contextoBase,
+      valorTasacion: precio,
+    });
+    const resultado = buscarPrecioMaximo(
+      (evaluacion) => esCompraComoda(evaluacion, AJUSTES_STD.ratioPersonalObjetivo),
+      contextoPorPrecio,
+      { min: toCents(50_000), max: toCents(500_000) },
+    );
+
+    expect(resultado.precioMaximo).not.toBeNull();
+    if (resultado.precioMaximo !== null) {
+      const evaluacion = evaluarPrecio(resultado.precioMaximo, contextoPorPrecio(resultado.precioMaximo));
+      expect(evaluacion.costeMensualVivienda).toBeLessThanOrEqual(toCents(1_200));
+    }
+  });
+
   // §9.1 · caso 28: umbral fiscal rompe la monotonía — hayDiscontinuidad detectado
   it('caso 28 — predicado no monótono: detecta dos intervalos y hayDiscontinuidad', () => {
     // Simula lo que ocurre con una bonificación fiscal condicionada a precio ≤ umbral:

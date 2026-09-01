@@ -9,14 +9,17 @@ import {
   ZERO,
 } from '@/core/money';
 import {
+  buscarPrecioMaximo,
   calcularCapacidadAhorroActual,
   calcularDeudasMensuales,
   calcularIngresoMensualNormalizado,
   calcularOtrosIngresosMensuales,
   calcularPlazoEfectivo,
+  esCompraComoda,
   evaluarPrecio,
+  RANGO_BUSQUEDA_CAPACIDAD,
 } from '@/finance/affordability';
-import { construirContexto } from '@/finance/contexto';
+import { construirContexto, CONTEXTO_VIVIENDA_PLAN } from '@/finance/contexto';
 import { capitalDesdeCuota } from '@/finance/mortgage';
 import { proyectarAhorro } from '@/finance/savingsGoal';
 import type { EstadoPersistido, EvaluacionPrecio, ViviendaGuardada } from '@/domain/types';
@@ -38,7 +41,7 @@ export interface ResultadoEncajePlanVivienda {
 }
 
 /**
- * Relaciona una vivienda con el precio objetivo del plan.
+ * Relaciona una vivienda con el precio cómodo calculado para el plan.
  *
  * Una vivienda dentro del presupuesto encaja directamente. Si lo supera, se
  * comprueba que la cuota sea asumible y que el desembolso completo (incluida
@@ -49,7 +52,12 @@ export function evaluarEncajePlanVivienda(
   estado: EstadoPersistido,
   fechaInicio = fechaLocalISO(),
 ): ResultadoEncajePlanVivienda {
-  const presupuestoPlanificado = estado.preferencias.precioObjetivo;
+  const presupuestoPlanificado =
+    buscarPrecioMaximo(
+      (evaluacion) => esCompraComoda(evaluacion, estado.ajustes.ratioPersonalObjetivo),
+      (precio) => construirContexto(estado, precio, undefined, CONTEXTO_VIVIENDA_PLAN),
+      RANGO_BUSQUEDA_CAPACIDAD,
+    ).precioMaximo ?? ZERO;
   const faltaPresupuesto = presupuestoPlanificado <= ZERO;
 
   const costeReforma = sumCents(vivienda.reformas.map((reforma) => reforma.costeEstimado));
@@ -61,7 +69,7 @@ export function evaluarEncajePlanVivienda(
   };
   const evaluacion = evaluarPrecio(
     vivienda.precioVenta,
-    construirContexto(estadoConReforma, vivienda.precioVenta),
+    construirContexto(estadoConReforma, vivienda.precioVenta, undefined, vivienda),
   );
   const estaDentroDelPresupuesto =
     !faltaPresupuesto && vivienda.precioVenta <= presupuestoPlanificado;
@@ -113,7 +121,10 @@ export function evaluarEncajePlanVivienda(
 
     const factorPrecio = Math.pow(1 + estado.ajustes.crecimientoAnualPrecioVivienda, mes / 12);
     const precioFuturo = multiplyCents(vivienda.precioVenta, factorPrecio);
-    const futura = evaluarPrecio(precioFuturo, construirContexto(estadoConReforma, precioFuturo));
+    const futura = evaluarPrecio(
+      precioFuturo,
+      construirContexto(estadoConReforma, precioFuturo, undefined, vivienda),
+    );
     evaluacionesPorMes.set(mes, futura);
     return futura;
   };
@@ -161,7 +172,7 @@ export function evaluarEncajePlanVivienda(
       mesesHastaAlcanzar,
       prestamoMaximoPorIngresos,
       motivo:
-        'La cuota y el ahorro son compatibles, pero falta un precio objetivo para medir el encaje con tu plan.',
+        'La cuota y el ahorro son compatibles, pero faltan ingresos para calcular una compra cómoda de referencia.',
       evaluacion,
     };
   }

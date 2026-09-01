@@ -44,40 +44,24 @@ test('los datos del perfil persisten al recargar la página', async ({ page }) =
 
 /**
  * §9.4 Smoke test 2.
- * Cambiar el precio objetivo actualiza el Resumen y la Escala de forma coherente.
+ * El Resumen concentra la escala simplificada de capacidad de compra.
  */
-test('cambiar el precio objetivo actualiza el Resumen y la Escala', async ({ page }) => {
+test('el Resumen muestra la escala simplificada de capacidad', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByLabel('Precio objetivo')).toBeVisible();
+  await page.getByRole('tab', { name: 'Titulares' }).click();
+  const ingreso = page.getByLabel('Neto por paga').first();
+  await ingreso.fill('2500');
+  await ingreso.press('Tab');
+  await page.waitForTimeout(700);
 
-  // Cambiar precio objetivo a 200.000 €
-  const inputPrecio = page.getByLabel('Precio objetivo');
-  await inputPrecio.click();
-  await inputPrecio.fill('200000');
-  await page.keyboard.press('Tab');
-
-  // Navegar al Resumen.
   await navegacionVisible(page)
     .getByRole('link', { name: /Resumen/ })
     .click();
 
-  // La fila compacta del Resumen muestra el precio objetivo.
-  await expect(page.getByRole('cell', { name: '200.000,00 €', exact: true }).first()).toBeVisible();
-
-  // Abrir el plan y, desde él, la Escala de precios.
-  await navegacionVisible(page)
-    .getByRole('link', { name: /Mi plan/i })
-    .click();
-  await page.getByRole('link', { name: /Ver escala de precios/i }).click();
-
-  // La fila del precio objetivo lleva el marcador ◀
-  await expect(page.getByText('◀')).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Precio €' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Mínimo €' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Impuestos €' })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: 'Ratio %' })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: 'Estado' })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: /^200 K/ })).toBeVisible();
+  await expect(page.getByText('Capacidad de compra estimada', { exact: true })).toBeVisible();
+  await expect(page.getByText('Compra cómoda', { exact: true })).toBeVisible();
+  await expect(page.getByText('Límite bancario', { exact: true })).toBeVisible();
+  await expect(page.getByText('Mi plan hipotecario', { exact: true })).toHaveCount(0);
 });
 
 /**

@@ -55,14 +55,10 @@ test('el navegador solo consulta el mismo origen y el endpoint autorizado del IN
   expect(externas, `Peticiones externas detectadas:\n${externas.join('\n')}`).toEqual([]);
 });
 
-test('el enlace profundo por hash sobrevive a un recargado', async ({ page }) => {
+test('el enlace antiguo de escala redirige al Resumen', async ({ page }) => {
   await page.goto('/#/escala');
-  await expect(
-    page.getByRole('heading', { level: 2, name: 'Comparativa por precio' }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/#\/resumen$/);
 
   await page.reload();
-  await expect(
-    page.getByRole('heading', { level: 2, name: 'Comparativa por precio' }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/#\/resumen$/);
 });

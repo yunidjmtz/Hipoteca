@@ -6,7 +6,7 @@ import { evaluarEncajePlanVivienda, type ResultadoEncajePlanVivienda } from './h
 /**
  * El valor económico sigue dominando la comparación, pero una compra no se
  * recomienda solo por ser barata: también debe encajar con el plan financiero
- * y con las necesidades declaradas por la persona compradora.
+ * y con la capacidad financiera de la persona compradora.
  */
 export const PESOS_VIVIENDA = {
   costePorM2: 60,
@@ -51,38 +51,10 @@ function calcularDatosBase(vivienda: ViviendaGuardada, estado?: EstadoPersistido
   };
 }
 
-function calcularNecesidades(
-  vivienda: ViviendaGuardada,
-  estado?: EstadoPersistido,
-): { cumplidos: number; totales: number; puntuacion: number } {
-  if (estado === undefined) {
-    const cumplidos =
-      Number(vivienda.esExterior) + Number(vivienda.tieneGaraje) + Number(vivienda.tieneTrastero);
-    return { cumplidos, totales: 3, puntuacion: (cumplidos / 3) * PESOS_VIVIENDA.necesidades };
-  }
-
-  const criterios: boolean[] = [];
-  const { preferencias } = estado;
-  if (preferencias.habitacionesMinimas > 0) {
-    criterios.push(vivienda.habitaciones >= preferencias.habitacionesMinimas);
-  }
-  if (preferencias.banosMinimos > 0) {
-    criterios.push((vivienda.banos ?? 0) >= preferencias.banosMinimos);
-  }
-  if (preferencias.exterior) criterios.push(vivienda.esExterior);
-  if (preferencias.garaje) criterios.push(vivienda.tieneGaraje);
-  if (preferencias.trastero) criterios.push(vivienda.tieneTrastero);
-
-  if (criterios.length === 0) {
-    return { cumplidos: 0, totales: 0, puntuacion: PESOS_VIVIENDA.necesidades };
-  }
-
-  const cumplidos = criterios.filter(Boolean).length;
-  return {
-    cumplidos,
-    totales: criterios.length,
-    puntuacion: (cumplidos / criterios.length) * PESOS_VIVIENDA.necesidades,
-  };
+function calcularNecesidades(): { cumplidos: number; totales: number; puntuacion: number } {
+  // Las características se describen en cada inmueble. Ya no hay requisitos
+  // globales que puedan dejar de ser visibles y sesgar una recomendación.
+  return { cumplidos: 0, totales: 0, puntuacion: PESOS_VIVIENDA.necesidades };
 }
 
 function puntuacionEncaje(encaje: ResultadoEncajePlanVivienda | null): number {
@@ -118,7 +90,7 @@ export function compararViviendas(
     .map((datos): ResultadoComparacionVivienda => {
       const encajePlan =
         estado === undefined ? null : evaluarEncajePlanVivienda(datos.vivienda, estado);
-      const necesidades = calcularNecesidades(datos.vivienda, estado);
+      const necesidades = calcularNecesidades();
       const cumpleNecesidades =
         estado === undefined ||
         necesidades.totales === 0 ||

@@ -19,6 +19,7 @@ import { fechaLocalISO } from '@/core/dates';
 import { formatEntero, formatEuros } from '@/core/format';
 import {
   addCents,
+  centsRoundHalfUp,
   maxCents,
   minCents,
   multiplyCents,
@@ -55,15 +56,17 @@ import { ANIOS_FIJOS_MIXTO_POR_DEFECTO } from '@/domain/mortgageScenario';
 import { compararViviendas, type ResultadoComparacionVivienda } from '@/finance/housingComparison';
 import { calcularCosteVivienda } from '@/finance/housingCosts';
 import { evaluarEncajePlanVivienda, type EstadoEncajePlanVivienda } from '@/finance/housingPlanFit';
-import { importarAnuncioIdealista, normalizarAnuncioImportado } from '@/services/importarAnuncio';
 import { mapImportedDataToExistingForm } from '@/services/propertyImportMapper';
 import { textoDeCapturaInmobiliaria } from '@/services/propertyImageOcr';
 import { parsePropertyListing } from '@/services/propertyListingParser';
 import { detectarFuenteAnuncio, type FuenteAnuncio } from '@/services/propertySourceDetector';
 import type {
   Cents,
+  DestinoCompra,
   EscenarioHipoteca,
+  EstadoVivienda,
   EstadoOferta,
+  EvaluacionPrecio,
   OfertaBancaria,
   PartidaReforma,
   ViviendaGuardada,
@@ -143,6 +146,7 @@ interface PropsRecomendacion {
   readonly comparacion: readonly ResultadoComparacion[];
   readonly ofertasComparables: boolean;
   readonly puntuacionActiva: boolean;
+  readonly ratioBancarioMaximo: number;
   readonly onConfigurar: () => void;
   readonly onVerHipoteca: (id: string) => void;
 }
@@ -151,6 +155,7 @@ function Recomendacion({
   comparacion,
   ofertasComparables,
   puntuacionActiva,
+  ratioBancarioMaximo,
   onConfigurar,
   onVerHipoteca,
 }: PropsRecomendacion) {
@@ -160,6 +165,17 @@ function Recomendacion({
 
   const hayCandidataApta = comparacion.some((resultado) => resultado.esMejorGlobal);
   const tieneFiltroDeIngresos = mejor.metricas.ratioBancarioTensionado !== null;
+  const faltaAhorroEnTodas =
+    ofertasComparables &&
+    !hayCandidataApta &&
+    comparacion.length > 0 &&
+    comparacion.every(
+      (resultado) =>
+        resultado.oferta.estado !== 'rechazada' &&
+        resultado.metricas.ahorroSuficiente === false &&
+        (resultado.metricas.ratioBancarioTensionado === null ||
+          resultado.metricas.ratioBancarioTensionado <= ratioBancarioMaximo),
+    );
   const segundaApta = comparacion.find(
     (resultado) => resultado.esAptaParaRecomendacion && resultado.oferta.id !== mejor.oferta.id,
   );
@@ -183,6 +199,8 @@ function Recomendacion({
               <p className={`rotulo ${hayCandidataApta ? 'text-acento' : 'text-no-viable'}`}>
                 {!ofertasComparables
                   ? 'Comparación no válida'
+                  : faltaAhorroEnTodas
+                    ? 'Aún te falta ahorro para esta compra'
                   : !hayCandidataApta
                     ? 'Ninguna supera el filtro de seguridad'
                     : comparacion.length === 1
@@ -208,7 +226,9 @@ function Recomendacion({
             <h2 className="mt-1 min-w-0 truncate font-display text-xl leading-tight text-tinta">
               {!hayCandidataApta
                 ? ofertasComparables
-                  ? 'Revisa ingresos, ahorro o condiciones'
+                  ? faltaAhorroEnTodas
+                    ? 'Reúne el efectivo inicial antes de decidir'
+                    : 'Revisa ingresos, ahorro o condiciones'
                   : 'Iguala el precio de compra'
                 : comparacion.length > 1
                   ? mejor.oferta.banco
@@ -222,8 +242,9 @@ function Recomendacion({
             )}
             {ofertasComparables && !hayCandidataApta && (
               <p className="mt-2 text-sm leading-relaxed text-tinta-media">
-                Las ofertas están rechazadas, superan el límite de esfuerzo o exigen más efectivo
-                del disponible. Se muestra la mejor puntuada solo para revisar sus condiciones.
+                {faltaAhorroEnTodas
+                  ? 'Todas las ofertas requieren más efectivo del que tienes disponible. Se muestra la mejor puntuada para comparar sus condiciones mientras reúnes el desembolso inicial.'
+                  : 'Las ofertas están rechazadas, superan el límite de esfuerzo o exigen más efectivo del disponible. Se muestra la mejor puntuada solo para revisar sus condiciones.'}
               </p>
             )}
             {decisionAjustada && segundaApta !== undefined && (
@@ -1122,6 +1143,18 @@ export function Hipoteca() {
       oferta.viviendaId === viviendaSeleccionadaId ||
       (oferta.viviendaId === undefined && viviendaSeleccionadaId === primeraViviendaId),
   );
+  const ofertaSolicitadaId = parametros.get('oferta') ?? '';
+  const ofertaSolicitada = ofertasVivienda.find((oferta) => oferta.id === ofertaSolicitadaId);
+  useEffect(() => {
+    if (ofertaSolicitada === undefined) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const tarjeta = document.getElementById(`hipoteca-${ofertaSolicitada.id}`);
+      tarjeta?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      tarjeta?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [ofertaSolicitada]);
   const contextoComparacion = useMemo<ContextoComparacionHipotecas | undefined>(() => {
     const ingresoMensual = addCents(
       calcularIngresoMensualNormalizado(estado.perfil.titulares),
@@ -1464,12 +1497,12 @@ export function Hipoteca() {
 
       {analisisAbierto &&
         createPortal(
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-4">
+          <div className="fixed inset-0 z-[60] bg-superficie">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="titulo-analisis-hipotecas"
-              className="max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado sm:max-h-[90dvh]"
+              className="h-[100dvh] w-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-7"
             >
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
@@ -1491,6 +1524,7 @@ export function Hipoteca() {
                 comparacion={comparacion}
                 ofertasComparables={ofertasComparables}
                 puntuacionActiva={mostrarPuntuacion}
+                ratioBancarioMaximo={estado.ajustes.ratioBancarioMaximo}
                 onConfigurar={() => setMostrarConfigPesos(true)}
                 onVerHipoteca={verHipotecaDesdeAnalisis}
               />
@@ -1525,7 +1559,7 @@ export function Hipoteca() {
                 )}
                 {comparacion[0]?.metricas.ratioBancarioTensionado === null && (
                   <p className="mt-3 text-xs leading-relaxed text-ajustado">
-                    Añade tus ingresos en Perfil para aplicar el filtro de esfuerzo a la
+                    Añade tus ingresos en Mis finanzas para aplicar el filtro de esfuerzo a la
                     recomendación.
                   </p>
                 )}
@@ -1635,6 +1669,12 @@ interface BorradorVivienda {
   readonly superficieM2: number;
   readonly habitaciones: number;
   readonly banos: number;
+  readonly ibiAnual: Cents;
+  readonly comunidadMensual: Cents;
+  readonly estadoVivienda: EstadoVivienda;
+  readonly destino: DestinoCompra;
+  readonly esVpoEspecial: boolean;
+  readonly valorReferenciaFiscal?: Cents;
   readonly esExterior: boolean;
   readonly tieneTrastero: boolean;
   readonly tieneGaraje: boolean;
@@ -1656,6 +1696,11 @@ const VIVIENDA_VACIA: BorradorVivienda = {
   superficieM2: 0,
   habitaciones: 0,
   banos: 0,
+  ibiAnual: ZERO,
+  comunidadMensual: ZERO,
+  estadoVivienda: 'usada',
+  destino: 'habitual',
+  esVpoEspecial: false,
   esExterior: false,
   tieneTrastero: false,
   tieneGaraje: false,
@@ -1679,6 +1724,14 @@ function borradorDesdeVivienda(vivienda: ViviendaGuardada): BorradorVivienda {
     superficieM2: vivienda.superficieM2,
     habitaciones: vivienda.habitaciones,
     banos: vivienda.banos ?? 0,
+    ibiAnual: vivienda.ibiAnual ?? ZERO,
+    comunidadMensual: vivienda.comunidadMensual ?? ZERO,
+    estadoVivienda: vivienda.estadoVivienda ?? 'usada',
+    destino: vivienda.destino ?? 'habitual',
+    esVpoEspecial: vivienda.esVpoEspecial ?? false,
+    ...(vivienda.valorReferenciaFiscal === undefined
+      ? {}
+      : { valorReferenciaFiscal: vivienda.valorReferenciaFiscal }),
     esExterior: vivienda.esExterior,
     tieneTrastero: vivienda.tieneTrastero,
     tieneGaraje: vivienda.tieneGaraje,
@@ -1757,7 +1810,6 @@ function FormularioVivienda({
   const [resultadoImportacion, setResultadoImportacion] = useState('');
   const [errorImportacion, setErrorImportacion] = useState('');
   const [procesandoCaptura, setProcesandoCaptura] = useState(false);
-  const [procesandoEnlace, setProcesandoEnlace] = useState(false);
   const [ejemplosAbiertos, setEjemplosAbiertos] = useState(false);
   const [confirmarReemplazo, setConfirmarReemplazo] = useState<Partial<BorradorVivienda> | null>(
     null,
@@ -1830,31 +1882,6 @@ function FormularioVivienda({
     else aplicarImportacion(patch, false);
   }
 
-  async function importarEnlaceIdealista() {
-    setProcesandoEnlace(true);
-    setErrorImportacion('');
-    setResultadoImportacion('');
-    try {
-      const datos = await importarAnuncioIdealista(borrador.anuncioUrl);
-      const fuente = detectarFuenteAnuncio(datos.url);
-      const patch = mapImportedDataToExistingForm(
-        normalizarAnuncioImportado(datos),
-        '',
-        fuente,
-      ) as Partial<BorradorVivienda>;
-      if (camposConConflicto(patch).length > 0) setConfirmarReemplazo(patch);
-      else aplicarImportacion(patch, false);
-    } catch (errorImportacionEnlace) {
-      setErrorImportacion(
-        errorImportacionEnlace instanceof Error
-          ? errorImportacionEnlace.message
-          : 'No se pudo importar el anuncio de Idealista.',
-      );
-    } finally {
-      setProcesandoEnlace(false);
-    }
-  }
-
   async function importarCaptura(archivo: File | undefined) {
     if (archivo === undefined) return;
     setProcesandoCaptura(true);
@@ -1897,7 +1924,7 @@ function FormularioVivienda({
           </p>
           <button
             type="button"
-            disabled={procesandoCaptura || procesandoEnlace}
+            disabled={procesandoCaptura}
             onClick={() => {
               setErrorImportacion('');
               setResultadoImportacion('');
@@ -1977,14 +2004,6 @@ function FormularioVivienda({
             className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
           />
         </label>
-        <button
-          type="button"
-          disabled={procesandoEnlace || procesandoCaptura}
-          onClick={() => void importarEnlaceIdealista()}
-          className="-mt-2 rounded-medio border border-acento/35 bg-superficie px-3 py-2 text-sm font-medium text-acento hover:bg-superficie-2 disabled:cursor-wait disabled:opacity-60"
-        >
-          {procesandoEnlace ? 'Importando anuncio…' : 'Importar datos del enlace de Idealista'}
-        </button>
         <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
           Teléfono de contacto
           <input
@@ -2038,6 +2057,85 @@ function FormularioVivienda({
               />
             </label>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <InputMoneda
+              id="vivienda-ibi-anual"
+              etiqueta="IBI anual"
+              valor={borrador.ibiAnual}
+              onChange={(ibiAnual) => setBorrador((actual) => ({ ...actual, ibiAnual }))}
+            />
+            <InputMoneda
+              id="vivienda-comunidad-mensual"
+              etiqueta="Comunidad mensual"
+              valor={borrador.comunidadMensual}
+              onChange={(comunidadMensual) =>
+                setBorrador((actual) => ({ ...actual, comunidadMensual }))
+              }
+            />
+          </div>
+          <fieldset className="grid grid-cols-1 gap-3 rounded-medio border border-linea p-3 sm:grid-cols-2">
+            <legend className="px-1 text-sm font-medium text-tinta">Datos para la compra</legend>
+            <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+              Estado de la vivienda
+              <select
+                value={borrador.estadoVivienda}
+                onChange={(e) =>
+                  setBorrador((actual) => ({
+                    ...actual,
+                    estadoVivienda: e.target.value as EstadoVivienda,
+                    esVpoEspecial: false,
+                  }))
+                }
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              >
+                <option value="usada">Usada (ITP)</option>
+                <option value="nueva">Nueva (IVA)</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-tinta">
+              Destino
+              <select
+                value={borrador.destino}
+                onChange={(e) =>
+                  setBorrador((actual) => ({
+                    ...actual,
+                    destino: e.target.value as DestinoCompra,
+                  }))
+                }
+                className="rounded-medio border border-linea bg-superficie px-3 py-2 text-sm font-normal text-tinta focus:outline-none focus:ring-2 focus:ring-acento/50"
+              >
+                <option value="habitual">Vivienda habitual</option>
+                <option value="segunda">Segunda residencia</option>
+                <option value="inversion">Inversión</option>
+              </select>
+            </label>
+            <InputMoneda
+              id="vivienda-valor-referencia"
+              etiqueta="Valor de referencia fiscal (opcional)"
+              valor={borrador.valorReferenciaFiscal ?? ZERO}
+              onChange={(valorReferenciaFiscal) =>
+                setBorrador((actual) => {
+                  if (valorReferenciaFiscal === ZERO) {
+                    const { valorReferenciaFiscal: valorAnterior, ...sinValorReferencia } = actual;
+                    void valorAnterior;
+                    return sinValorReferencia;
+                  }
+                  return { ...actual, valorReferenciaFiscal };
+                })
+              }
+            />
+            {borrador.estadoVivienda === 'nueva' && (
+              <label className="flex cursor-pointer items-center gap-2.5 self-end pb-2 text-sm text-tinta">
+                <Interruptor
+                  activado={borrador.esVpoEspecial}
+                  alCambiar={(e) =>
+                    setBorrador((actual) => ({ ...actual, esVpoEspecial: e.target.checked }))
+                  }
+                />
+                VPO de régimen especial (IVA 4 %)
+              </label>
+            )}
+          </fieldset>
         </div>
         <fieldset className="grid grid-cols-1 gap-3 rounded-medio border border-linea p-3 sm:grid-cols-3">
           <legend className="px-1 text-sm font-medium text-tinta">Características</legend>
@@ -2355,6 +2453,53 @@ function BadgeEncajePlan({
   );
 }
 
+type ClasificacionCompraAhorro = 'comoda' | 'maxima' | 'falta_ahorro';
+
+const CONFIG_CLASIFICACION_COMPRA_AHORRO: Record<
+  ClasificacionCompraAhorro,
+  { texto: string; clases: string }
+> = {
+  comoda: {
+    texto: 'Compra cómoda',
+    clases: 'border-comodo/35 bg-comodo-tenue text-comodo',
+  },
+  maxima: {
+    texto: 'Compra máxima',
+    clases: 'border-revisar/35 bg-revisar-tenue text-revisar',
+  },
+  falta_ahorro: {
+    texto: 'Falta ahorro',
+    clases: 'border-no-viable/35 bg-no-viable-tenue text-no-viable',
+  },
+};
+
+/**
+ * Clasifica el desembolso inicial de una vivienda con los ahorros utilizables:
+ * cómodo cubre el importe recomendado y máximo cubre solo el mínimo imprescindible.
+ */
+function clasificarCompraPorAhorros(
+  evaluacion: EvaluacionPrecio | null,
+): ClasificacionCompraAhorro | null {
+  if (evaluacion === null) return null;
+  if (evaluacion.ahorroDisponible >= evaluacion.dineroComodo) return 'comoda';
+  if (evaluacion.ahorroDisponible >= evaluacion.dineroMinimo) return 'maxima';
+  return 'falta_ahorro';
+}
+
+function BadgeClasificacionCompra({ evaluacion }: { readonly evaluacion: EvaluacionPrecio | null }) {
+  const clasificacion = clasificarCompraPorAhorros(evaluacion);
+  if (clasificacion === null) return null;
+
+  const config = CONFIG_CLASIFICACION_COMPRA_AHORRO[clasificacion];
+  return (
+    <span
+      className={`inline-flex rounded-chico border px-2 py-1 text-xs font-bold ${config.clases}`}
+    >
+      {config.texto}
+    </span>
+  );
+}
+
 function describirDiferenciaMonetaria(actual: Cents, referencia: Cents): string {
   if (actual === referencia) return 'El mismo importe';
 
@@ -2398,6 +2543,13 @@ function RecomendacionVivienda({
 
   const esComparacionReal = comparacion.length >= 2;
   const hayCompraRecomendable = mejor.esRecomendable;
+  const faltaAhorroEnTodas =
+    !hayCompraRecomendable &&
+    comparacion.length > 0 &&
+    comparacion.every(
+      (resultado) =>
+        resultado.encajePlan?.estado === 'no_viable' && resultado.encajePlan.limitante === 'ahorro',
+    );
   const segundaRecomendable = comparacion.find(
     (resultado) => resultado.esRecomendable && resultado.vivienda.id !== mejor.vivienda.id,
   );
@@ -2426,7 +2578,9 @@ function RecomendacionVivienda({
               <div className="flex items-center justify-between gap-3">
                 <p className={`rotulo ${hayCompraRecomendable ? 'text-acento' : 'text-no-viable'}`}>
                   {!hayCompraRecomendable
-                    ? 'Ninguna compra pasa el filtro financiero'
+                    ? faltaAhorroEnTodas
+                      ? 'Aún te falta ahorro para estas compras'
+                      : 'Ninguna compra pasa el filtro financiero'
                     : faltaPresupuesto
                       ? 'Mejor valor provisional'
                       : !esComparacionReal
@@ -2445,7 +2599,9 @@ function RecomendacionVivienda({
               <div className="mt-1 min-w-0">
                 <h2 className="min-w-0 truncate font-display text-lg leading-tight text-tinta">
                   {!hayCompraRecomendable
-                    ? 'Revisa presupuesto, ingresos o ahorro'
+                    ? faltaAhorroEnTodas
+                      ? 'Sigue reuniendo el desembolso inicial'
+                      : 'Revisa presupuesto, ingresos o ahorro'
                     : esComparacionReal
                       ? mejor.vivienda.nombre
                       : `Por ahora, ${mejor.vivienda.nombre}`}
@@ -2468,14 +2624,15 @@ function RecomendacionVivienda({
           )}
           {!hayCompraRecomendable && (
             <p className="mt-3 text-sm leading-relaxed text-tinta-media">
-              No señalamos una ganadora cuando todas son inviables, incumplen tus necesidades o ya
-              no están disponibles. La primera se conserva solo como referencia comparativa.
+              {faltaAhorroEnTodas
+                ? 'La cuota es asumible, pero con tu capacidad de ahorro actual todavía no se reúne el desembolso recomendado dentro del horizonte del plan. Conservamos la primera como referencia para que puedas seguir su evolución.'
+                : 'No señalamos una ganadora cuando todas son inviables o ya no están disponibles. La primera se conserva solo como referencia comparativa.'}
             </p>
           )}
           {faltaPresupuesto && (
             <p className="mt-3 text-sm leading-relaxed text-ajustado">
-              La cuota y el ahorro se han comprobado, pero falta tu precio objetivo; completa Mi
-              plan para confirmar el veredicto.
+              La cuota y el ahorro se han comprobado, pero faltan ingresos para calcular tu compra
+              cómoda; completa Mis finanzas para confirmar el veredicto.
             </p>
           )}
           {decisionAjustada && segundaRecomendable !== undefined && (
@@ -2551,7 +2708,7 @@ function RecomendacionVivienda({
             <p className="mt-3 text-xs leading-relaxed text-tinta-suave">
               {mejor.criteriosNecesidadesTotales > 0
                 ? `Cumple ${mejor.criteriosNecesidadesCumplidos} de ${mejor.criteriosNecesidadesTotales} requisitos mínimos.`
-                : 'No has definido requisitos mínimos.'}
+                : 'La comparación se centra en el encaje financiero de cada inmueble.'}
             </p>
             {mejor.encajePlan !== null && (
               <p className="mt-2 text-sm leading-relaxed text-tinta-media">
@@ -2679,6 +2836,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                 ),
               );
               const encajePlan = evaluarEncajePlanVivienda(vivienda, estado);
+              const clasificacionCompra = encajePlan.evaluacion;
               const hipotecasVivienda = estado.ofertas.filter(
                 (oferta) =>
                   oferta.viviendaId === vivienda.id ||
@@ -2694,6 +2852,8 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
               let menorPagoBanco: Cents | null = null;
               let menorCosteReal: Cents | null = null;
               let costesInicialesHipoteca = ZERO;
+              let costeBonificacionesMensual = ZERO;
+              let mejorHipoteca: OfertaBancaria | null = null;
               let desgloseMejorBanco: {
                 capital: Cents;
                 intereses: Cents;
@@ -2725,10 +2885,12 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                   mejorCuotaMensual = cuota;
                   menorPagoBanco = pagoBanco;
                   menorCosteReal = metricasHipoteca.costeRealTotal;
+                  mejorHipoteca = hipoteca;
                   costesInicialesHipoteca = maxCents(
                     ZERO,
                     subtractCents(metricasHipoteca.desembolsoInicial, entrada),
                   );
+                  costeBonificacionesMensual = flujoHipoteca[1]?.costesVinculados ?? ZERO;
                   desgloseMejorBanco = { capital, intereses, comisionApertura, total: pagoBanco };
                 }
               }
@@ -2771,6 +2933,10 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                 ZERO,
                 subtractCents(totalNecesario, estado.perfil.ahorrosActuales),
               );
+              const ahorroRestante = maxCents(
+                ZERO,
+                subtractCents(estado.perfil.ahorrosActuales, totalNecesario),
+              );
               const porcentajeAhorros =
                 totalNecesario <= ZERO
                   ? 0
@@ -2778,6 +2944,125 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                       100,
                       Math.round((estado.perfil.ahorrosActuales / totalNecesario) * 100),
                     );
+              const cuotaParaVivir = mejorCuotaMensual ?? cuotaAproximada;
+              const ibiMensual = centsRoundHalfUp((vivienda.ibiAnual ?? ZERO) / 12);
+              const costeMensualVivir = sumCents([
+                cuotaParaVivir,
+                vivienda.comunidadMensual ?? ZERO,
+                ibiMensual,
+                costeBonificacionesMensual,
+              ]);
+              const esInviablePorIngresos =
+                encajePlan.estado === 'no_viable' && encajePlan.limitante === 'ingresos';
+
+              if (esInviablePorIngresos) {
+                return (
+                  <article
+                    id={`vivienda-${vivienda.id}`}
+                    key={vivienda.id}
+                    tabIndex={-1}
+                    className="relative mt-5 rounded-grande border border-l-4 border-no-viable bg-superficie px-3 py-4 shadow-papel sm:px-4 sm:py-5"
+                  >
+                    <span
+                      className="absolute -top-5 left-1/2 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-no-viable/30 bg-no-viable-tenue text-no-viable shadow-papel"
+                      aria-hidden="true"
+                    >
+                      <Icono nombre="casa" tamano={21} />
+                    </span>
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <BadgeEncajePlan
+                          estado={encajePlan.estado}
+                          limitante={encajePlan.limitante}
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            className="rounded-medio border border-no-viable/35 bg-no-viable-tenue px-2.5 py-1.5 text-xs font-semibold text-no-viable hover:bg-no-viable/15"
+                            onClick={() =>
+                              void navegar(
+                                `/ofertas/vivienda?vivienda=${encodeURIComponent(vivienda.id)}`,
+                              )
+                            }
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-medio border border-no-viable px-2.5 py-1.5 text-xs font-semibold text-no-viable hover:bg-no-viable-tenue"
+                            onClick={() => eliminar(vivienda.id)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate font-display text-lg leading-snug text-no-viable">
+                          {vivienda.nombre}
+                        </h3>
+                        <p className="mt-1 text-sm text-no-viable">{vivienda.direccion}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {vivienda.origenInmobiliaria !== undefined && (
+                        <span className="inline-flex rounded-chico border border-acento/25 bg-acento-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-acento">
+                          Ofrecida por {vivienda.origenInmobiliaria}
+                        </span>
+                      )}
+                      {vivienda.yaNoDisponible === true && (
+                        <span className="inline-flex rounded-chico border border-revisar/35 bg-revisar-tenue px-1.5 py-0.5 text-[0.6875rem] font-semibold text-revisar">
+                          Ya no disponible
+                        </span>
+                      )}
+                      <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                        {vivienda.superficieM2 > 0
+                          ? `${vivienda.superficieM2} mÂ²`
+                          : 'Superficie pendiente'}
+                      </span>
+                      {vivienda.habitaciones > 0 && (
+                        <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                          {vivienda.habitaciones} habit.
+                        </span>
+                      )}
+                      {(vivienda.banos ?? 0) > 0 && (
+                        <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                          {vivienda.banos} baÃ±os
+                        </span>
+                      )}
+                      {vivienda.esExterior && (
+                        <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                          Exterior
+                        </span>
+                      )}
+                      {vivienda.tieneTrastero && (
+                        <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                          Trastero
+                        </span>
+                      )}
+                      {vivienda.tieneGaraje && (
+                        <span className="inline-flex rounded-chico border border-linea bg-superficie-2 px-1.5 py-0.5 text-[0.6875rem] font-medium text-tinta-media">
+                          Garaje
+                        </span>
+                      )}
+                    </div>
+                    <dl className="mt-3 overflow-hidden rounded-medio border border-no-viable/45 bg-no-viable-tenue text-sm">
+                      <div className="min-w-0 px-3 py-2.5">
+                        <dt className="text-[0.6875rem] font-medium text-no-viable">Precio</dt>
+                        <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-no-viable sm:text-lg">
+                          {formatEuros(vivienda.precioVenta)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <section className="mt-3 rounded-medio border border-no-viable/45 bg-no-viable-tenue px-3 py-2.5">
+                      <p className="text-[0.6875rem] font-medium text-no-viable">Precio + gastos</p>
+                      <p className="mt-0.5 font-cifra text-lg font-bold tabular-nums text-no-viable sm:text-xl">
+                        {formatEuros(precioTotal)}
+                      </p>
+                    </section>
+                  </article>
+                );
+              }
+
               return (
                 <article
                   id={`vivienda-${vivienda.id}`}
@@ -2871,27 +3156,27 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                       </span>
                     )}
                   </div>
-                  <dl className="mt-3 grid grid-cols-2 overflow-hidden rounded-medio border border-linea bg-superficie-2 text-sm">
+                  <dl className="mt-3 overflow-hidden rounded-medio border border-linea bg-superficie-2 text-sm">
                     <div className="min-w-0 px-3 py-2.5">
                       <dt className="text-[0.6875rem] font-medium text-tinta-media">Precio</dt>
                       <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-acento sm:text-lg">
                         {formatEuros(vivienda.precioVenta)}
-                      </dd>
-                    </div>
-                    <div className="min-w-0 border-l border-linea px-3 py-2.5">
-                      <dt className="text-[0.6875rem] font-medium text-tinta-media">Precio/m²</dt>
-                      <dd className="mt-0.5 font-cifra text-base font-bold tabular-nums text-acento sm:text-lg">
-                        {vivienda.superficieM2 > 0
-                          ? precioPorM2Formateado(
-                              vivienda.precioVenta / 100 / vivienda.superficieM2,
-                            )
-                          : '—'}
+                        {vivienda.superficieM2 > 0 && (
+                          <span className="ml-2 text-base font-semibold text-tinta-media sm:text-lg">
+                            ⟶
+                            <span className="ml-2">
+                              {precioPorM2Formateado(
+                                vivienda.precioVenta / 100 / vivienda.superficieM2,
+                              )}
+                            </span>
+                          </span>
+                        )}
                       </dd>
                     </div>
                   </dl>
                   <section className="mt-3 rounded-medio border border-linea bg-superficie-2 px-3 py-2.5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-tinta-media">Precio total</p>
+                      <p className="text-[0.6875rem] font-medium text-tinta-media">Precio + gastos</p>
                       <button
                         type="button"
                         onClick={() => setDetallePrecioViviendaId(vivienda.id)}
@@ -2903,9 +3188,102 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                     <p className="mt-0.5 font-cifra text-lg font-bold tabular-nums text-tinta sm:text-xl">
                       {formatEuros(precioTotal)}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-tinta-media">
-                      Precio, reforma, impuestos y todos los gastos de compra configurados.
-                    </p>
+                  </section>
+                  <section className="mt-3 overflow-hidden rounded-medio border border-acento/20 bg-gradient-to-br from-acento-tenue/80 via-superficie to-superficie p-3">
+                      <div className="grid grid-cols-2 divide-x divide-acento/15">
+                        <div className="pr-3">
+                          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-tinta-media">
+                            Necesitas reunir
+                          </p>
+                          <p className="mt-1 font-cifra text-lg font-bold tabular-nums text-tinta sm:text-xl">
+                            {formatEuros(totalNecesario)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-tinta-media">Entrada y gastos</p>
+                        </div>
+                        <div className="pl-3">
+                          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-tinta-media">
+                            Te falta
+                          </p>
+                          <p
+                            className={`mt-1 font-cifra text-lg font-bold tabular-nums sm:text-xl ${
+                              faltaPorReunir > ZERO ? 'text-no-viable' : 'text-comodo'
+                            }`}
+                          >
+                            {formatEuros(faltaPorReunir)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-tinta-media">
+                            {faltaPorReunir > ZERO ? 'Para dar el siguiente paso' : '¡Objetivo cubierto!'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-label="Ahorros reunidos para esta compra"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={porcentajeAhorros}
+                        className="mt-3 h-1.5 overflow-hidden rounded-full bg-acento/15"
+                      >
+                        <div
+                          className="h-full rounded-full bg-acento transition-all duration-700"
+                          style={{ width: `${porcentajeAhorros}%` }}
+                        />
+                      </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-acento/15 pt-3">
+                      <BadgeClasificacionCompra evaluacion={clasificacionCompra} />
+                      <div className="text-right">
+                        <p className="text-[0.6875rem] font-medium text-tinta-media">
+                          Te quedan en ahorros
+                        </p>
+                        <p className="mt-0.5 font-cifra text-sm font-bold tabular-nums text-comodo">
+                          {formatEuros(ahorroRestante)}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="mt-3 overflow-hidden rounded-medio border border-comodo/30 bg-gradient-to-br from-comodo-tenue via-superficie to-superficie">
+                    <div className="flex items-start justify-between gap-3 px-3 pb-2 pt-3">
+                      <div>
+                        <p className="rotulo text-comodo">Coste mensual</p>
+                        <h4 className="mt-0.5 text-sm font-semibold text-tinta">
+                          Coste de vivir aquí
+                        </h4>
+                      </div>
+                      <p className="font-cifra text-lg font-bold tabular-nums text-comodo sm:text-xl">
+                        {formatEuros(costeMensualVivir)}
+                        <span className="ml-0.5 text-xs font-medium text-tinta-media">/mes</span>
+                      </p>
+                    </div>
+                    <dl className="grid grid-cols-2 border-t border-comodo/20 bg-superficie text-sm sm:grid-cols-4">
+                      <div className="min-w-0 px-3 py-2.5">
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          {mejorHipoteca === null ? 'Hipoteca estimada' : 'Hipoteca'}
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-bold tabular-nums text-tinta">
+                          {formatEuros(cuotaParaVivir)}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 border-l border-comodo/15 px-3 py-2.5">
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">Comunidad</dt>
+                        <dd className="mt-0.5 font-cifra font-bold tabular-nums text-tinta">
+                          {formatEuros(vivienda.comunidadMensual ?? ZERO)}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 border-t border-comodo/15 px-3 py-2.5 sm:border-l sm:border-t-0">
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">IBI prorrateado</dt>
+                        <dd className="mt-0.5 font-cifra font-bold tabular-nums text-tinta">
+                          {formatEuros(ibiMensual)}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 border-l border-t border-comodo/15 px-3 py-2.5 sm:border-t-0">
+                        <dt className="text-[0.6875rem] font-medium text-tinta-media">
+                          Vinculaciones del banco
+                        </dt>
+                        <dd className="mt-0.5 font-cifra font-bold tabular-nums text-tinta">
+                          {formatEuros(costeBonificacionesMensual)}
+                        </dd>
+                      </div>
+                    </dl>
                   </section>
                   {!viviendasExpandidas.has(vivienda.id) && (
                     <>
@@ -2968,7 +3346,7 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                             </div>
                           </dl>
                           <div className="border-t border-ajustado/20 bg-ajustado-tenue px-3 py-3">
-                            <p className="text-xs font-medium text-tinta-media">Total aproximado</p>
+                            <p className="text-xs font-medium text-tinta-media">Terminas pagando</p>
                             <p className="mt-0.5 font-cifra text-lg font-bold tabular-nums text-acento sm:text-xl">
                               {formatEuros(totalAproximado)}
                             </p>
@@ -2991,9 +3369,9 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                           <div className="flex items-center justify-between gap-3 px-3 py-2">
                             <p className="rotulo text-acento">Mejor Hipoteca</p>
                             <span className="text-xs font-medium text-tinta-media">
-                              {hipotecasAplicables.length === 0
-                                ? 'Pendiente'
-                                : `${hipotecasAplicables.length} ${hipotecasAplicables.length === 1 ? 'oferta' : 'ofertas'}`}
+                              {mejorHipoteca === null
+                                ? ''
+                                : `${mejorHipoteca.escenario.plazoAnios} años`}
                             </span>
                           </div>
                           <dl className="grid grid-cols-2 border-t border-acento/20 bg-superficie text-sm">
@@ -3040,55 +3418,22 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
                               Cuotas, intereses y comisión de apertura.
                             </p>
                           </div>
+                          {mejorHipoteca !== null && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void navegar(
+                                  `/hipoteca?vivienda=${encodeURIComponent(vivienda.id)}&oferta=${encodeURIComponent(mejorHipoteca.id)}`,
+                                )
+                              }
+                              aria-label={`Ir a la hipoteca de ${mejorHipoteca.banco}, a ${mejorHipoteca.escenario.plazoAnios} años`}
+                              className="w-full border-t border-acento/20 bg-superficie px-3 py-2.5 text-sm font-semibold text-acento hover:bg-acento-tenue"
+                            >
+                              Ir a esta hipoteca →
+                            </button>
+                          )}
                         </section>
                       )}
-                      <section className="mt-3 rounded-medio border border-linea bg-superficie-2 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="rotulo text-acento">Lo que te falta</p>
-                          <button
-                            type="button"
-                            onClick={() => setDetalleAhorroViviendaId(vivienda.id)}
-                            className="rounded-chico border border-acento/30 bg-superficie px-2.5 py-1.5 text-xs font-semibold text-acento hover:bg-superficie-2"
-                          >
-                            Ver detalles
-                          </button>
-                        </div>
-                        <div className="mt-2 flex items-baseline justify-between gap-3">
-                          <p className="text-xs font-medium text-tinta-media">Total necesario</p>
-                          <p className="font-cifra text-sm font-bold tabular-nums text-tinta">
-                            {formatEuros(totalNecesario)}
-                          </p>
-                        </div>
-                        <div
-                          role="progressbar"
-                          aria-label="Ahorros reunidos para este inmueble"
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={porcentajeAhorros}
-                          className="mt-2 h-3 overflow-hidden rounded-full bg-linea"
-                        >
-                          <div
-                            className="flex h-full items-center justify-center rounded-full bg-acento text-[0.625rem] font-bold leading-none text-sobre-acento"
-                            style={{ width: `${porcentajeAhorros}%` }}
-                          >
-                            {porcentajeAhorros >= 18 ? `${porcentajeAhorros} %` : ''}
-                          </div>
-                        </div>
-                        <dl className="mt-3 grid grid-cols-2 gap-3">
-                          <div>
-                            <dt className="text-xs font-medium text-tinta-media">Tienes</dt>
-                            <dd className="mt-0.5 font-cifra text-lg font-bold tabular-nums text-acento">
-                              {formatEuros(estado.perfil.ahorrosActuales)}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs font-medium text-tinta-media">Te falta</dt>
-                            <dd className="mt-0.5 font-cifra text-lg font-bold tabular-nums text-no-viable">
-                              {formatEuros(faltaPorReunir)}
-                            </dd>
-                          </div>
-                        </dl>
-                      </section>
                       {vivienda.reformas.length > 0 && (
                         <div className="mt-3">
                           <p className="text-xs font-medium text-tinta">Reformas</p>
@@ -3414,12 +3759,12 @@ function Viviendas({ conPestanas = false }: { readonly conPestanas?: boolean }) 
 
       {analisisAbierto &&
         createPortal(
-          <div className="fixed inset-x-0 top-[3.75rem] bottom-0 z-[60] flex items-center justify-center bg-tinta/30 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:inset-0 lg:p-4">
+          <div className="fixed inset-0 z-[60] bg-superficie">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="titulo-analisis-viviendas"
-              className="max-h-[calc(100dvh-9.75rem-env(safe-area-inset-bottom))] w-full max-w-xl overflow-y-auto rounded-grande bg-superficie p-5 shadow-elevado lg:max-h-[90dvh]"
+              className="h-[100dvh] w-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-7"
             >
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>

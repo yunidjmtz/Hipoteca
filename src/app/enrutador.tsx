@@ -54,22 +54,10 @@ export const enrutador = createHashRouter([
           return { Component: Resumen };
         },
       },
-      {
-        path: 'plan-hipotecario',
-        lazy: async () => {
-          const { Resumen } = await import('@/pages/Resumen');
-          return { Component: () => <Resumen modo="plan" /> };
-        },
-      },
-      { path: 'capacidad', element: <Navigate to="/plan-hipotecario" replace /> },
-      { path: 'meta', element: <Navigate to="/plan-hipotecario" replace /> },
-      {
-        path: 'escala',
-        lazy: async () => {
-          const { EscalaPrecios } = await import('@/pages/EscalaPrecios');
-          return { Component: EscalaPrecios };
-        },
-      },
+      { path: 'plan-hipotecario', element: <Navigate to="/resumen" replace /> },
+      { path: 'capacidad', element: <Navigate to="/resumen" replace /> },
+      { path: 'meta', element: <Navigate to="/resumen" replace /> },
+      { path: 'escala', element: <Navigate to="/resumen" replace /> },
       {
         path: 'ofertas',
         lazy: async () => {
@@ -100,6 +88,13 @@ export const enrutador = createHashRouter([
         lazy: async () => {
           const { Simulador } = await import('@/pages/Simulador');
           return { Component: Simulador };
+        },
+      },
+      {
+        path: 'comparador',
+        lazy: async () => {
+          const { Comparador } = await import('@/pages/Comparador');
+          return { Component: Comparador };
         },
       },
       // Conserva los enlaces antiguos al simulador, ahora integrado en Hipoteca.
